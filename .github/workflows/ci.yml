@@ -19,7 +19,7 @@ jobs:
     name: Contributor trust
     runs-on: ubuntu-latest
     outputs:
-      allowed: ${{ github.event_name == 'push' || steps.vouch.outputs.vouched == 'true' }}
+      allowed: ${{ github.event_name == 'push' || github.event_name == 'workflow_dispatch' || steps.vouch.outputs.vouched == 'true' }}
     steps:
       - name: Check pull request author
         id: vouch
