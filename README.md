@@ -1,40 +1,29 @@
-<p align="center">
-  <a href="https://primeintellect.ai">
-    <picture>
-      <source media="(prefers-color-scheme: light)" srcset="https://github.com/user-attachments/assets/40c36e38-c5bd-4c5a-9cb3-f7b902cd155d">
-      <source media="(prefers-color-scheme: dark)" srcset="https://github.com/user-attachments/assets/6414bc9b-126b-41ca-9307-9e982430cde8">
-      <img alt="Prime Intellect" src="https://github.com/user-attachments/assets/6414bc9b-126b-41ca-9307-9e982430cde8" width="312" style="max-width: 100%;">
-    </picture>
-  </a>
-</p>
+<h1 align="center">Prime Agent Pi</h1>
 
 <h3 align="center">
-Prime Agent: A Self-Improving RLM Harness
+The TypeScript/pi RLM harness
 </h3>
 
 <p align="center">
   <a href="packages/coding-agent/docs/index.md">Documentation</a> &bull;
-  <a href="https://github.com/PrimeIntellect-ai/verifiers">Verifiers</a> &bull;
-  <a href="https://github.com/PrimeIntellect-ai/prime-rl">PRIME-RL</a>
+  <a href="https://github.com/PrimeIntellect-ai/prime-agent">Upstream</a> &bull;
+  <a href="https://github.com/SailorJoe6/prime-agent-upstream">Upstream fork mirror</a>
 </p>
 
 <p align="center">
-  <a href="https://github.com/PrimeIntellect-ai/prime-agent/actions/workflows/ci.yml">
-    <img src="https://github.com/PrimeIntellect-ai/prime-agent/actions/workflows/ci.yml/badge.svg" alt="CI" />
+  <a href="https://github.com/SailorJoe6/prime-agent-pi/actions/workflows/ci.yml">
+    <img src="https://github.com/SailorJoe6/prime-agent-pi/actions/workflows/ci.yml/badge.svg" alt="CI" />
   </a>
-  <a href="https://github.com/PrimeIntellect-ai/prime-agent/actions/workflows/build-binaries.yml">
-    <img src="https://github.com/PrimeIntellect-ai/prime-agent/actions/workflows/build-binaries.yml/badge.svg" alt="Build Binaries" />
+  <a href="https://github.com/SailorJoe6/prime-agent-pi/actions/workflows/build-binaries.yml">
+    <img src="https://github.com/SailorJoe6/prime-agent-pi/actions/workflows/build-binaries.yml/badge.svg" alt="Build Binaries" />
   </a>
   <a href="https://arxiv.org/abs/2608.23552">
     <img src="https://img.shields.io/badge/arXiv-2608.23552-b31b1b.svg" alt="arXiv" />
   </a>
 </p>
 
-<p align="center">
-  <a href="https://trendshift.io/repositories/104249?utm_source=repository-badge&amp;utm_medium=badge&amp;utm_campaign=badge-repository-104249" target="_blank" rel="noopener noreferrer">
-    <img src="https://trendshift.io/api/badge/repositories/104249" alt="PrimeIntellect-ai%2Fprime-agent | Trendshift" width="250" height="55" />
-  </a>
-</p>
+> [!IMPORTANT]
+> **Prime Agent Pi** is an independent continuation of the TypeScript/pi-based Prime Agent. It preserves the full Git history through upstream v0.9.8 (`7d442aafa985f9342134fac16c2ef41f03fb45c1`) and starts from the validated TypeScript downstream commit `a1faacd53ac4473a75de1d434afaf50945c2f647`. Upstream moved to a Rust implementation in v0.10. Rust tracking and downstream provenance remain separate in [`SailorJoe6/prime-agent-upstream`](https://github.com/SailorJoe6/prime-agent-upstream).
 
 Prime Agent is an open-source coding and research agent for general and long-running work. It is designed around two core abstractions:
 
@@ -43,10 +32,15 @@ Prime Agent is an open-source coding and research agent for general and long-run
 
 ## Install
 
-Install the latest stable release on macOS or Linux:
+Prime Agent Pi does not yet publish a standalone installer. The Prime Intellect installer installs the upstream Rust product and is not an installer for this repository.
+
+Run the TypeScript product from source:
 
 ```bash
-curl --proto '=https' --proto-redir '=https' -fsSL https://app.primeintellect.ai/prime-agent/install.sh | sh
+git clone https://github.com/SailorJoe6/prime-agent-pi.git
+cd prime-agent-pi
+npm ci
+./prime-agent.sh
 ```
 
 ## Why Prime Agent
@@ -111,7 +105,7 @@ Prime Agent is built for long-running work, especially for evaluations in resear
 
 ## Contributing
 
-Start with a GitHub Discussion for [general questions](https://github.com/PrimeIntellect-ai/prime-agent/discussions/categories/general), [bug reports](https://github.com/PrimeIntellect-ai/prime-agent/discussions/categories/bug-reports), and [feature requests](https://github.com/PrimeIntellect-ai/prime-agent/discussions/categories/feature-requests). Maintainers promote accepted work into Issues, and pull requests are reviewed from maintainers and vouched contributors.
+Use [this repository's issues](https://github.com/SailorJoe6/prime-agent-pi/issues) for Prime Agent Pi bugs and feature proposals. Use the [upstream repository](https://github.com/PrimeIntellect-ai/prime-agent) for the Rust product.
 
 Read the [contribution guidelines](CONTRIBUTING.md) for the full process. Report security vulnerabilities privately by following the [security policy](SECURITY.md).
 
