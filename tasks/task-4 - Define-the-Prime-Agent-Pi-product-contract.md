@@ -4,6 +4,7 @@ title: Define the Prime Agent Pi product contract
 status: In Design
 assignee: []
 created_date: '2026-11-01 16:15'
+updated_date: '2026-11-01 16:22'
 labels: []
 dependencies: []
 references:
@@ -25,7 +26,7 @@ ordinal: 4000
 
 Prime Agent Pi is now an independent TypeScript/pi product in `SailorJoe6/prime-agent-pi`, with full upstream ancestry and a separate `SailorJoe6/prime-agent-upstream` provenance mirror. The installed runtime remains the validated `cwd-fix-v0.9.8-r1` baseline, but the future product contract is not yet coherent. Decisions about product scope, compatibility, versioning, packaging, distribution, and governance are currently spread across brainstorming and operational history rather than one reviewable source of truth.
 
-Backlog has no configured Epic type, so this parent task represents the product-contract thought-work Epic. It is discovery and decision work. It does not authorize implementation.
+This task is the product-contract thought-work Epic. It is discovery and decision work. It does not authorize implementation.
 
 ## Outcome
 
