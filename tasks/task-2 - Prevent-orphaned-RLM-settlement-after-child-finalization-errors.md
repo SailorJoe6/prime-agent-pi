@@ -1,7 +1,7 @@
 ---
 id: TASK-2
 title: Prevent orphaned RLM settlement after child finalization errors
-status: In Progress
+status: Blocked
 assignee: []
 created_date: '2026-10-30 21:41'
 updated_date: '2026-11-01 02:54'
@@ -103,3 +103,11 @@ Original worker transcript: /Users/jlanders/.prime/agent/session-artifacts/01a0e
 
 Keep TASK-2 In Planning for review. This plan authorizes no implementation; require separate `/implement-task TASK-2`.
 <!-- SECTION:PLAN:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Episode admission blocked after durable or uncertain mutation at 2026-11-01T02:54:35.582Z.
+Recovery condition: inspect .prime-claw/ownership.json and reconcile every recorded task, worktree, and session identity to TASK-2 before continuing; do not retry it as fresh creation.
+Cause: Episode worktree is missing .agents/skills/execute/SKILL.md
+<!-- SECTION:NOTES:END -->
