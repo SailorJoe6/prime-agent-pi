@@ -4,7 +4,7 @@ title: Prevent orphaned RLM settlement after child finalization errors
 status: In Progress
 assignee: []
 created_date: '2026-10-30 21:41'
-updated_date: '2026-11-02 20:08'
+updated_date: '2026-11-02 20:10'
 labels: []
 dependencies: []
 references:
@@ -112,4 +112,6 @@ Recovery condition: inspect .prime-claw/ownership.json and reconcile every recor
 Cause: Episode worktree is missing .agents/skills/execute/SKILL.md
 
 Operator explicitly cancelled failed admission 7cd387bb-7278-4dd2-b770-ba051f919859. Its unlaunched Orca worktree, local branch, clean published nested task clone, and exact ownership entry were removed. No implementation code was discarded. The previous admission blocker is retired; TASK-2 and its specification, acceptance criteria, and implementation plan are preserved for a fresh admission. The project-skill tracking fix is committed on main at 58c7a4e9320abe15e761cdb29ebf0c4d87829223.
+
+Execution started in Episode 01a19de1-b1f5-70af-8429-44fb6499a02a at code base 58c7a4e9320abe15e761cdb29ebf0c4d87829223. One bounded slice: non-deletion child finalization settlement, truthful diagnostics, focused deterministic regression and steer control; detached deletion unchanged. Native task status remains In Progress. Validation will include negative-control removal/restoration, direct recursion/continuation tests, shuffle seeds 17/73, npm run check and npm run check:test-policy. No historical wedge causality claim.
 <!-- SECTION:NOTES:END -->
