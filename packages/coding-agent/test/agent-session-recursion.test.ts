@@ -8,6 +8,8 @@ import {
 	type Context,
 	createAssistantMessageEventStream,
 	fauxAssistantMessage,
+	type LogEntry,
+	setLogSink,
 	type TextContent,
 	type Usage,
 } from "@earendil-works/pi-ai";
@@ -26,6 +28,7 @@ import {
 	type RlmChildAgentSnapshot,
 } from "../src/core/agent-session.js";
 import { AuthStorage } from "../src/core/auth-storage.js";
+import { createAutonomousRuntimeState } from "../src/core/autonomous.js";
 import type { LoadExtensionsResult } from "../src/core/extensions/index.js";
 import { type HostRequestHandler, type HostRequestHandlers, ReplKernelManager } from "../src/core/kernel/index.js";
 import { ASYNC_BASH_COMPLETION_CUSTOM_TYPE, convertToLlm } from "../src/core/messages.js";
@@ -1662,6 +1665,212 @@ describe("AgentSession rlm recursion", () => {
 		releaseListing();
 		await expect(Promise.all([first, second])).resolves.toHaveLength(2);
 		expect(deleteRlmSubagentRuntime).toHaveBeenCalledOnce();
+	});
+
+	async function exerciseFinalizationBoundary(mode: "attribution" | "cleanup" | "steer") {
+		const childStarted = deferred<void>();
+		const completion = deferred<void>();
+		const drain = deferred<void>();
+		const finalizationReached = deferred<void>();
+		const fault = new Error(`TASK-2 ${mode} fault`);
+		const continuationFault = new Error("TASK-2 goal notification fault");
+		const child = createSession({
+			streamFn: () => {
+				const stream = createAssistantMessageEventStream();
+				childStarted.resolve();
+				void completion.promise.then(() => {
+					stream.push({ type: "done", reason: "stop", message: assistantMessage("finished") });
+				});
+				return stream;
+			},
+		});
+		const parentPrompts: string[] = [];
+		const root = createSession({
+			streamFn: (_model, context) => {
+				parentPrompts.push(userText(context));
+				const stream = createAssistantMessageEventStream();
+				queueMicrotask(() =>
+					stream.push({
+						type: "done",
+						reason: "stop",
+						message: assistantMessage("parent consumed result", usage(0, 0)),
+					}),
+				);
+				return stream;
+			},
+			subagentRuntimeHost: {
+				createRlmSubagentRuntime: async () => ({ session: child }),
+				completeRlmSubagentRuntime: () => mode !== "cleanup",
+				releaseRlmSubagentRuntime: async () => {},
+				deleteRlmSubagentRuntime: async () => child.disposeAsync(),
+			},
+		});
+		const parentAssistant = assistantMessage("running ipython", usage(2, 1));
+		root.agent.state.messages.push(parentAssistant);
+		const internals = root as unknown as InspectableRlmSession & {
+			_agentEventQueue: Promise<void>;
+			_findAssistantEntryForMessage(message: AssistantMessage): ReturnType<SessionManager["getLeafEntry"]>;
+			_autonomousState: ReturnType<typeof createAutonomousRuntimeState>;
+			_holdAutonomousContinuationForRlmWork(message: AssistantMessage): boolean;
+			_maybeResumeGoalContinuationAfterRlmWork(): void;
+		};
+		// agent_end queues an attribution retry, but the parent assistant is not indexed until this drain opens.
+		internals._agentEventQueue = drain.promise.then(() => {
+			root.sessionManager.appendMessage(parentAssistant);
+		});
+		const lookup = vi.spyOn(internals, "_findAssistantEntryForMessage");
+		const goalNotification = vi.spyOn(internals, "_maybeResumeGoalContinuationAfterRlmWork");
+		const register = root.registerRlmChildSession.bind(root);
+		const retain = vi.spyOn(root, "registerRlmChildSession").mockImplementation((id, retained) => {
+			if (mode === "attribution") {
+				lookup.mockImplementationOnce(() => {
+					finalizationReached.resolve();
+					throw fault;
+				});
+				goalNotification.mockImplementationOnce(() => {
+					throw continuationFault;
+				});
+			}
+			internals._autonomousState = createAutonomousRuntimeState({
+				enabled: true,
+				maxContinuations: 1,
+				subagentKeepAliveMs: 0,
+			});
+			internals._holdAutonomousContinuationForRlmWork(parentAssistant);
+			if (mode === "steer") finalizationReached.resolve();
+			return register(id, retained);
+		});
+		const subscribe = child.subscribe.bind(child);
+		const disposers: Array<() => void> = [];
+		let cleanupFaultArmed = mode === "cleanup";
+		const subscription = vi.spyOn(child, "subscribe").mockImplementation((listener) => {
+			const unsubscribe = subscribe(listener);
+			disposers.push(unsubscribe);
+			return () => {
+				unsubscribe();
+				if (cleanupFaultArmed) {
+					cleanupFaultArmed = false;
+					finalizationReached.resolve();
+					throw fault;
+				}
+			};
+		});
+		let steer: Promise<void> | undefined;
+		const unsubscribe = subscribe((event) => {
+			if (event.type === "agent_end" && mode === "steer") steer = root.steer("TASK-2 steer");
+		});
+		const diagnostics: LogEntry[] = [];
+		const fallbackEntries: string[] = [];
+		const fallback = vi.spyOn(console, "error").mockImplementation((entry: string) => {
+			fallbackEntries.push(entry);
+			throw new Error("TASK-2 broken diagnostic fallback");
+		});
+		setLogSink((entry) => {
+			diagnostics.push(entry);
+			throw new Error("TASK-2 broken diagnostic sink");
+		});
+		const abort = new AbortController();
+		let quiescence: Promise<void> | undefined;
+		// Failure bound only: a missing completion must fail, never count as readiness.
+		// test-policy: allow wall-clock-timer -- Failure-only cancellation bounds orphaned quiescence; deferred gates provide all readiness.
+		const failure = setTimeout(() => abort.abort(), 1000);
+		try {
+			const spawned = await root.runRlmChild("finish", { name: "task-2-worker" });
+			await childStarted.promise;
+			quiescence = root.waitForRlmQuiescence(abort.signal);
+			void quiescence.catch(() => {});
+			completion.resolve();
+			await Promise.race([finalizationReached.promise, quiescence]);
+			expect(parentAssistant.usage).toMatchObject({ input: 9, output: 4, cost: usage(9, 4).cost });
+			expect(root.sessionManager.getEntries().filter((entry) => entry.type === "child_usage_attributed")).toEqual(
+				[],
+			);
+			drain.resolve();
+			await steer;
+			await quiescence;
+			await root.waitForRlmQuiescence(abort.signal);
+			expect(child.getLastAssistantText()).toBe("finished");
+			expect(terminalNotices(root)).toEqual([
+				expect.objectContaining({
+					details: expect.objectContaining({ childId: spawned.rlm_child_id, kind: "completed_without_reply" }),
+				}),
+			]);
+			expect(root.getLastAssistantText()).toBe("parent consumed result");
+			expect(parentPrompts.filter((text) => text.startsWith("[autonomous-continuation]"))).toHaveLength(1);
+			expect(root.getAutonomousStatus().continuationsUsed).toBe(1);
+			if (!root.sessionFile) throw new Error("Missing TASK-2 parent session file");
+			root.sessionManager.flushNow();
+			const reloaded = SessionManager.open(root.sessionFile, join(tempDir, "sessions"));
+			expect(reloaded.getEntries().filter((entry) => entry.type === "child_usage_attributed")).toEqual([
+				expect.objectContaining({
+					childUsage: usage(),
+					aggregateUsage: expect.objectContaining({ input: 9, output: 4, cost: usage(9, 4).cost }),
+					origin: "spawn_task",
+				}),
+			]);
+			expect(root.getContextTree()).toMatchObject({
+				ownUsage: { input: 2, output: 1, cost: usage(2, 1).cost },
+				totalUsage: { input: 9, output: 4, cost: usage(9, 4).cost },
+			});
+			expect(child.getContextTree()).toMatchObject({ ownUsage: usage(), totalUsage: usage() });
+			const failures = diagnostics.filter((entry) => entry.component === "coding-agent.rlm");
+			if (mode === "steer") {
+				expect(failures).toEqual([]);
+				expect(parentPrompts).toContain("TASK-2 steer");
+			} else {
+				expect(failures).toContainEqual(
+					expect.objectContaining({
+						msg:
+							mode === "attribution"
+								? "Child finalization usage attribution failed"
+								: "Child finalization tracking cleanup incomplete",
+						error: fault.message,
+						stack: fault.stack,
+						parentSessionId: root.sessionId,
+						childId: spawned.rlm_child_id,
+						childSessionId: child.sessionId,
+						detachedDeletion: false,
+						status: "done",
+					}),
+				);
+				expect(fallbackEntries.join("\n")).toContain(fault.message);
+				if (mode === "attribution")
+					expect(failures).toContainEqual(
+						expect.objectContaining({
+							msg: "Child finalization goal continuation failed",
+							error: continuationFault.message,
+							stack: continuationFault.stack,
+						}),
+					);
+			}
+		} finally {
+			clearTimeout(failure);
+			completion.resolve();
+			drain.resolve();
+			abort.abort();
+			await quiescence?.catch(() => {});
+			unsubscribe();
+			for (const dispose of disposers) dispose();
+			lookup.mockRestore();
+			goalNotification.mockRestore();
+			retain.mockRestore();
+			subscription.mockRestore();
+			setLogSink(undefined);
+			fallback.mockRestore();
+			await root.disposeAsync();
+			await child.disposeAsync();
+		}
+	}
+
+	it.each(["attribution", "cleanup"] as const)(
+		"TASK-2 releases quiescence after a real %s finalization fault",
+		async (mode) => {
+			await exerciseFinalizationBoundary(mode);
+		},
+	);
+
+	it("TASK-2 completes steer-at-child-agent_end without a finalization fault", async () => {
+		await exerciseFinalizationBoundary("steer");
 	});
 
 	it("adds child usage to the parent session aggregate", async () => {
