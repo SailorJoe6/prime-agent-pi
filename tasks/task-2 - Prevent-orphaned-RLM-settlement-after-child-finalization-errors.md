@@ -1,10 +1,10 @@
 ---
 id: TASK-2
 title: Prevent orphaned RLM settlement after child finalization errors
-status: In Progress
+status: Blocked
 assignee: []
 created_date: '2026-10-30 21:41'
-updated_date: '2026-11-02 20:16'
+updated_date: '2026-11-02 20:18'
 labels: []
 dependencies: []
 references:
@@ -138,4 +138,6 @@ At root: npm run check PASSED (full output inspected; no fixes/warnings); npm ru
 NOT RUN: new injected-fault regression, separate steer control, hardening-removal sensitivity/restoration, shuffle seeds 17 and 73. Existing-suite success does not satisfy those missing acceptance requirements. No historical October 27–28 wedge causality or resolution claim.
 
 Reproducible local artifacts: /var/folders/4_/twy0wz3s1mq650wnqzn1b8rr0000gq/T/task-2-episode-29v8w3wo/worker-evidence.json, draft-tests.txt, recursion-existing.log, recursion-root-environment.log, continuation-root-environment.log, npm-check.log, test-policy.log. npm ci succeeded; reported existing dependency audit findings (28 vulnerabilities) are outside this bounded fix. No dependencies/lockfile changed. Native task remains In Progress; only owning Conversation may publish Blocked or another lifecycle decision.
+
+Owning Conversation accepted the reported TASK-2 test/source growth blocker after reviewing pushed checkpoint a3eadae403320eaa13e91ec2295bd58ad005e32d, compatible current native task evidence at 7601f71aea4adc3f5361865d7b1b2fa5897e9007, and the 84-line shared draft. Production adds 56 lines and removes 20; no test lines changed. Required focused regression/control coverage exceeds the current test/source growth allowance. This checkpoint is not merge-ready; new fault/control, sensitivity/restoration and shuffle validation remain outstanding. Unblock condition: Joe explicitly approves a TASK-2-only exception permitting necessary focused regression test additions to exceed source additions, preserving all seven acceptance criteria and all other testing policies, or approves another resolution preserving those behaviors. Preserve the same Episode, worktree and branch; do not create a new admission, merge or clean up.
 <!-- SECTION:NOTES:END -->
