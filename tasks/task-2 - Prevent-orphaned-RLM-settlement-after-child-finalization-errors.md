@@ -4,7 +4,7 @@ title: Prevent orphaned RLM settlement after child finalization errors
 status: In Progress
 assignee: []
 created_date: '2026-10-30 21:41'
-updated_date: '2026-11-02 21:21'
+updated_date: '2026-11-02 21:31'
 labels: []
 dependencies: []
 references:
@@ -33,6 +33,7 @@ modified_files:
   - packages/coding-agent/src/core/agent-session.ts
   - packages/coding-agent/docs/rlm.md
   - packages/coding-agent/.changes/task-2-rlm-finalization-settlement.md
+  - packages/coding-agent/test/agent-session-recursion.test.ts
 type: bug
 ordinal: 2000
 ---
@@ -74,13 +75,13 @@ Original worker transcript: /Users/jlanders/.prime/agent/session-artifacts/01a0e
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 An unexpected non-deletion child finalization fault after terminal status cannot leave RLM quiescence waiting indefinitely on an orphaned settlement. The wait completes or reports an explicit failure, and later quiescence is not blocked by that orphaned run.
-- [ ] #2 Unexpected finalization failures are observable through the supported error/diagnostic surface rather than silently discarded; reporting does not mask the original failure, falsely claim cleanup success, or introduce a new quiescence hang.
-- [ ] #3 Deterministic failure-path coverage in the existing agent-session recursion suite injects a one-shot finalization fault with child usage pending and a controlled parent event drain. It exercises observable quiescence behavior, fails against the unhardened path, and does not rely only on private-state or mock-return assertions.
-- [ ] #4 A gated fake-provider control delivers a steer at child agent_end and verifies normal completion and ordinary steer/usage attribution behavior. It distinguishes the rejected interleaving hypothesis from the injected finalization failure.
-- [ ] #5 Detached-deletion settlement still requires its stronger cleanup guarantees, including failure handling; non-deletion hardening must not settle deletion early or report incomplete deletion as successful.
-- [ ] #6 Terminal result delivery, child/parent usage accounting, goal/autonomous continuation, and Orca/extension behavior remain intact on ordinary and relevant failure paths; no wait or lock is added around the parent event queue to address the rejected hypothesis.
-- [ ] #7 Coverage uses explicit completion events or deferred gates and self-contained fake providers, with no polling sleeps, paid provider calls, or readiness-by-timeout. Results retain the distinction between the source-identified latent defect and the unproven historical October 27–28 wedge cause; a finally change alone is not evidence of historical resolution.
+- [x] #1 An unexpected non-deletion child finalization fault after terminal status cannot leave RLM quiescence waiting indefinitely on an orphaned settlement. The wait completes or reports an explicit failure, and later quiescence is not blocked by that orphaned run.
+- [x] #2 Unexpected finalization failures are observable through the supported error/diagnostic surface rather than silently discarded; reporting does not mask the original failure, falsely claim cleanup success, or introduce a new quiescence hang.
+- [x] #3 Deterministic failure-path coverage in the existing agent-session recursion suite injects a one-shot finalization fault with child usage pending and a controlled parent event drain. It exercises observable quiescence behavior, fails against the unhardened path, and does not rely only on private-state or mock-return assertions.
+- [x] #4 A gated fake-provider control delivers a steer at child agent_end and verifies normal completion and ordinary steer/usage attribution behavior. It distinguishes the rejected interleaving hypothesis from the injected finalization failure.
+- [x] #5 Detached-deletion settlement still requires its stronger cleanup guarantees, including failure handling; non-deletion hardening must not settle deletion early or report incomplete deletion as successful.
+- [x] #6 Terminal result delivery, child/parent usage accounting, goal/autonomous continuation, and Orca/extension behavior remain intact on ordinary and relevant failure paths; no wait or lock is added around the parent event queue to address the rejected hypothesis.
+- [x] #7 Coverage uses explicit completion events or deferred gates and self-contained fake providers, with no polling sleeps, paid provider calls, or readiness-by-timeout. Results retain the distinction between the source-identified latent defect and the unproven historical October 27–28 wedge cause; a finally change alone is not evidence of historical resolution.
 <!-- AC:END -->
 
 ## Implementation Plan
@@ -106,6 +107,8 @@ Original worker transcript: /Users/jlanders/.prime/agent/session-artifacts/01a0e
    Add the genuine user-visible fragment `packages/coding-agent/.changes/task-2-rlm-finalization-settlement.md`. Record changed files, source/test growth, negative-control/restoration, direct/shuffled test and check results in TASK-2 native notes/criteria during implementation. Preserve all seven criteria, TypeScript extension and Orca contracts; no compatibility redesign. This fixes a source-identified latent defect, not a proven cause of the October 27–28 wedges. Non-goals: task reconciliation, automatic plan editing, semantic decision machinery, new persistent state/retry/state frameworks or dependencies.
 
 TASK-2 implementation is authorized in this same active Episode and remains In Progress. Resume the preserved source-only checkpoint with all seven acceptance criteria unchanged. Historical admission/planning-only wording and numerical allowance notes are superseded by the recorded operator implementation authority and policy clearance; no new Episode, merge, abandonment or cleanup is authorized.
+
+Execution result: completed the approved bounded finalization-fault/control slice and validation. See acceptance evidence in Implementation Notes. No implementation remains identified in this slice; next action is owning Conversation review of the separately published task and code candidate, not another execute slice or lifecycle mutation.
 <!-- SECTION:PLAN:END -->
 
 ## Implementation Notes
@@ -144,4 +147,33 @@ Owning Conversation accepted the reported TASK-2 test/source growth blocker afte
 Joe explicitly approved replacing the inherited test/source line-count rule in AGENTS.md with: "Avoid redundant tests and unnecessary scaffolding; judge coverage by behavior and risk, not line count." The replacement is published on canonical main at fdbeff3a5d0664eb9f617a8e1ae8b8a66c4e7864 and integrated into this same Episode at 9956c3485547f57942c97cab3b8cb454b4844c7b. This clears the recorded test/source growth blocker and supersedes the old numerical allowance language in the existing Implementation Plan and historical blocker notes. Necessary focused regression coverage may exceed production line additions; preserve all seven acceptance criteria, useful existing coverage, and every other testing policy. Do not pad source or add redundant tests/scaffolding. Joe requested continuation of the same retained Episode; no new admission, merge of TASK-2 implementation into main, abandonment or cleanup is authorized by this clearance.
 
 Handoff preparation after operator clearance: updated the living Implementation Plan to the approved behavior/risk-based test policy; retired numerical test/source limits without weakening any of the seven acceptance criteria. Continue from preserved checkpoint a3eadae403320eaa13e91ec2295bd58ad005e32d with AGENTS-only main change integrated at 9956c3485547f57942c97cab3b8cb454b4844c7b. Complete focused fault/control, observable accounting/diagnostic/continuation and deletion evidence, unhardened RED/control baseline then restored GREEN, exact focused files, shuffle seeds 17/73 and full checks. Preserve the initial inherited-RLM_DEPTH failure; use env -u RLM_DEPTH explicitly. The 84-line draft is untested starting material, not acceptance evidence or a line mandate. No historical wedge causality claim.
+
+## Completed bounded regression/control slice — acceptance evidence
+The approved behavior/risk policy cleared the numerical blocker. Source-only checkpoint a3eadae403320eaa13e91ec2295bd58ad005e32d is preserved at current integrated code base 9956c3485547f57942c97cab3b8cb454b4844c7b. The only additional code change is packages/coding-agent/test/agent-session-recursion.test.ts (+209/-0): two real one-shot finalization faults in a shared fixture and one separate no-fault steer-at-child-agent_end control. Production remains +56/-20 from the source checkpoint; no source padding or useful-test deletion. No dependencies, wire contracts, task lifecycle or runtime resources changed.
+
+Acceptance evidence (all seven criteria retained verbatim):
+1. Attribution lookup and real-disposer cleanup faults both complete first and later public quiescence with released parent drain. On the exact unhardened source both fail from cancelled orphaned quiescence; steer control passes. Hardened source restored byte-for-byte (SHA-256 08929739a7b7523a7d081b61187525911addd69ce61ef455ad8a96c68c32ae29).
+2. Supported coding-agent.rlm diagnostics retain operation, original error/message/stack, parent/child identity, terminal done and detachedDeletion=false. Cleanup failure truthfully says incomplete. A separate injected goal-notification failure is retained independently. Throwing log sink and console fallback do not re-orphan settlement.
+3. Explicit deferred child completion and parent event drain leave live pending child spend with no durable attribution yet. Real lookup/disposer fault seams signal readiness independently of diagnostics. Observable quiescence, not private state or mocked return values, is the regression boundary.
+4. Separate gated fake-provider control actually sends root.steer at child agent_end, verifies provider consumption, terminal result and ordinary accounting. It passes the unhardened baseline beside both RED faults.
+5. Full unchanged recursion coverage passes deletion unwind/cleanup ordering, no premature settlement, failed-cleanup reservation and explicit retry, late startup and parent disposal cases. No unconditional deletion settlement was added.
+6. All three boundary cases assert terminal notice child identity, child result and actual parent consumption, reopened durable attribution, parent-own 2/1 versus aggregate 9/4 and child-own/total 7/3 input/output plus exact costs. One actual autonomous continuation is consumed in each case; injected goal-notification error cannot skip it. Existing goal/autonomous, hosted-runtime and extension compaction/deletion coverage passes. No queue wait/lock added.
+7. Readiness is deferred/event-driven and fake-provider-only; gates, real listeners, spies, sink and sessions are released in finally. One exact-expression wall-clock-timer annotation permits only failure cancellation; expiry always fails, never supplies readiness. No broad exclusion, sleep/polling, live provider, paid token or daemon startup. This demonstrates the latent defect, not historical October 27–28 wedge causality or resolution.
+
+Reproducible final validation (package root packages/coding-agent; all commands explicitly use env -u RLM_DEPTH):
+- npx tsx ../../node_modules/vitest/dist/cli.js --run test/agent-session-recursion.test.ts: 92/92 PASS.
+- Same direct command for test/goal-continuation-quiescence.test.ts: 8/8 PASS; test/autonomous-continuation-subagent-gate.test.ts: 28/28 PASS.
+- Same CLI with all three exact files and --sequence.shuffle --sequence.seed=17, then seed=73: 128/128 PASS each; no unexpected shuffle failure or retry.
+- At repository root env -u RLM_DEPTH npm run check: PASS (full output reviewed, no remaining warnings/infos); separate env -u RLM_DEPTH npm run check:test-policy: PASS.
+- Sensitivity uses exact pre-hardening source a3eadae403320eaa13e91ec2295bd58ad005e32d^ temporarily: two expected RED faults, steer-control GREEN. Restored hardened direct/full shuffled GREEN.
+
+Failed/superseded attempts are retained, not retried to green: initial new assertion confused aggregate context totalTokens with billable child spend (corrected to input/output/cost); first RED gated on diagnostics (superseded by real throwing-seam signal and released drain); first static-policy check rejected failure-only timer (single exact-expression rationale added). Initial sensitivity log filename reuse was corrected by verbatim recovery from worker tool output. The historical initial recursion 88/89 failure from inherited RLM_DEPTH=1 remains recorded; tests were not altered to match worker depth.
+
+Full local artifacts: /var/folders/4_/twy0wz3s1mq650wnqzn1b8rr0000gq/T/task-2-regression-oxrn3a1o/ contains evidence.json (every command, exit, correction), behavioral-coverage-map.json, README.md, final-test.patch and full logs. Original checkpoint artifacts remain at /var/folders/4_/twy0wz3s1mq650wnqzn1b8rr0000gq/T/task-2-episode-29v8w3wo/. Only owning Conversation may decide candidate status/merge; TASK-2 remains In Progress pending review.
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Implemented local non-deletion RLM child finalization hardening with truthful supported diagnostics and independent continuation attempts. Added two deterministic real-fault cases and separate steer-at-child-agent_end control in the existing recursion suite. Both faults expose orphaned settlement on the unhardened baseline; control passes, exact source restoration and hardened validation pass. Direct recursion 92/92, goal 8/8, autonomous 28/28; shuffle seeds 17/73 each 128/128; repository check and test-policy pass. Existing detached-deletion guarantees preserved. No historical wedge cause/resolution claim. Candidate awaits owning Conversation review; task status remains In Progress.
+<!-- SECTION:FINAL_SUMMARY:END -->
