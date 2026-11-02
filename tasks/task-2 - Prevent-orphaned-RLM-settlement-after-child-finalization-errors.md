@@ -1,10 +1,10 @@
 ---
 id: TASK-2
 title: Prevent orphaned RLM settlement after child finalization errors
-status: Ready for Merge
+status: Done
 assignee: []
 created_date: '2026-10-30 21:41'
-updated_date: '2026-11-02 21:40'
+updated_date: '2026-11-02 22:07'
 labels: []
 dependencies: []
 references:
@@ -172,6 +172,8 @@ Failed/superseded attempts are retained, not retried to green: initial new asser
 Full local artifacts: /var/folders/4_/twy0wz3s1mq650wnqzn1b8rr0000gq/T/task-2-regression-oxrn3a1o/ contains evidence.json (every command, exit, correction), behavioral-coverage-map.json, README.md, final-test.patch and full logs. Original checkpoint artifacts remain at /var/folders/4_/twy0wz3s1mq650wnqzn1b8rr0000gq/T/task-2-episode-29v8w3wo/. Only owning Conversation may decide candidate status/merge; TASK-2 remains In Progress pending review.
 
 Owning Conversation reviewed the complete TASK-2 native contract, the published candidate f80340d93dc3b1c6de3459b54a82f351e136f75e, test sensitivity/restoration evidence, direct and shuffled validation, docs and checks. Independent read-only review by openai-codex/gpt-6-astra found no material defects. The approved behavior/risk testing policy and all seven acceptance texts remain intact. Fresh native session observations prove the same Episode idle with no queued work, tools, bash or running RLM children; its explicitly bound former workers are deleted and absent. Canonical main remains fdbeff3a5d0664eb9f617a8e1ae8b8a66c4e7864. Publishing Ready for Merge only; no merge, abandonment, runtime update or Episode cleanup is authorized. Await Joe’s explicit decision for this exact TASK-2 candidate.
+
+Joe explicitly authorized merging the reviewed TASK-2 candidate now, with integration into the broader TASK-1/TASK-4 product plan to follow. Fast-forward merged candidate f80340d93dc3b1c6de3459b54a82f351e136f75e from reviewed main fdbeff3a5d0664eb9f617a8e1ae8b8a66c4e7864 and pushed canonical main normally; local, upstream and direct remote all equal the candidate. Independent review found no material defects and the documented regression sensitivity/control, direct/shuffled tests and repository checks passed. This publishes task completion for that exact code merge. Existing main-push workflows may run; no separate release command, runtime installation, activation or restart is authorized or performed. Broader product policy remains separate work. The same idle Episode will receive ordinary terminal cleanup after exact Done publication is verified.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
