@@ -30,6 +30,7 @@ import {
 	clampServiceTier,
 	clampThinkingLevel,
 	cleanupSessionResources,
+	getLogger,
 	getSupportedThinkingLevels,
 	isContextOverflow,
 	modelsAreEqual,
@@ -12831,6 +12832,23 @@ export class AgentSession {
 			return notice;
 		};
 
+		const reportFinalizationFailure = (operation: string, error: unknown) => {
+			try {
+				getLogger("coding-agent.rlm").error(operation, {
+					parentSessionId: this.sessionId,
+					childId: run.id,
+					childSessionId: childSession?.sessionId,
+					status: run.status,
+					detachedDeletion: !!run.detachedDeletion,
+					error: error instanceof Error ? error.message : String(error),
+					stack: error instanceof Error ? error.stack : undefined,
+				});
+			} catch {
+				// Even a hostile error formatter must not interrupt settlement.
+				getLogger("coding-agent.rlm").error(operation, { childId: run.id, error });
+			}
+		};
+
 		// Runtime startup and the task run are deliberately detached. The public
 		// spawn resolves at admission, while this task owns live tracking, usage,
 		// retention, cancellation, and late-startup cleanup.
@@ -13073,7 +13091,11 @@ export class AgentSession {
 					}
 				}
 			} finally {
-				flushPendingChildUsageAttribution();
+				try {
+					flushPendingChildUsageAttribution();
+				} catch (error) {
+					reportFinalizationFailure("Child finalization usage attribution failed", error);
+				}
 				if (run.detachedDeletion) {
 					run.deletionRunFinished = true;
 					if (!run.settled) {
@@ -13091,29 +13113,43 @@ export class AgentSession {
 						if (cleanupSucceeded) await this._finishRlmRunDeletion(run);
 					}
 				} else {
-					if (this._activeRlmChildRuns.get(run.id) === run) {
-						if (this._rlmChildSessions.has(run.id)) {
-							this._activeRlmChildRuns.delete(run.id);
-							if (run.unsubscribe) this._rlmChildUnsubscribes.set(run.id, run.unsubscribe);
-							run.abort = noopRlmChildAbort;
-							run.unsubscribe = undefined;
-							run.session = undefined;
-						} else if (run.status !== "error") {
-							this._removeRlmSubagentTracking(run.id, run);
-						} else {
-							run.unsubscribe?.();
-							run.abort = noopRlmChildAbort;
-							run.unsubscribe = undefined;
+					try {
+						if (this._activeRlmChildRuns.get(run.id) === run) {
+							if (this._rlmChildSessions.has(run.id)) {
+								this._activeRlmChildRuns.delete(run.id);
+								if (run.unsubscribe) this._rlmChildUnsubscribes.set(run.id, run.unsubscribe);
+								run.abort = noopRlmChildAbort;
+								run.unsubscribe = undefined;
+								run.session = undefined;
+							} else if (run.status !== "error") {
+								this._removeRlmSubagentTracking(run.id, run);
+							} else {
+								run.unsubscribe?.();
+								run.abort = noopRlmChildAbort;
+								run.unsubscribe = undefined;
+							}
 						}
+					} catch (error) {
+						reportFinalizationFailure("Child finalization tracking cleanup incomplete", error);
+					} finally {
+						// Settlement releases waiters; it does not certify successful cleanup.
+						run.settled = true;
+						run.settlement.resolve();
+						this._unsettledRlmChildRuns.delete(run);
 					}
-					run.settled = true;
-					run.settlement.resolve();
-					this._unsettledRlmChildRuns.delete(run);
-					this._maybeResumeGoalContinuationAfterRlmWork();
-					this._maybeResumeAutonomousContinuationAfterRlmWork();
+					try {
+						this._maybeResumeGoalContinuationAfterRlmWork();
+					} catch (error) {
+						reportFinalizationFailure("Child finalization goal continuation failed", error);
+					}
+					try {
+						this._maybeResumeAutonomousContinuationAfterRlmWork();
+					} catch (error) {
+						reportFinalizationFailure("Child finalization autonomous continuation failed", error);
+					}
 				}
 			}
-		})().catch(() => undefined);
+		})().catch((error) => reportFinalizationFailure("Detached child finalization failed", error));
 
 		return {
 			rlm_child_id: childNodeId,

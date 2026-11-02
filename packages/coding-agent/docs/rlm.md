@@ -116,6 +116,12 @@ await rlm.delete_subagent(children[0])
 
 The default recursion depth allows a root agent to create children. Raising the configured depth allows descendants to recurse further.
 
+#### Child finalization failures
+
+A terminal non-deletion child run releases its settlement even if usage-attribution finalization or tracking cleanup throws. Quiescence can therefore finish without waiting on an orphaned settlement. Unexpected finalization failures are reported through the `coding-agent.rlm` diagnostic logger; settlement does not mean cleanup succeeded. Detached deletion still waits for its stronger cleanup guarantees before settlement.
+
+This guards a source-identified failure path. It does not establish the cause of the October 27–28, 2026 daily-sweep stalls.
+
 ### 3. Skills add programmatic capability
 
 Prime Agent supports the Agent Skills markdown format and extends it with Python-backed skills. Both use `SKILL.md` for discovery, routing, and instructions. A Python-backed skill also contains a Python package that Prime Agent installs into the kernel environment and exposes by import name.
