@@ -1,10 +1,10 @@
 ---
 id: TASK-2
 title: Prevent orphaned RLM settlement after child finalization errors
-status: In Progress
+status: Ready for Merge
 assignee: []
 created_date: '2026-10-30 21:41'
-updated_date: '2026-11-02 21:31'
+updated_date: '2026-11-02 21:40'
 labels: []
 dependencies: []
 references:
@@ -170,6 +170,8 @@ Reproducible final validation (package root packages/coding-agent; all commands 
 Failed/superseded attempts are retained, not retried to green: initial new assertion confused aggregate context totalTokens with billable child spend (corrected to input/output/cost); first RED gated on diagnostics (superseded by real throwing-seam signal and released drain); first static-policy check rejected failure-only timer (single exact-expression rationale added). Initial sensitivity log filename reuse was corrected by verbatim recovery from worker tool output. The historical initial recursion 88/89 failure from inherited RLM_DEPTH=1 remains recorded; tests were not altered to match worker depth.
 
 Full local artifacts: /var/folders/4_/twy0wz3s1mq650wnqzn1b8rr0000gq/T/task-2-regression-oxrn3a1o/ contains evidence.json (every command, exit, correction), behavioral-coverage-map.json, README.md, final-test.patch and full logs. Original checkpoint artifacts remain at /var/folders/4_/twy0wz3s1mq650wnqzn1b8rr0000gq/T/task-2-episode-29v8w3wo/. Only owning Conversation may decide candidate status/merge; TASK-2 remains In Progress pending review.
+
+Owning Conversation reviewed the complete TASK-2 native contract, the published candidate f80340d93dc3b1c6de3459b54a82f351e136f75e, test sensitivity/restoration evidence, direct and shuffled validation, docs and checks. Independent read-only review by openai-codex/gpt-6-astra found no material defects. The approved behavior/risk testing policy and all seven acceptance texts remain intact. Fresh native session observations prove the same Episode idle with no queued work, tools, bash or running RLM children; its explicitly bound former workers are deleted and absent. Canonical main remains fdbeff3a5d0664eb9f617a8e1ae8b8a66c4e7864. Publishing Ready for Merge only; no merge, abandonment, runtime update or Episode cleanup is authorized. Await Joe’s explicit decision for this exact TASK-2 candidate.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
