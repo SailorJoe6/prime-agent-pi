@@ -1,10 +1,10 @@
 ---
 id: TASK-2
 title: Prevent orphaned RLM settlement after child finalization errors
-status: In Planning
+status: In Progress
 assignee: []
 created_date: '2026-10-30 21:41'
-updated_date: '2026-11-02 20:02'
+updated_date: '2026-11-02 20:08'
 labels: []
 dependencies: []
 references:
