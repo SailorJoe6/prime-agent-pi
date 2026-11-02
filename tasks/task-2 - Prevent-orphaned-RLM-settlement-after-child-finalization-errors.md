@@ -1,10 +1,10 @@
 ---
 id: TASK-2
 title: Prevent orphaned RLM settlement after child finalization errors
-status: Blocked
+status: In Planning
 assignee: []
 created_date: '2026-10-30 21:41'
-updated_date: '2026-11-01 02:54'
+updated_date: '2026-11-02 20:02'
 labels: []
 dependencies: []
 references:
@@ -110,4 +110,6 @@ Keep TASK-2 In Planning for review. This plan authorizes no implementation; requ
 Episode admission blocked after durable or uncertain mutation at 2026-11-01T02:54:35.582Z.
 Recovery condition: inspect .prime-claw/ownership.json and reconcile every recorded task, worktree, and session identity to TASK-2 before continuing; do not retry it as fresh creation.
 Cause: Episode worktree is missing .agents/skills/execute/SKILL.md
+
+Operator explicitly cancelled failed admission 7cd387bb-7278-4dd2-b770-ba051f919859. Its unlaunched Orca worktree, local branch, clean published nested task clone, and exact ownership entry were removed. No implementation code was discarded. The previous admission blocker is retired; TASK-2 and its specification, acceptance criteria, and implementation plan are preserved for a fresh admission. The project-skill tracking fix is committed on main at 58c7a4e9320abe15e761cdb29ebf0c4d87829223.
 <!-- SECTION:NOTES:END -->
