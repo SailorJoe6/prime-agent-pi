@@ -4,7 +4,7 @@ title: Prevent orphaned RLM settlement after child finalization errors
 status: In Progress
 assignee: []
 created_date: '2026-10-30 21:41'
-updated_date: '2026-11-02 20:10'
+updated_date: '2026-11-02 20:16'
 labels: []
 dependencies: []
 references:
@@ -29,6 +29,10 @@ documentation:
   - 'https://github.com/PrimeIntellect-ai/prime-agent/releases/tag/v0.10.0'
   - 'https://github.com/PrimeIntellect-ai/prime-agent/releases/tag/v0.10.1'
   - 'https://github.com/PrimeIntellect-ai/prime-agent/releases/tag/v0.10.2'
+modified_files:
+  - packages/coding-agent/src/core/agent-session.ts
+  - packages/coding-agent/docs/rlm.md
+  - packages/coding-agent/.changes/task-2-rlm-finalization-settlement.md
 type: bug
 ordinal: 2000
 ---
@@ -114,4 +118,24 @@ Cause: Episode worktree is missing .agents/skills/execute/SKILL.md
 Operator explicitly cancelled failed admission 7cd387bb-7278-4dd2-b770-ba051f919859. Its unlaunched Orca worktree, local branch, clean published nested task clone, and exact ownership entry were removed. No implementation code was discarded. The previous admission blocker is retired; TASK-2 and its specification, acceptance criteria, and implementation plan are preserved for a fresh admission. The project-skill tracking fix is committed on main at 58c7a4e9320abe15e761cdb29ebf0c4d87829223.
 
 Execution started in Episode 01a19de1-b1f5-70af-8429-44fb6499a02a at code base 58c7a4e9320abe15e761cdb29ebf0c4d87829223. One bounded slice: non-deletion child finalization settlement, truthful diagnostics, focused deterministic regression and steer control; detached deletion unchanged. Native task status remains In Progress. Validation will include negative-control removal/restoration, direct recursion/continuation tests, shuffle seeds 17/73, npm run check and npm run check:test-policy. No historical wedge causality claim.
+
+## Resumable checkpoint — test/source growth conflict
+Code checkpoint: a3eadae403320eaa13e91ec2295bd58ad005e32d, branch JLanders/prime-agent-task-2-episode-be707607, pushed without force. This is NOT a completed candidate; all seven acceptance criteria remain unchecked. No test file was changed.
+
+Changed files:
+- packages/coding-agent/src/core/agent-session.ts (+56/-20): separately guarded attribution and tracking cleanup, non-deletion settlement in finally, independent goal/autonomous notifications, no-throw coding-agent.rlm diagnostics. Detached deletion retains observer/retry cleanup before settlement.
+- packages/coding-agent/docs/rlm.md (+6): behavior and historical uncertainty.
+- packages/coding-agent/.changes/task-2-rlm-finalization-settlement.md (+1): user-visible fragment.
+
+Exact blocker: smallest shared fault/control draft is 84 test lines before formatter/imports and remaining required durable accounting/real continuation assertions, versus 56 added source lines (net +36). Required attribution-fault, real-disposer tracking-fault and separate steer-at-agent_end coverage cannot honestly fit the current no-more-test-than-source rule. Draft is not executable evidence. We did not pad source, delete valid tests, weaken policy, or add excess tests.
+Unblock condition: operator explicitly authorizes a narrow TASK-2 test/source growth exception sufficient for required focused coverage, or explicitly approves another resolution preserving acceptance behavior. Recommended: narrow exception, retain all seven criteria and no broad policy exclusion. Same Episode/worktree/branch must resume; no new admission.
+
+Validation from packages/coding-agent:
+1. npx tsx ../../node_modules/vitest/dist/cli.js --run test/agent-session-recursion.test.ts — first attempt FAILED 88/89: worker inherited RLM_DEPTH=1 and existing root-session test:2843 expected 0. Preserved failure; no test changed.
+2. env -u RLM_DEPTH npx tsx ../../node_modules/vitest/dist/cli.js --run test/agent-session-recursion.test.ts — PASSED 89/89 after explicit environment correction; inherited RLM_MAX_DEPTH=2 retained. Existing deletion cleanup/unwind/retry coverage passed.
+3. env -u RLM_DEPTH npx tsx ../../node_modules/vitest/dist/cli.js --run test/goal-continuation-quiescence.test.ts test/autonomous-continuation-subagent-gate.test.ts — PASSED 36/36 (goal 8, autonomous 28).
+At root: npm run check PASSED (full output inspected; no fixes/warnings); npm run check:test-policy PASSED. Pre-commit reran full check successfully.
+NOT RUN: new injected-fault regression, separate steer control, hardening-removal sensitivity/restoration, shuffle seeds 17 and 73. Existing-suite success does not satisfy those missing acceptance requirements. No historical October 27–28 wedge causality or resolution claim.
+
+Reproducible local artifacts: /var/folders/4_/twy0wz3s1mq650wnqzn1b8rr0000gq/T/task-2-episode-29v8w3wo/worker-evidence.json, draft-tests.txt, recursion-existing.log, recursion-root-environment.log, continuation-root-environment.log, npm-check.log, test-policy.log. npm ci succeeded; reported existing dependency audit findings (28 vulnerabilities) are outside this bounded fix. No dependencies/lockfile changed. Native task remains In Progress; only owning Conversation may publish Blocked or another lifecycle decision.
 <!-- SECTION:NOTES:END -->
