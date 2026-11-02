@@ -1,10 +1,10 @@
 ---
 id: TASK-2
 title: Prevent orphaned RLM settlement after child finalization errors
-status: Blocked
+status: In Progress
 assignee: []
 created_date: '2026-10-30 21:41'
-updated_date: '2026-11-02 20:18'
+updated_date: '2026-11-02 21:17'
 labels: []
 dependencies: []
 references:
@@ -140,4 +140,6 @@ NOT RUN: new injected-fault regression, separate steer control, hardening-remova
 Reproducible local artifacts: /var/folders/4_/twy0wz3s1mq650wnqzn1b8rr0000gq/T/task-2-episode-29v8w3wo/worker-evidence.json, draft-tests.txt, recursion-existing.log, recursion-root-environment.log, continuation-root-environment.log, npm-check.log, test-policy.log. npm ci succeeded; reported existing dependency audit findings (28 vulnerabilities) are outside this bounded fix. No dependencies/lockfile changed. Native task remains In Progress; only owning Conversation may publish Blocked or another lifecycle decision.
 
 Owning Conversation accepted the reported TASK-2 test/source growth blocker after reviewing pushed checkpoint a3eadae403320eaa13e91ec2295bd58ad005e32d, compatible current native task evidence at 7601f71aea4adc3f5361865d7b1b2fa5897e9007, and the 84-line shared draft. Production adds 56 lines and removes 20; no test lines changed. Required focused regression/control coverage exceeds the current test/source growth allowance. This checkpoint is not merge-ready; new fault/control, sensitivity/restoration and shuffle validation remain outstanding. Unblock condition: Joe explicitly approves a TASK-2-only exception permitting necessary focused regression test additions to exceed source additions, preserving all seven acceptance criteria and all other testing policies, or approves another resolution preserving those behaviors. Preserve the same Episode, worktree and branch; do not create a new admission, merge or clean up.
+
+Joe explicitly approved replacing the inherited test/source line-count rule in AGENTS.md with: "Avoid redundant tests and unnecessary scaffolding; judge coverage by behavior and risk, not line count." The replacement is published on canonical main at fdbeff3a5d0664eb9f617a8e1ae8b8a66c4e7864 and integrated into this same Episode at 9956c3485547f57942c97cab3b8cb454b4844c7b. This clears the recorded test/source growth blocker and supersedes the old numerical allowance language in the existing Implementation Plan and historical blocker notes. Necessary focused regression coverage may exceed production line additions; preserve all seven acceptance criteria, useful existing coverage, and every other testing policy. Do not pad source or add redundant tests/scaffolding. Joe requested continuation of the same retained Episode; no new admission, merge of TASK-2 implementation into main, abandonment or cleanup is authorized by this clearance.
 <!-- SECTION:NOTES:END -->
