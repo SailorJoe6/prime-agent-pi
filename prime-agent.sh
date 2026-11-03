@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SCRIPT_DIR="$(node --input-type=module -e 'import { realpathSync } from "node:fs"; import { dirname } from "node:path"; console.log(dirname(realpathSync(process.argv[1])));' "${BASH_SOURCE[0]}")"
 export PRIME_AGENT_LAUNCHER_PATH="$SCRIPT_DIR/prime-agent.sh"
 if BUILD_ID="$(git -C "$SCRIPT_DIR" describe --tags --always --dirty 2>/dev/null)"; then
   export PRIME_AGENT_BUILD_ID="$BUILD_ID"

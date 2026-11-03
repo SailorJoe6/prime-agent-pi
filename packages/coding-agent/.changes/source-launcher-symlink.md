@@ -1,0 +1,1 @@
+- Fixed source launches through symlinks, including the `prime-agent` PATH command.
