@@ -4,7 +4,7 @@ title: Define the Prime Agent Pi product contract
 status: In Design
 assignee: []
 created_date: '2026-11-01 16:15'
-updated_date: '2026-11-05 02:45'
+updated_date: '2026-11-05 02:50'
 labels: []
 dependencies: []
 references:
@@ -42,7 +42,11 @@ Joe set the nearest-term goal as reaching parity with the current upstream relea
 
 ### Settled: capability-and-behavior parity
 
-Parity means providing the same user-facing capabilities and behavior and fixing the same applicable bugs, implemented in Prime Agent Pi’s TypeScript/Python architecture. Matching upstream Rust internals is not a goal; an internal Rust change alone does not require copying its implementation. Handling of compatibility conflicts, allowed parity exceptions, and the ongoing catch-up commitment remain open interview decisions.
+Parity means providing the same user-facing capabilities and behavior and fixing the same applicable bugs, implemented in Prime Agent Pi’s TypeScript/Python architecture. Matching upstream Rust internals is not a goal; an internal Rust change alone does not require copying its implementation. Allowed parity exceptions beyond the compatibility rule below and the ongoing catch-up commitment remain open interview decisions.
+
+### Settled: preserve existing compatibility by default
+
+When an upstream change conflicts with existing Orca or Prime Claw integrations, TypeScript extensions, or Python-first workflows, preserve those by default and adapt the upstream capability around them. Do not break compatibility automatically in pursuit of parity. Bring any unavoidable compatibility break to Joe as an explicit product decision before implementation. This is not blanket approval for an exception or a break; the treatment of a specific unavoidable conflict remains for that decision.
 
 ## Required decisions
 
@@ -81,7 +85,7 @@ Parity means providing the same user-facing capabilities and behavior and fixing
 <!-- AC:BEGIN -->
 - [ ] #1 The product contract states Prime Agent Pi’s intended users, core use cases, product promise, and distinct reason for existing, with no contradiction between an evolving product and its current validated baseline.
 - [ ] #2 The contract defines capability-and-behavior parity with upstream user-facing features and applicable bug fixes, implemented in Prime Agent Pi’s TypeScript/Python architecture rather than by matching Rust internals. It specifies the comparison release, observable parity evidence, architecture and compatibility conflict handling, any justified exceptions, and ongoing intake expectations alongside local fixes.
-- [ ] #3 The contract identifies hard and best-effort compatibility commitments for Orca, Prime Claw, TypeScript extensions, Python-first execution, saved sessions, daemon protocol behavior, and rollback, including how an intentional compatibility break would be proposed.
+- [ ] #3 The contract preserves existing Orca and Prime Claw integrations, TypeScript extensions, and Python-first workflows by default when upstream parity conflicts with them, adapting the upstream capability where possible and requiring Joe’s explicit decision before implementing an unavoidable compatibility break. It also identifies hard and best-effort commitments for saved sessions, daemon protocol behavior, and rollback, including how intentional incompatibilities are proposed.
 - [ ] #4 The contract makes explicit decisions about versioning, release channels, cadence, support window, and the relationship between product versions and immutable downstream runtime releases; it does not inherit an indefinite `0.9.x` or next-`0.9.9` assumption by default.
 - [ ] #5 The contract chooses package, CLI command, installer, source-install, and distribution identity and addresses the upstream installer’s Rust-product behavior without changing any installed runtime in this task.
 - [ ] #6 The contract defines the product’s relationship to `PrimeIntellect-ai/prime-agent` and `SailorJoe6/prime-agent-upstream`, including stable-release intake, provenance preservation, adaptation boundaries, and the prohibition on mechanical Rust merges into product `main`.
