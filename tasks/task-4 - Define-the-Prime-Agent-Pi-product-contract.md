@@ -4,7 +4,7 @@ title: Define the Prime Agent Pi product contract
 status: In Design
 assignee: []
 created_date: '2026-11-01 16:15'
-updated_date: '2026-11-05 02:51'
+updated_date: '2026-11-05 14:19'
 labels: []
 dependencies: []
 references:
@@ -42,15 +42,19 @@ Joe set the nearest-term goal as reaching parity with the current upstream relea
 
 ### Settled: capability-and-behavior parity
 
-Parity means providing the same user-facing capabilities and behavior and fixing the same applicable bugs, implemented in Prime Agent Pi’s TypeScript/Python architecture. Matching upstream Rust internals is not a goal; an internal Rust change alone does not require copying its implementation. Allowed parity exceptions beyond the compatibility rule below and the ongoing catch-up commitment remain open interview decisions.
+Parity means providing the same user-facing capabilities and behavior and fixing the same applicable bugs, implemented in Prime Agent Pi’s TypeScript/Python architecture. Matching upstream Rust internals is not a goal; an internal Rust change alone does not require copying its implementation. Allowed parity exceptions beyond the compatibility rule below, release-channel eligibility, and the ongoing catch-up commitment remain open interview decisions.
 
 ### Settled: preserve existing compatibility by default
 
 When an upstream change conflicts with existing Orca or Prime Claw integrations, TypeScript extensions, or Python-first workflows, preserve those by default and adapt the upstream capability around them. Do not break compatibility automatically in pursuit of parity. Bring any unavoidable compatibility break to Joe as an explicit product decision before implementation. This is not blanket approval for an exception or a break; the treatment of a specific unavoidable conflict remains for that decision.
 
-### Settled: current-upstream parity is the finish line
+### Settled: parity with released upstream versions is the finish line
 
-Catch-up is complete when Prime Agent Pi reaches the agreed capability-and-behavior parity with the current upstream release, not merely when a frozen historical target is completed. Incorporate later upstream releases that arrive during catch-up rather than automatically deferring them to another cycle to preserve a fixed finish line. Joe rejected that fixed-target approach because upstream does not change too often to catch up. Record exact comparison revisions for evidence, not as permission to declare success while relevant newer upstream changes remain unaddressed. The previously settled compatibility rule still applies. This answer does not yet decide how upstream main, prereleases, or stable-release channels enter the comparison.
+Catch-up is complete when Prime Agent Pi reaches the agreed capability-and-behavior parity with current released upstream versions, not merely when a frozen historical target is completed and not by matching upstream main. Incorporate later upstream releases that arrive during catch-up rather than automatically deferring them to another cycle to preserve a fixed finish line. Joe rejected that fixed-target approach because upstream does not change too often to catch up. Record exact released-version comparison revisions for evidence, not as permission to declare success while relevant newer released changes remain unaddressed. Upstream main is not the parity target. The previously settled compatibility rule still applies. Whether published prereleases qualify remains an open release-channel decision.
+
+### Settled: audience and product purpose
+
+Prime Agent Pi is intended to help any Prime Agent user affected by the removal of the Pi-derived extensibility APIs in the upstream Rust rewrite, not only Joe’s personal workflows. Its principal reason for existing is to retain those extensibility APIs while providing the same feature updates and applicable bug fixes that upstream releases receive. This is an extensible TypeScript/Python continuation with released-upstream capability-and-behavior parity, not a frozen legacy fork. This audience decision does not by itself create a support-service commitment, platform matrix, or compatibility promise beyond the separately settled rules.
 
 ## Required decisions
 
@@ -87,8 +91,8 @@ Catch-up is complete when Prime Agent Pi reaches the agreed capability-and-behav
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 The product contract states Prime Agent Pi’s intended users, core use cases, product promise, and distinct reason for existing, with no contradiction between an evolving product and its current validated baseline.
-- [ ] #2 The contract defines capability-and-behavior parity with current upstream user-facing features and applicable bug fixes, implemented in Prime Agent Pi’s TypeScript/Python architecture rather than by matching Rust internals. Catch-up finishes at current-upstream parity, not completion of a frozen historical target; later upstream releases arriving during catch-up are incorporated. The contract specifies exact comparison evidence, architecture and compatibility conflict handling, any justified exceptions, and ongoing intake expectations alongside local fixes.
+- [ ] #1 The contract identifies Prime Agent users affected by the Rust rewrite’s removal of Pi-derived extensibility APIs as the intended audience. It states the core promise: retain those APIs while providing the same user-facing feature updates and applicable bug fixes as released upstream versions, without reducing the product to a frozen legacy fork.
+- [ ] #2 The contract defines capability-and-behavior parity with released upstream user-facing features and applicable bug fixes, implemented in Prime Agent Pi’s TypeScript/Python architecture rather than by matching Rust internals. Catch-up finishes at parity with current released versions, not upstream main or completion of a frozen historical target; later upstream releases arriving during catch-up are incorporated. The contract specifies released-version comparison evidence, release-channel eligibility, architecture and compatibility conflict handling, any justified exceptions, and ongoing intake expectations alongside local fixes.
 - [ ] #3 The contract preserves existing Orca and Prime Claw integrations, TypeScript extensions, and Python-first workflows by default when upstream parity conflicts with them, adapting the upstream capability where possible and requiring Joe’s explicit decision before implementing an unavoidable compatibility break. It also identifies hard and best-effort commitments for saved sessions, daemon protocol behavior, and rollback, including how intentional incompatibilities are proposed.
 - [ ] #4 The contract makes explicit decisions about versioning, release channels, cadence, support window, and the relationship between product versions and immutable downstream runtime releases; it does not inherit an indefinite `0.9.x` or next-`0.9.9` assumption by default.
 - [ ] #5 The contract chooses package, CLI command, installer, source-install, and distribution identity and addresses the upstream installer’s Rust-product behavior without changing any installed runtime in this task.
