@@ -4,7 +4,7 @@ title: Define the Prime Agent Pi product contract
 status: In Design
 assignee: []
 created_date: '2026-11-01 16:15'
-updated_date: '2026-11-05 00:37'
+updated_date: '2026-11-05 02:45'
 labels: []
 dependencies: []
 references:
@@ -38,7 +38,11 @@ Produce one reviewed, version-controlled Prime Agent Pi product contract that ma
 
 Conduct an interviewer-led Q&A with Joe, one material question at a time. Keep settled answers in this living task, then produce the concise canonical product contract and the smallest separate implementation specifications. Do not infer product choices from inherited upstream documentation or tooling.
 
-Joe set the nearest-term goal as reaching parity with the current upstream release, integrating new upstream features and fixing upstream-discovered bugs that also affect Prime Agent Pi. `v0.10.2` is the working comparison target, not a freshly verified latest-release claim; TASK-1 owns the stable-release audit. The meaning of parity, handling of architecture and compatibility conflicts, allowed exceptions, and ongoing catch-up commitment remain interview decisions. This replaces the earlier assumption that scope is limited to selected enhancements without a parity goal; it does not authorize implementation, Rust adoption, or mechanical Rust merges.
+Joe set the nearest-term goal as reaching parity with the current upstream release, integrating new upstream features and fixing upstream-discovered bugs that also affect Prime Agent Pi. `v0.10.2` is the working comparison target, not a freshly verified latest-release claim; TASK-1 owns the stable-release audit. This replaces the earlier assumption that scope is limited to selected enhancements without a parity goal; it does not authorize implementation, Rust adoption, or mechanical Rust merges.
+
+### Settled: capability-and-behavior parity
+
+Parity means providing the same user-facing capabilities and behavior and fixing the same applicable bugs, implemented in Prime Agent Pi’s TypeScript/Python architecture. Matching upstream Rust internals is not a goal; an internal Rust change alone does not require copying its implementation. Handling of compatibility conflicts, allowed parity exceptions, and the ongoing catch-up commitment remain open interview decisions.
 
 ## Required decisions
 
@@ -76,7 +80,7 @@ Joe set the nearest-term goal as reaching parity with the current upstream relea
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
 - [ ] #1 The product contract states Prime Agent Pi’s intended users, core use cases, product promise, and distinct reason for existing, with no contradiction between an evolving product and its current validated baseline.
-- [ ] #2 The contract defines the upstream feature and applicable-bug-fix parity goal, its comparison release, observable meaning, architecture and compatibility conflict handling, any justified exceptions, and ongoing intake expectations alongside local fixes; it does not assume identical Rust architecture or reduce Prime Agent Pi to a frozen fork.
+- [ ] #2 The contract defines capability-and-behavior parity with upstream user-facing features and applicable bug fixes, implemented in Prime Agent Pi’s TypeScript/Python architecture rather than by matching Rust internals. It specifies the comparison release, observable parity evidence, architecture and compatibility conflict handling, any justified exceptions, and ongoing intake expectations alongside local fixes.
 - [ ] #3 The contract identifies hard and best-effort compatibility commitments for Orca, Prime Claw, TypeScript extensions, Python-first execution, saved sessions, daemon protocol behavior, and rollback, including how an intentional compatibility break would be proposed.
 - [ ] #4 The contract makes explicit decisions about versioning, release channels, cadence, support window, and the relationship between product versions and immutable downstream runtime releases; it does not inherit an indefinite `0.9.x` or next-`0.9.9` assumption by default.
 - [ ] #5 The contract chooses package, CLI command, installer, source-install, and distribution identity and addresses the upstream installer’s Rust-product behavior without changing any installed runtime in this task.
