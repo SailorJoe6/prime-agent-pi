@@ -4,7 +4,7 @@ title: Define the Prime Agent Pi product contract
 status: In Design
 assignee: []
 created_date: '2026-11-01 16:15'
-updated_date: '2026-11-05 02:50'
+updated_date: '2026-11-05 02:51'
 labels: []
 dependencies: []
 references:
@@ -48,6 +48,10 @@ Parity means providing the same user-facing capabilities and behavior and fixing
 
 When an upstream change conflicts with existing Orca or Prime Claw integrations, TypeScript extensions, or Python-first workflows, preserve those by default and adapt the upstream capability around them. Do not break compatibility automatically in pursuit of parity. Bring any unavoidable compatibility break to Joe as an explicit product decision before implementation. This is not blanket approval for an exception or a break; the treatment of a specific unavoidable conflict remains for that decision.
 
+### Settled: current-upstream parity is the finish line
+
+Catch-up is complete when Prime Agent Pi reaches the agreed capability-and-behavior parity with the current upstream release, not merely when a frozen historical target is completed. Incorporate later upstream releases that arrive during catch-up rather than automatically deferring them to another cycle to preserve a fixed finish line. Joe rejected that fixed-target approach because upstream does not change too often to catch up. Record exact comparison revisions for evidence, not as permission to declare success while relevant newer upstream changes remain unaddressed. The previously settled compatibility rule still applies. This answer does not yet decide how upstream main, prereleases, or stable-release channels enter the comparison.
+
 ## Required decisions
 
 - Define the intended users, core use cases, product promise, and the reason Prime Agent Pi exists separately from upstream Prime Agent.
@@ -84,7 +88,7 @@ When an upstream change conflicts with existing Orca or Prime Claw integrations,
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
 - [ ] #1 The product contract states Prime Agent Pi’s intended users, core use cases, product promise, and distinct reason for existing, with no contradiction between an evolving product and its current validated baseline.
-- [ ] #2 The contract defines capability-and-behavior parity with upstream user-facing features and applicable bug fixes, implemented in Prime Agent Pi’s TypeScript/Python architecture rather than by matching Rust internals. It specifies the comparison release, observable parity evidence, architecture and compatibility conflict handling, any justified exceptions, and ongoing intake expectations alongside local fixes.
+- [ ] #2 The contract defines capability-and-behavior parity with current upstream user-facing features and applicable bug fixes, implemented in Prime Agent Pi’s TypeScript/Python architecture rather than by matching Rust internals. Catch-up finishes at current-upstream parity, not completion of a frozen historical target; later upstream releases arriving during catch-up are incorporated. The contract specifies exact comparison evidence, architecture and compatibility conflict handling, any justified exceptions, and ongoing intake expectations alongside local fixes.
 - [ ] #3 The contract preserves existing Orca and Prime Claw integrations, TypeScript extensions, and Python-first workflows by default when upstream parity conflicts with them, adapting the upstream capability where possible and requiring Joe’s explicit decision before implementing an unavoidable compatibility break. It also identifies hard and best-effort commitments for saved sessions, daemon protocol behavior, and rollback, including how intentional incompatibilities are proposed.
 - [ ] #4 The contract makes explicit decisions about versioning, release channels, cadence, support window, and the relationship between product versions and immutable downstream runtime releases; it does not inherit an indefinite `0.9.x` or next-`0.9.9` assumption by default.
 - [ ] #5 The contract chooses package, CLI command, installer, source-install, and distribution identity and addresses the upstream installer’s Rust-product behavior without changing any installed runtime in this task.
