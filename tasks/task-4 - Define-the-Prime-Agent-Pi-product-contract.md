@@ -4,7 +4,7 @@ title: Define the Prime Agent Pi product contract
 status: In Design
 assignee: []
 created_date: '2026-11-01 16:15'
-updated_date: '2026-11-06 15:19'
+updated_date: '2026-11-06 15:20'
 labels: []
 dependencies: []
 references:
@@ -49,7 +49,7 @@ Joe set the nearest-term goal as reaching parity with the current upstream relea
 
 ### Settled: capability-and-behavior parity
 
-Parity means providing the same user-facing capabilities and behavior and fixing the same applicable bugs, implemented in Prime Agent Pi’s TypeScript/Python architecture. Matching upstream Rust internals is not a goal; an internal Rust change alone does not require copying its implementation. Allowed parity exceptions beyond the compatibility rule below, release-channel eligibility, and the ongoing catch-up commitment remain open interview decisions.
+Parity means providing the same user-facing capabilities and behavior and fixing the same applicable bugs, implemented in Prime Agent Pi’s TypeScript/Python architecture. Matching upstream Rust internals is not a goal; an internal Rust change alone does not require copying its implementation. Allowed parity exceptions beyond the compatibility rule below and the ongoing catch-up commitment remain open interview decisions.
 
 ### Settled: preserve existing compatibility by default
 
@@ -57,7 +57,7 @@ When an upstream change conflicts with existing Orca or Prime Claw integrations,
 
 ### Settled: parity with released upstream versions is the finish line
 
-Catch-up is complete when Prime Agent Pi reaches the agreed capability-and-behavior parity with current released upstream versions, not merely when a frozen historical target is completed and not by matching upstream main. Incorporate later upstream releases that arrive during catch-up rather than automatically deferring them to another cycle to preserve a fixed finish line. Joe rejected that fixed-target approach because upstream does not change too often to catch up. Record exact released-version comparison revisions for evidence, not as permission to declare success while relevant newer released changes remain unaddressed. Upstream main is not the parity target. The previously settled compatibility rule still applies. Whether published prereleases qualify remains an open release-channel decision.
+Catch-up is complete when Prime Agent Pi reaches the agreed capability-and-behavior parity with current released upstream versions, not merely when a frozen historical target is completed and not by matching upstream main. Incorporate later upstream releases that arrive during catch-up rather than automatically deferring them to another cycle to preserve a fixed finish line. Joe rejected that fixed-target approach because upstream does not change too often to catch up. Record exact released-version comparison revisions for evidence, not as permission to declare success while relevant newer released changes remain unaddressed. Upstream main is not the parity target. The previously settled compatibility rule still applies. Only stable upstream releases define the parity target. Betas, release candidates, other prereleases, and upstream main do not expand that target. This is not a frozen-version policy: incorporate new stable upstream releases during catch-up. Pi’s own release-channel policy remains a separate decision.
 
 ### Settled: audience and product purpose
 
@@ -127,7 +127,7 @@ Evidence: the exact-tag release-platform source and `packages/coding-agent/docs/
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
 - [ ] #1 The contract identifies Prime Agent users affected by the Rust rewrite’s removal of Pi-derived extensibility APIs as the intended audience. It states the core promise: retain those APIs while providing the same user-facing feature updates and applicable bug fixes as released upstream versions, without reducing the product to a frozen legacy fork.
-- [ ] #2 The contract defines capability-and-behavior parity with released upstream user-facing features and applicable bug fixes, implemented in Prime Agent Pi’s TypeScript/Python architecture rather than by matching Rust internals. Catch-up finishes at parity with current released versions, not upstream main or completion of a frozen historical target; later upstream releases arriving during catch-up are incorporated. The contract specifies released-version comparison evidence, release-channel eligibility, architecture and compatibility conflict handling, any justified exceptions, and ongoing intake expectations alongside local fixes.
+- [ ] #2 The contract defines capability-and-behavior parity with current stable upstream user-facing features and applicable bug fixes, implemented in Prime Agent Pi’s TypeScript/Python architecture rather than by matching Rust internals. Catch-up incorporates later stable releases and finishes at current stable-release parity, not upstream main or a frozen historical target. Betas, release candidates, and other prereleases are excluded as parity targets. The contract specifies released-version comparison evidence, architecture and compatibility conflict handling, any justified exceptions, and ongoing intake expectations alongside local fixes.
 - [ ] #3 The contract preserves the entire public v0.9.8 extensibility surface, including extension hooks, custom tools and commands, and TUI customization, not only APIs Joe uses. It preserves existing Orca and Prime Claw integrations and Python-first workflows by default when upstream parity conflicts with them, adapting upstream capabilities where possible and requiring Joe’s explicit decision before implementing an unavoidable compatibility break. It also identifies hard and best-effort commitments for saved sessions, daemon protocol behavior, and rollback, including how intentional incompatibilities are proposed.
 - [ ] #4 The contract uses the released upstream version as the first three components and a fourth Pi revision for local fixes, such as `0.10.2.1` and `0.10.2.2`, advancing to a new upstream version only after integrating its released features and applicable fixes under the compatibility rules. It resolves machine/package encoding for the four-part product version, initial revision convention, ordering, release channels, cadence, support window, and relationship to immutable legacy runtime releases without inheriting an indefinite `0.9.x` or next-`0.9.9` assumption.
 - [ ] #5 The contract requires a ready-to-install `prime-agent-pi` distribution while retaining the `prime-agent` command, with any future command rename left to Joe. It preserves v0.9.8’s eight macOS/Linux native targets (macOS arm64/x64; Linux arm64 glibc/musl; Linux x64 glibc/musl with ordinary and baseline variants) and its additional documented Windows Bash-based and Android Termux setup routes, without inventing Windows/Android native archives. It defines package format, delivery channel, platform validation, installer/update and source-install policy, resolves registry-specific naming constraints, and addresses the upstream installer’s Rust-product behavior without publishing or installing anything in this task.
