@@ -4,7 +4,7 @@ title: Define the Prime Agent Pi product contract
 status: In Design
 assignee: []
 created_date: '2026-11-01 16:15'
-updated_date: '2026-11-06 03:20'
+updated_date: '2026-11-06 15:19'
 labels: []
 dependencies: []
 references:
@@ -13,6 +13,13 @@ references:
   - 'https://github.com/PrimeIntellect-ai/prime-agent'
   - >-
     https://github.com/SailorJoe6/prime-agent-pi/commit/a1faacd53ac4473a75de1d434afaf50945c2f647
+  - >-
+    https://github.com/PrimeIntellect-ai/prime-agent/blob/7d442aafa985f9342134fac16c2ef41f03fb45c1/scripts/release-platforms.mjs
+  - >-
+    https://github.com/PrimeIntellect-ai/prime-agent/blob/7d442aafa985f9342134fac16c2ef41f03fb45c1/packages/coding-agent/docs/windows.md
+  - >-
+    https://github.com/PrimeIntellect-ai/prime-agent/blob/7d442aafa985f9342134fac16c2ef41f03fb45c1/packages/coding-agent/docs/termux.md
+  - 'https://github.com/PrimeIntellect-ai/prime-agent/releases/tag/v0.9.8'
 documentation:
   - README.md
 type: task
@@ -72,7 +79,17 @@ The public executable must remain `prime-agent` to keep existing systems’ Prim
 
 ### Settled: ready-to-install prime-agent-pi distribution
 
-Provide a ready-to-install public package rather than requiring ordinary users to install from a source checkout. Joe delegated the package name choice; use `prime-agent-pi` as the public package/distribution identity and Prime Agent Pi as the product name, while installing the previously agreed `prime-agent` executable. A distinct distribution name does not authorize renaming that executable or inherited source workspaces during this task. The package format, delivery channel, registry-specific availability or scope, supported platforms, installer/update behavior, and ongoing source-install support remain to be specified. No package is created, reserved, published, or installed by this interview decision.
+Provide a ready-to-install public package rather than requiring ordinary users to install from a source checkout. Joe delegated the package name choice; use `prime-agent-pi` as the public package/distribution identity and Prime Agent Pi as the product name, while installing the previously agreed `prime-agent` executable. A distinct distribution name does not authorize renaming that executable or inherited source workspaces during this task. Platform coverage is decided below. The package format, delivery channel, registry-specific availability or scope, installer/update behavior, and any source-install policy beyond the preserved platform routes remain to be specified. No package is created, reserved, published, or installed by this interview decision.
+
+### Settled: retain the final upstream TypeScript platform coverage
+
+Joe chose the same platform coverage as upstream’s final Pi-based release, v0.9.8 (`7d442aafa985f9342134fac16c2ef41f03fb45c1`), rather than a newly narrowed set. Keep the distinction between shipped native packages and additional documented setup routes:
+
+- Native packages: macOS Apple Silicon (`darwin-arm64`) and Intel (`darwin-x64`); Linux ARM64 on glibc and musl; Linux x64 on glibc and musl, each with ordinary and baseline/non-AVX2 variants. These are the eight targets in tagged `scripts/release-platforms.mjs`, corroborated by the actual v0.9.8 GitHub release assets.
+- Windows: retain the documented Bash-based setup, including Git Bash or another configured Bash/WSL route. The v0.9.8 Windows guide exists, but the release shipped no Windows native archive; this decision does not invent a native Windows package requirement.
+- Android: retain the documented Termux source-install route with its existing limitations, including text-only clipboard integration and unavailable optional native dependencies. The release shipped no Android native archive.
+
+Evidence: the exact-tag release-platform source and `packages/coding-agent/docs/windows.md` and `termux.md`, plus https://github.com/PrimeIntellect-ai/prime-agent/releases/tag/v0.9.8. This is verified historical support intent/artifact coverage, not a claim that Pi has already been tested on all those systems. Preserve the coverage and document/test the respective routes during separately authorized implementation; do not silently promote supplemental setup notes into stronger native-package guarantees.
 
 ## Required decisions
 
@@ -80,7 +97,7 @@ Provide a ready-to-install public package rather than requiring ordinary users t
 - Define the product boundary and parity goal: how new upstream features, applicable upstream bug fixes, local fixes, and incompatible upstream architecture are evaluated. Specify observable parity, any justified exceptions, and ongoing intake expectations without reducing the product to a frozen fork or assuming identical Rust architecture.
 - Define the compatibility contract for Orca, Prime Claw, the TypeScript extension surface, Python-first execution, saved sessions, daemon protocol behavior, and rollback. Distinguish hard compatibility requirements from best-effort behavior and state how an intentional incompatibility would be proposed.
 - Complete the upstream-version-plus-Pi-revision model: resolve exact spelling and machine/package encoding, initial revision convention, ordering, release channels, release cadence, support window, and the relationship to immutable downstream runtime releases. Do not assume an indefinite `0.9.x` line or next `0.9.9` release.
-- Provide a ready-to-install `prime-agent-pi` public package/distribution while retaining the `prime-agent` executable for current integration compatibility, with a possible future command rename left to Joe. Complete package-format, delivery-channel, platform, installer/update, and source-install decisions. Address the risk that the upstream Prime Agent installer installs the Rust product rather than Prime Agent Pi.
+- Provide a ready-to-install `prime-agent-pi` public package/distribution while retaining the `prime-agent` executable for current integration compatibility, with a possible future command rename left to Joe. Match the final upstream TypeScript platform coverage and complete package-format, delivery-channel, installer/update, platform-validation, and source-install decisions. Address the risk that the upstream Prime Agent installer installs the Rust product rather than Prime Agent Pi.
 - Define the relationship to `PrimeIntellect-ai/prime-agent` and `SailorJoe6/prime-agent-upstream`: what is mirrored, what is audited, what may be adapted, and what must never be merged mechanically into product `main`.
 - Define lightweight feature and release governance: who decides, what evidence is required, how decisions are recorded, and which changes require explicit operator authority. Prefer direct product decisions over generalized approval infrastructure.
 - Identify the smallest set of child specifications needed to implement the contract. Keep maintenance intake (`TASK-1`), the RLM settlement bug (`TASK-2`), and the local checkout rename (`TASK-3`) as distinct work rather than absorbing them into this Epic.
@@ -113,7 +130,7 @@ Provide a ready-to-install public package rather than requiring ordinary users t
 - [ ] #2 The contract defines capability-and-behavior parity with released upstream user-facing features and applicable bug fixes, implemented in Prime Agent Pi’s TypeScript/Python architecture rather than by matching Rust internals. Catch-up finishes at parity with current released versions, not upstream main or completion of a frozen historical target; later upstream releases arriving during catch-up are incorporated. The contract specifies released-version comparison evidence, release-channel eligibility, architecture and compatibility conflict handling, any justified exceptions, and ongoing intake expectations alongside local fixes.
 - [ ] #3 The contract preserves the entire public v0.9.8 extensibility surface, including extension hooks, custom tools and commands, and TUI customization, not only APIs Joe uses. It preserves existing Orca and Prime Claw integrations and Python-first workflows by default when upstream parity conflicts with them, adapting upstream capabilities where possible and requiring Joe’s explicit decision before implementing an unavoidable compatibility break. It also identifies hard and best-effort commitments for saved sessions, daemon protocol behavior, and rollback, including how intentional incompatibilities are proposed.
 - [ ] #4 The contract uses the released upstream version as the first three components and a fourth Pi revision for local fixes, such as `0.10.2.1` and `0.10.2.2`, advancing to a new upstream version only after integrating its released features and applicable fixes under the compatibility rules. It resolves machine/package encoding for the four-part product version, initial revision convention, ordering, release channels, cadence, support window, and relationship to immutable legacy runtime releases without inheriting an indefinite `0.9.x` or next-`0.9.9` assumption.
-- [ ] #5 The contract requires a ready-to-install public package/distribution named `prime-agent-pi` while retaining `prime-agent` as the public command for current integration compatibility, without ruling out a future operator-decided command rename. It defines the package format, delivery channel, platform support, installer/update behavior, and source-install policy, resolves any registry-specific naming constraints, and addresses the upstream installer’s Rust-product behavior without publishing a package or changing any installed runtime in this task.
+- [ ] #5 The contract requires a ready-to-install `prime-agent-pi` distribution while retaining the `prime-agent` command, with any future command rename left to Joe. It preserves v0.9.8’s eight macOS/Linux native targets (macOS arm64/x64; Linux arm64 glibc/musl; Linux x64 glibc/musl with ordinary and baseline variants) and its additional documented Windows Bash-based and Android Termux setup routes, without inventing Windows/Android native archives. It defines package format, delivery channel, platform validation, installer/update and source-install policy, resolves registry-specific naming constraints, and addresses the upstream installer’s Rust-product behavior without publishing or installing anything in this task.
 - [ ] #6 The contract defines the product’s relationship to `PrimeIntellect-ai/prime-agent` and `SailorJoe6/prime-agent-upstream`, including stable-release intake, provenance preservation, adaptation boundaries, and the prohibition on mechanical Rust merges into product `main`.
 - [ ] #7 The contract defines lightweight feature and release decision ownership, required evidence, durable recording, and explicit-authority boundaries without creating generalized approval machinery for ordinary observations or maintenance.
 - [ ] #8 A canonical version-controlled product-contract document is linked from repository documentation, and a baseline-to-contract check identifies inherited material or stale task claims needing separate correction without treating inherited upstream documentation or tooling as adopted Pi policy.
