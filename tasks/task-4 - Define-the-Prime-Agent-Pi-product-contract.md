@@ -4,7 +4,7 @@ title: Define the Prime Agent Pi product contract
 status: In Design
 assignee: []
 created_date: '2026-11-01 16:15'
-updated_date: '2026-11-06 15:28'
+updated_date: '2026-11-06 15:31'
 labels: []
 dependencies: []
 references:
@@ -97,9 +97,21 @@ Offer both Pi release channels: stable is the default for normal users, and prev
 
 ### Settled: conditional automatic stable publication
 
-An automated process may publish stable Pi releases publicly without asking Joe for approval each time, provided the agreed validation checks pass and the rules for when to publish are explicit and unambiguous. This is conditional future product policy, not permission to treat the check list or publication trigger as already settled. Define both before implementing or enabling automatic publication. Do not silently substitute inherited upstream workflow rules for those decisions.
+An automated process may publish stable Pi releases publicly without asking Joe for approval each time, provided the agreed validation checks pass and the rules for when to publish are explicit and unambiguous. This is conditional future product policy. The agreed validation baseline is stated below; clear publication-trigger rules still need to be settled before automatic publication is implemented or enabled. Do not silently substitute inherited upstream workflow rules for those decisions.
 
 This authority is for public stable-release publication only. It does not authorize automatic installation, local update activation, or restarting Joe’s running agent, nor does it grant code-merge, product-scope, or compatibility-break authority. Preview-publication details remain to be specified. TASK-4 itself still performs no automation changes, publication, or runtime mutation.
+
+### Settled: initial stable-release validation baseline
+
+Required release checks are:
+
+1. Required automated repository checks and tests actually run and pass.
+2. Extensibility and integration compatibility checks pass.
+3. Packaged install, update, and rollback checks pass in a Docker container. Docker-based proof is sufficient for the initial release gate; a separate validation environment for every supported platform is not required now.
+4. Evidence supports the upstream parity claimed by the release.
+5. Version, release notes, and package checksums identify exactly what was tested.
+
+The Docker lifecycle gate reflects currently available environments, not a reduction in the chosen platform support target. Record the tested container environment and be explicit about coverage: container results do not prove untested macOS, Windows, Android, or other OS/architecture behavior. Do not claim a full native-platform validation matrix or require a new environment fleet as a prerequisite to the initial gate. This is a future validation requirement, not a claim that any check has already run or an authorization to change CI or run live installation/update/rollback probes during TASK-4.
 
 ## Required decisions
 
@@ -142,7 +154,7 @@ This authority is for public stable-release publication only. It does not author
 - [ ] #4 The contract uses the released upstream version as the first three components and a fourth Pi revision for local fixes, such as `0.10.2.1` and `0.10.2.2`, advancing to a new upstream version only after integrating its released features and applicable fixes under the compatibility rules. It provides a default stable channel and an opt-in preview channel, with readiness-based releases for upstream catch-ups and Pi-only fixes once changes are ready and validated, not a fixed calendar schedule. It resolves machine/package encoding for the four-part product version, initial revision convention, ordering, channel promotion, support window, and relationship to immutable legacy runtime releases without inheriting an indefinite `0.9.x` or next-`0.9.9` assumption.
 - [ ] #5 The contract requires a ready-to-install `prime-agent-pi` distribution while retaining the `prime-agent` command, with any future command rename left to Joe. It preserves v0.9.8’s eight macOS/Linux native targets (macOS arm64/x64; Linux arm64 glibc/musl; Linux x64 glibc/musl with ordinary and baseline variants) and its additional documented Windows Bash-based and Android Termux setup routes, without inventing Windows/Android native archives. It defines package format, delivery channel, platform validation, installer/update and source-install policy, resolves registry-specific naming constraints, and addresses the upstream installer’s Rust-product behavior without publishing or installing anything in this task.
 - [ ] #6 The contract defines the product’s relationship to `PrimeIntellect-ai/prime-agent` and `SailorJoe6/prime-agent-upstream`, including stable-release intake, provenance preservation, adaptation boundaries, and the prohibition on mechanical Rust merges into product `main`.
-- [ ] #7 The contract defines lightweight feature and release decision ownership, evidence, durable recording, and explicit-authority boundaries. Stable public releases may publish automatically without per-release approval only when an explicit agreed validation-check set passes and clear publication rules are satisfied; both must be defined before automation is implemented or enabled. This does not grant automatic local installation, activation/restart, code-merge, scope-change, or compatibility-break authority, and must not create generalized approval machinery for ordinary observations or maintenance.
+- [ ] #7 The contract defines lightweight feature/release ownership, evidence, durable recording, and authority boundaries. Automatic stable publication requires clear agreed publication rules and all five release checks: required automated checks/tests execute and pass; extensibility/integration compatibility passes; packaged install/update/rollback passes in Docker; evidence supports claimed upstream parity; and version/notes/checksums identify the tested artifacts. Docker lifecycle validation is sufficient initially without a per-platform environment fleet, but coverage limits must be stated and the platform support target retained. This grants no automatic local installation, activation/restart, code-merge, scope-change, or compatibility-break authority and creates no generalized approval machinery for routine observations or maintenance.
 - [ ] #8 A canonical version-controlled product-contract document is linked from repository documentation, and a baseline-to-contract check identifies inherited material or stale task claims needing separate correction without treating inherited upstream documentation or tooling as adopted Pi policy.
 - [ ] #9 Each independently plannable implementation stream revealed by the approved contract has a separate provider-native `In Design` child task; `TASK-1`, `TASK-2`, and `TASK-3` remain distinct and are not broadened by this Epic.
 - [ ] #10 No product code, runtime, launcher, package, command, automation, branch topology, release artifact, installation, session, or compatibility behavior is changed while completing this thought-work Epic.
