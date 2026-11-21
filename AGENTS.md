@@ -1,5 +1,13 @@
 # Development Rules
 
+## Standing product policy
+
+Read and follow the [Prime Agent Pi product contract](docs/product-contract.md) before project work. It is standing operator-approved policy for the project's active lifetime, until Joe explicitly revises it—not a Backlog task to complete.
+
+The contract takes precedence over conflicting inherited guidance about product scope, compatibility, public versions, distribution, contribution intake, and publication authority. The remaining development, test, and safety rules still apply. Existing scripts and historical operational instructions do not by themselves authorize releases, runtime activation, or compatibility breaks.
+
+Track finite work in Backlog and reference the contract rather than treating its ongoing constraints as an epic or completion checklist.
+
 ## Conversational Style
 
 - No fluff or cheerful filler text
