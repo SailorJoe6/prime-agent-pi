@@ -1,10 +1,10 @@
 ---
 id: TASK-4
 title: Inventory released upstream feature-parity gaps
-status: In Progress
+status: Blocked
 assignee: []
 created_date: '2026-11-21 16:53'
-updated_date: '2026-11-21 20:43'
+updated_date: '2026-11-21 20:50'
 labels: []
 dependencies: []
 references:
@@ -94,3 +94,21 @@ Authoring these follow-up specifications does not approve them, advance them int
 
 This plan has no dependency on completion of TASK-1. It plans execution of the finite inventory and gap-specification work only; the current operator request authorizes planning, not starting that execution.
 <!-- SECTION:PLAN:END -->
+
+## Comments
+
+<!-- COMMENTS:BEGIN -->
+author: Ralph (owning Conversation)
+created: 2026-11-21 20:50
+---
+Creation blocked before a durable Episode could be bound.
+
+The approved TASK-4 inventory/specification scope passed semantic readiness. One creation operation, `83f29689-f471-440f-a78e-e2195141b84e`, published In Progress in task-history commit `0f92046a0526f79df8efb96cbd83bff0aaa06c27`, created branch `JLanders/prime-agent-task-4-episode-83f29689` and its Orca worktree, then timed out binding a fresh Prime Agent session and connected tab. Ownership remains `uncertain`; no durable Episode/routing identity or initial execute admission was established by the returned ownership evidence.
+
+Read-only inspection of the exact recorded launch run `3185cd35-f513-4daf-9b90-a6fbf337efc6` and its terminal showed `ERR_MODULE_NOT_FOUND`: package `typebox` could not be resolved from the fresh worktree's `packages/ai/src/index.ts`. That worktree has no `node_modules`; the canonical checkout has `node_modules/typebox`. The terminal returned to a shell prompt. The launch automation remains disabled. Current native agent list/state evidence did not identify a session at the exact Episode CWD; absence from that list is not proof that no session or historical prompt effect ever existed. No launch, prompt, allocation, or handoff was retried.
+
+Both code workspaces remain clean at `6cd28f90e2391441850485c94b3ff099f579ef7a`. No inventory work or gap specifications have been produced. Existing worktree, branch, launch automation/run, task history, selected host, and uncertain ownership are preserved.
+
+Unblock condition: repair the fresh-worktree runtime dependency-resolution problem through an operator-approved setup/runtime action, and obtain supported owner-led creation recovery for this same operation and unchanged resources. The loaded oversight guidance refers to an Owner-led creation recovery section, but the current project implement-task workflow does not contain it. Before any continuation, establish exact existing session/launch/assignment facts and use only a supported continuation for the remaining creation step; do not infer non-delivery from an absent session ID, allocate a replacement Episode, promote ownership manually, resend an initial assignment, or use ordinary handoff. TASK-4 remains paused pending this recovery decision; its implementation authority and scope are unchanged.
+---
+<!-- COMMENTS:END -->
