@@ -4,7 +4,7 @@ title: Inventory released upstream feature-parity gaps
 status: In Progress
 assignee: []
 created_date: 2026-11-21 16:53
-updated_date: '2026-11-22T07:52:00Z'
+updated_date: '2026-11-22T07:57:00Z'
 labels: []
 dependencies: []
 references:
@@ -189,6 +189,19 @@ Joe explicitly authorized the local Orca include configuration, repair of this e
 Repaired this already-created Episode in place by copying all 10 existing canonical project workflow files into its previously absent .prime-claw/workflows directory; exact names and byte-for-byte equality were verified. Did not copy ownership or other local runtime state. No source code, specification, acceptance criteria, or plan changed. The existing active operation c88f1d99-e6a9-4710-81d0-471530d4ecdd, durable Episode 01a2020b-d277-775c-bd4c-62c44ab9aa07, selected host, original code base, branch and worktree remain intact.
 
 The missing-workflow blocker is cleared. Native session evidence shows the exact Episode idle with no unfinished actions and empty steering/follow-up queues before continuation. The prior handoff attempt stopped on the missing workflow before prompt admission; this authorization permits one canonical handoff re-invocation with the same approved inventory/confirmed-gap In Design specification scope. It does not resend the initial assignment, create another Episode, or authorize gap-feature implementation, merge, release or runtime activation. Restore In Progress and continue through the canonical handoff tool after verifying task publication.
+
+---
+
+author: Ralph (owning Conversation)
+created: 2026-11-22T07:57:00Z
+
+---
+
+Conversation review accepted bounded slice 1 at code candidate 93c4e7cbd5d27aa2c399a0e3fbcebbc144c732b0 and Episode-authored task history 7e2bc6f3cdee256f7869fd9eaf848355a3f3bcc8. This is an owner review of the release-coverage checkpoint, not independent EXPERT approval, final task acceptance or merge authority.
+
+Read both changed documents and the complete native task contract. Independently re-enumerated stable GitHub release metadata and latest release; dates and six post-v0.9.8 releases v0.10.0–v0.10.5 agree with the table. Compared every listed source commit with upstream remote tag targets, verified commit object types, adjacent ancestry and baseline ancestry into the pinned Pi revision. Direct origin refs confirm candidate publication and task-history publication separately; primary main remains 6cd28f90e2391441850485c94b3ff099f579ef7a. Source diff changes only README and the inventory. The native task changes are compatible execution notes/documentation/modified paths, not specification or plan changes. Re-ran source diff --check and npm run check:test-policy successfully; no behavior checks or final parity claim. All six criteria remain unchecked, appropriately, because capability assessment and final release refresh remain outstanding.
+
+Fresh native list shows the exact existing Episode idle, no unfinished actions, no running children, and empty action queues. No material defect found in this checkpoint. Accept and advance the same Episode to one bounded approved slice: reconcile covered release notes with pinned source ranges, relevant docs, linked changes and tests; group observable capabilities and begin supported Pi-equivalence assessment. Preserve honest unresolved entries/next investigations and the assessment-only boundaries. Do not implement features, plan follow-up gap tasks, change policy or compatibility, merge, release or activate runtime code. Refresh current-stable coverage again before the final report.
 
 ---
 <!-- COMMENTS:END -->
