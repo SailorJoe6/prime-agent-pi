@@ -1,10 +1,10 @@
 ---
 id: TASK-5
 title: Restore RLM model discovery and launch parity for Codex models
-status: Ready for Merge
+status: Done
 assignee: []
 created_date: '2026-11-22T06:52:00Z'
-updated_date: '2026-11-22T16:41:00Z'
+updated_date: '2026-11-22T16:44:00Z'
 labels: []
 dependencies: []
 references:
