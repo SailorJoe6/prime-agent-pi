@@ -4,7 +4,7 @@ title: Restore RLM model discovery and launch parity for Codex models
 status: In Progress
 assignee: []
 created_date: '2026-11-22T06:52:00Z'
-updated_date: '2026-11-22T16:33:00Z'
+updated_date: '2026-11-22T16:38:00Z'
 labels: []
 dependencies: []
 references:
@@ -24,6 +24,7 @@ modified_files:
   - packages/coding-agent/test/model-registry.test.ts
   - packages/coding-agent/docs/rlm-runtime.md
   - packages/coding-agent/.changes/task-5-rlm-codex-model-parity.md
+  - packages/coding-agent/src/core/agent-session.ts
 priority: high
 type: bug
 ordinal: 5000
@@ -70,6 +71,12 @@ Preserve existing provider and model IDs, exact selector and short-form rules, c
 - Red on base code: the partial Codex response omitted newer Astra, while empty/failed responses hid both. Both exact launch surfaces rejected the older Astra fixture with failed discovery. Scoped search on base both missed the Codex rows and could match a similarly named model from another provider.
 - Green: from `packages/coding-agent`, `npx tsx ../../node_modules/vitest/dist/cli.js --run test/model-registry.test.ts test/suite/regressions/4649-subagent-model-selection.test.ts` passed (89 tests). `npm run check` passed from the repository root. CI used fixture credentials only.
 - Isolated source acceptance: temporary HOME, config, cwd and sessions; only the existing Codex model overrides and stored Codex OAuth route, with no live refresh grant carried over. `prime-agent.sh model list "openai-codex astra"` and the candidate SDK’s RLM search both returned `openai-codex/gpt-6-astra` and `openai-codex/gpt-6.2-astra`. Exact lookups returned each requested selector first. The real RLM spawn used `openai-codex/gpt-6.2-astra`, stopped normally, and returned `TASK5_ASTRA_OK`. Both exact selectors were tested through both launch surfaces in deterministic tests; only spawn was exercised against the live provider. No activation or restart.
+
+### Review revision of c44cc78
+- Discovery resolves the selected Codex OAuth credential before advertising Codex rows. After timestamp expiry, failed refresh removes those rows without falling back to another credential. Both explicit launch surfaces reject an expired Codex selector, including the exact parent selector. Final launch preflight remains; no separate Codex `/models` call.
+- Provider-plus-family lookup recognizes scope from the configured catalog even if the provider has no eligible rows. Results still come only from eligible rows. Existing generic, exact-selector and single-term tests remain green.
+- Red on the old behavior: six focused cases failed, covering discovery, both launch surfaces (including the parent selector), and provider scoping with no eligible rows. Green on this revision: all 90 tests across `test/model-registry.test.ts` and `test/suite/regressions/4649-subagent-model-selection.test.ts` passed from `packages/coding-agent`. `npm run check` passed at the repository root. OAuth denial was deterministic and offline; fixtures also exercised valid OAuth and the launch preflight.
+- Isolated source acceptance used the candidate CLI list handler and SDK RLM paths in a one-shot process with temporary config and sessions. No second Prime Agent app or daemon was launched. The configured Codex OAuth route listed both Astra selectors in CLI and RLM, both exact lookups matched, and a live `spawn` on `openai-codex/gpt-6.2-astra` stopped normally and replied `TASK5_REVISED_ASTRA_OK`. `create_session` was validated offline, not against the live provider. No merge, activation, or restart.
 <!-- SECTION:NOTES:END -->
 
 ## Comments
@@ -90,5 +97,5 @@ The canonical revision handoff stopped before the first prompt: the existing Epi
 ## Final Summary
 
 <!-- SECTION:FINAL_SUMMARY:BEGIN -->
-Restored RLM discovery and explicit launch selection for configured Codex models, including both Astra rows. Provider-scoped search no longer leaks matches from other providers. The old-behavior regressions reproduced the gaps, 89 focused tests and the repository check passed, and isolated same-route GPT-6.2 Astra inference succeeded. Candidate is for Conversation review; task status is unchanged.
+Fixed both accepted review findings: expired Codex OAuth is denied on failed refresh without restoring the model-list gate, and known providers with no eligible rows return no scoped matches. Launch preflight is preserved. All 90 focused tests and npm run check passed; isolated live Codex GPT-6.2 Astra spawn succeeded. Candidate is for Conversation review; TASK-5 remains In Progress.
 <!-- SECTION:FINAL_SUMMARY:END -->
