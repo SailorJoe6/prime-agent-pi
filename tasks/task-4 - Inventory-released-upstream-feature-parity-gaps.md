@@ -1,10 +1,10 @@
 ---
 id: TASK-4
 title: Inventory released upstream feature-parity gaps
-status: In Progress
+status: Blocked
 assignee: []
 created_date: 2026-11-21 16:53
-updated_date: '2026-11-22T07:11:00Z'
+updated_date: '2026-11-22T07:12:00Z'
 labels: []
 dependencies: []
 references:
@@ -151,6 +151,21 @@ Joe approved repair of the fresh Episode's tab attachment. Created a background 
 The supported existing-operation session-binding call returned active ownership for operation c88f1d99-e6a9-4710-81d0-471530d4ecdd and the same durable session, route f35b1b242fd0, provider/task, original code base, selected host, branch and worktree. Current terminal is term_425519ca-4dc7-46d1-8f8c-4e79c7f41d05. It explicitly sent no new execute assignment. Initial delivery is independently established by the native session transcript and the Episode's earlier receipt. No manual ownership edit, workflow upgrade, product-code change or runtime cutover was needed.
 
 The recorded creation blocker is cleared. Restoring In Progress for continuation of the same approved TASK-4 inventory and confirmed-gap In Design specification scope through canonical task handoff. The Episode had stopped before assessment; current native observations show idle, empty queues and no unfinished actions. Specification, acceptance criteria and plan remain unchanged. Historical planning-only wording is superseded by Joe's explicit implementation approval; no gap-feature implementation is authorized.
+
+---
+
+author: Ralph (owning Conversation)
+created: 2026-11-22T07:12:00Z
+
+---
+
+Tab repair and supported same-operation session binding succeeded; ownership is active for the unchanged TASK-4 Episode. The subsequent canonical `handoff_task_episode` invocation stopped with `Episode worktree is missing .prime-claw/workflows/handoff.md`.
+
+Read-only verification confirms that exact file exists in the canonical checkout but is absent from the Episode worktree. The native session remains idle at 15 messages with no unfinished actions and empty queues. Ownership still holds the original task revision; the Episode task clone remains clean at 7b2575c3b157c6923461b77661448a81e84442c0. No handoff or execute prompt was sent by this attempt. This is supported by the exact missing-file refusal and inspection of the installed matching failure path: independent-Backlog preflight constructs the handoff prompt before task-workspace preparation, evidence advancement or delivery; this missing-file throw occurs at that preflight. Installed source supports this explanation but is not an independent running-build attestation.
+
+Stopped without retry. The restored visible tab, exact durable session, operation, active ownership, host, worktree, branch, code base, specification and plan are preserved. No inventory work has started.
+
+Unblock condition: restore the existing canonical handoff workflow into this same Episode's ignored project-workflow location, verify its exact content and current native task/session/resource facts, and obtain an explicit informed operator decision for one canonical handoff re-invocation under the definite pre-admission refusal exception. This is not permission to resend the initial assignment, invoke raw execute, allocate resources, change product scope or upgrade/activate runtime code.
 
 ---
 <!-- COMMENTS:END -->
