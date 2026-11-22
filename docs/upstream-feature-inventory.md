@@ -1,12 +1,12 @@
 # Upstream feature inventory
 
-**Status: release coverage pinned; capability assessment in progress.** This is not a claim of feature parity or release readiness. The [Prime Agent Pi product contract](product-contract.md) governs scope and compatibility. TASK-1 separately tracks upstream bug-fix intake; mixed feature/fix changes should cross-reference that work rather than duplicate it.
+**Status: assessment candidate for owner review.** This is not a claim of feature parity or release readiness. The [Prime Agent Pi product contract](product-contract.md) governs scope and compatibility. TASK-1 separately tracks upstream bug-fix intake; mixed feature/fix changes should cross-reference that work rather than duplicate it.
 
 ## Assessment baseline
 
 - **Prime Agent Pi source:** [`6cd28f90e2391441850485c94b3ff099f579ef7a`](https://github.com/SailorJoe6/prime-agent-pi/tree/6cd28f90e2391441850485c94b3ff099f579ef7a), the Pi `main` commit at the start of the assessment, including merged downstream work. This pins the source for comparison; it does not identify an installed runtime.
 - **Upstream comparison baseline:** final TypeScript release v0.9.8. Assess observable changes in stable releases after it, including those introduced with the Rust rewrite. Compare behavior, not implementation language.
-- **Release observation cutoff:** 2026-11-22 22:05:46 UTC. The latest verified stable release at that cutoff was **v0.10.5**. Refresh the release list before the final assessment report and include any new stable releases. Upstream `main`, betas, and release candidates are not independent parity targets.
+- **Release observation cutoff:** 2026-11-22 22:24:17 UTC. The latest verified stable release at that cutoff was **v0.10.5**. Upstream `main`, betas, and release candidates are not independent parity targets.
 
 ## Verified release coverage
 
@@ -122,7 +122,7 @@ For each adjacent pair in the table, `git rev-list --count OLD..NEW` gives 161, 
 
 | First stable | Upstream behavior | Original Pi |
 | --- | --- | --- |
-| v0.10.0 | [Provider failover](https://github.com/PrimeIntellect-ai/prime-agent/blob/763094e1b6a7c17450ee8399b06cda1853847ca5/crates/pa-core/src/session_engine/provider_failover.rs) can retry a turn on a second configured provider serving the same model after exhausting the first route. | [Session retry](https://github.com/SailorJoe6/prime-agent-pi/blob/6cd28f90e2391441850485c94b3ff099f579ef7a/packages/coding-agent/src/core/agent-session.ts) retries or parks the original route. Neither fresh-session fallback nor TASK-5 child selection is turn failover. This comparison does not authorize switching providers. |
+| v0.10.0 | [Provider failover](https://github.com/PrimeIntellect-ai/prime-agent/blob/763094e1b6a7c17450ee8399b06cda1853847ca5/crates/pa-core/src/session_engine/provider_failover.rs) can retry a turn on a second configured provider serving the same model after exhausting the first route. | [Session retry](https://github.com/SailorJoe6/prime-agent-pi/blob/6cd28f90e2391441850485c94b3ff099f579ef7a/packages/coding-agent/src/core/agent-session.ts) is **partial**: [the explicit `providerBackupModel`](https://github.com/SailorJoe6/prime-agent-pi/blob/6cd28f90e2391441850485c94b3ff099f579ef7a/packages/coding-agent/docs/settings.md#L250-L258) can switch the turn immediately to a configured different model before the primary retry budget expires, then restore the primary. The missing behavior is expressly permitted **post-budget same-model** routing. Preserve the existing backup and restoration when the new policy is unset. Neither fresh-session fallback nor TASK-5 child selection is turn failover. This comparison does not authorize switching providers. |
 | v0.10.0 | The [daemon allowlist](https://github.com/PrimeIntellect-ai/prime-agent/blob/763094e1b6a7c17450ee8399b06cda1853847ca5/crates/pa-daemon/src/model_allowlist.rs) rejects a disallowed model. | `enabledModels` in [settings](https://github.com/SailorJoe6/prime-agent-pi/blob/6cd28f90e2391441850485c94b3ff099f579ef7a/packages/coding-agent/src/core/settings-manager.ts) limits model cycling; it is not a global admission rule. Do not restrict Pi extensions by inference. |
 | v0.10.0 | Enabled telemetry can write a rotating [local event log](https://github.com/PrimeIntellect-ai/prime-agent/blob/763094e1b6a7c17450ee8399b06cda1853847ca5/crates/pa-telemetry/src/sinks/file.rs). | [Pi telemetry](https://github.com/SailorJoe6/prime-agent-pi/blob/6cd28f90e2391441850485c94b3ff099f579ef7a/packages/coding-agent/src/core/telemetry.ts) stores client state and sends events; it lacks a selectable local event mirror. No telemetry was accessed. |
 | v0.10.1 | The [cell output buffer](https://github.com/PrimeIntellect-ai/prime-agent/blob/8aac8692456c00c01d4e53e60e6d3347a3506559/crates/pa-core/src/kernel/manager/requests.rs) keeps three quarters of the limit for the head and one quarter for the tail, with an omitted count. | The [Pi kernel manager](https://github.com/SailorJoe6/prime-agent-pi/blob/6cd28f90e2391441850485c94b3ff099f579ef7a/packages/coding-agent/src/core/kernel/repl-manager.ts) keeps a prefix and a truncation marker; a final diagnostic can be lost. This finding concerns cell stdout/stderr, not every tool. |
@@ -166,17 +166,83 @@ These are differences in existing providers, not five new providers in v0.10.2.
 | Do recovery and paint preserve events and position? | Compare active versus explicitly stopped turns on restart, queued steer destination after a fork, envless Herdr attach, viewport anchoring on page prepend and input during streaming. Bracketed-paste fixtures do not decide raw Windows terminal framing. |
 | What is billed after reattach? | Compare fixed synthetic parent, child and cancelled-summary usage once each across branch own/total, session stats, goal and captured telemetry. No live account is needed. |
 
-**Validation boundary:** pinned sources, docs and fixture definitions were inspected. The documentation checks were `git diff --check` and `npm run check:test-policy`. No behavioral test, release asset, installer or provider was exercised. Refresh the stable-release list again before final acceptance.
+**Validation boundary:** pinned sources, docs and fixture definitions were inspected. The documentation checks were `git diff --check` and `npm run check:test-policy`. No behavioral test, release asset, installer or provider was exercised.
 
 ## Published gap specifications
 
-The following four `In Design` specifications address the four confirmed differences in [the release-note cross-check](#what-the-release-notes-leave-out). Each can be reviewed independently. None requires TASK-1, another specification, or a provider change. They describe proposed behavior, not implemented parity.
+The 51 `In Design` specifications below cover the confirmed gaps at the pinned Pi revision. Each link opens the published task, including its acceptance cases and source evidence. These are proposed outcomes, not implemented features.
 
-- [TASK-6: Retry the same model on an explicitly permitted provider](https://github.com/SailorJoe6/prime-agent-pi/blob/5d28fc2d9ab1ae4741ac6344127cb6be865298ac/tasks/task-6%20-%20Retry-the-same-model-on-an-explicitly-permitted-provider.md)
-- [TASK-7: Enforce a configured model allowlist at daemon admission](https://github.com/SailorJoe6/prime-agent-pi/blob/5d28fc2d9ab1ae4741ac6344127cb6be865298ac/tasks/task-7%20-%20Enforce-a-configured-model-allowlist-at-daemon-admission.md)
-- [TASK-8: Offer a rotating local log for enabled telemetry](https://github.com/SailorJoe6/prime-agent-pi/blob/5d28fc2d9ab1ae4741ac6344127cb6be865298ac/tasks/task-8%20-%20Offer-a-rotating-local-log-for-enabled-telemetry.md)
-- [TASK-9: Preserve the end of truncated Python cell output](https://github.com/SailorJoe6/prime-agent-pi/blob/5d28fc2d9ab1ae4741ac6344127cb6be865298ac/tasks/task-9%20-%20Preserve-the-end-of-truncated-Python-cell-output.md)
+### Skills, prompts and refinement
 
-**Existing coverage.** TASK-1 is the repair audit, including the signed-replay comparison. TASK-2 covers orphan settlement, TASK-3 checkout relocation, TASK-4 the inventory itself, and TASK-5 the later Codex discovery correction. None delivers these four outcomes. No existing task was repurposed.
+- [TASK-10: Explain skill discovery for a chosen directory](https://github.com/SailorJoe6/prime-agent-pi/blob/9090e082d314b0e0008fa9973ecf808fafbb7e20/tasks/task-10%20-%20Explain-skill-discovery-for-a-chosen-directory.md)
+- [TASK-11: Expand inline skill references during prompt submission](https://github.com/SailorJoe6/prime-agent-pi/blob/9090e082d314b0e0008fa9973ecf808fafbb7e20/tasks/task-11%20-%20Expand-inline-skill-references-during-prompt-submission.md)
+- [TASK-15: Choose a retention-aware automatic compaction percentage](https://github.com/SailorJoe6/prime-agent-pi/blob/9090e082d314b0e0008fa9973ecf808fafbb7e20/tasks/task-15%20-%20Choose-a-retention-aware-automatic-compaction-percentage.md)
+- [TASK-16: Carry outstanding work through summary requests](https://github.com/SailorJoe6/prime-agent-pi/blob/9090e082d314b0e0008fa9973ecf808fafbb7e20/tasks/task-16%20-%20Carry-outstanding-work-through-summary-requests.md)
+- [TASK-17: Suspend refinements without deleting saved entries](https://github.com/SailorJoe6/prime-agent-pi/blob/9090e082d314b0e0008fa9973ecf808fafbb7e20/tasks/task-17%20-%20Suspend-refinements-without-deleting-saved-entries.md)
+- [TASK-18: Preview a fresh root prompt offline](https://github.com/SailorJoe6/prime-agent-pi/blob/9090e082d314b0e0008fa9973ecf808fafbb7e20/tasks/task-18%20-%20Preview-a-fresh-root-prompt-offline.md)
+- [TASK-19: Select prompt additions by resolved model](https://github.com/SailorJoe6/prime-agent-pi/blob/9090e082d314b0e0008fa9973ecf808fafbb7e20/tasks/task-19%20-%20Select-prompt-additions-by-resolved-model.md)
 
-**Remaining specifications.** The skills, factory, prompt and compaction, shell and Python API, session and terminal, provider/MCP, and distribution comparisons above are not fully mapped to published specifications yet. In particular, a named machine must be defined before it can run, and run identity is needed for terminal navigation. Persistent-shell navigation similarly needs a durable shell identity. Count the executed-command card once under terminal display. Keep archive contents, fresh-kernel imports and reattached cost totals as investigations. Do not advance a public parity version on the strength of this inventory.
+### Named machines and runs
+
+- [TASK-12: Define and share named factory machines](https://github.com/SailorJoe6/prime-agent-pi/blob/9090e082d314b0e0008fa9973ecf808fafbb7e20/tasks/task-12%20-%20Define-and-share-named-factory-machines.md)
+- [TASK-13: Run and recover named machines from Python](https://github.com/SailorJoe6/prime-agent-pi/blob/9090e082d314b0e0008fa9973ecf808fafbb7e20/tasks/task-13%20-%20Run-and-recover-named-machines-from-Python.md)
+- [TASK-14: Inspect and control named factory runs in the terminal](https://github.com/SailorJoe6/prime-agent-pi/blob/9090e082d314b0e0008fa9973ecf808fafbb7e20/tasks/task-14%20-%20Inspect-and-control-named-factory-runs-in-the-terminal.md)
+
+### Python cells, shells and session family
+
+- [TASK-9: Preserve the end of truncated Python cell output](https://github.com/SailorJoe6/prime-agent-pi/blob/9090e082d314b0e0008fa9973ecf808fafbb7e20/tasks/task-9%20-%20Preserve-the-end-of-truncated-Python-cell-output.md)
+- [TASK-20: Rename the current session or a direct child from Python](https://github.com/SailorJoe6/prime-agent-pi/blob/9090e082d314b0e0008fa9973ecf808fafbb7e20/tasks/task-20%20-%20Rename-the-current-session-or-a-direct-child-from-Python.md)
+- [TASK-21: Choose the working directory for a spawned child](https://github.com/SailorJoe6/prime-agent-pi/blob/9090e082d314b0e0008fa9973ecf808fafbb7e20/tasks/task-21%20-%20Choose-the-working-directory-for-a-spawned-child.md)
+- [TASK-22: Page and count family transcripts from Python](https://github.com/SailorJoe6/prime-agent-pi/blob/9090e082d314b0e0008fa9973ecf808fafbb7e20/tasks/task-22%20-%20Page-and-count-family-transcripts-from-Python.md)
+- [TASK-23: Record confirmed cancellation separately from child return](https://github.com/SailorJoe6/prime-agent-pi/blob/9090e082d314b0e0008fa9973ecf808fafbb7e20/tasks/task-23%20-%20Record-confirmed-cancellation-separately-from-child-return.md)
+- [TASK-24: Yield from long shell waits and deliver completion](https://github.com/SailorJoe6/prime-agent-pi/blob/9090e082d314b0e0008fa9973ecf808fafbb7e20/tasks/task-24%20-%20Yield-from-long-shell-waits-and-deliver-completion.md)
+- [TASK-25: Reattach opt-in persistent shells after restart](https://github.com/SailorJoe6/prime-agent-pi/blob/9090e082d314b0e0008fa9973ecf808fafbb7e20/tasks/task-25%20-%20Reattach-opt-in-persistent-shells-after-restart.md)
+- [TASK-26: Browse and control persistent shells](https://github.com/SailorJoe6/prime-agent-pi/blob/9090e082d314b0e0008fa9973ecf808fafbb7e20/tasks/task-26%20-%20Browse-and-control-persistent-shells.md)
+- [TASK-27: Bound slow Python cells and report outcome](https://github.com/SailorJoe6/prime-agent-pi/blob/9090e082d314b0e0008fa9973ecf808fafbb7e20/tasks/task-27%20-%20Bound-slow-Python-cells-and-report-outcome.md)
+- [TASK-28: End turn explicitly from a cell](https://github.com/SailorJoe6/prime-agent-pi/blob/9090e082d314b0e0008fa9973ecf808fafbb7e20/tasks/task-28%20-%20End-turn-explicitly-from-a-cell.md)
+
+### Session browsing, terminal and headless clients
+
+- [TASK-29: Create a user-owned session inside the roster scope](https://github.com/SailorJoe6/prime-agent-pi/blob/9090e082d314b0e0008fa9973ecf808fafbb7e20/tasks/task-29%20-%20Create-a-user-owned-session-inside-the-roster-scope.md)
+- [TASK-30: Route a text copy to the attached terminal](https://github.com/SailorJoe6/prime-agent-pi/blob/9090e082d314b0e0008fa9973ecf808fafbb7e20/tasks/task-30%20-%20Route-a-text-copy-to-the-attached-terminal.md)
+- [TASK-31: Page and search the saved-session roster](https://github.com/SailorJoe6/prime-agent-pi/blob/9090e082d314b0e0008fa9973ecf808fafbb7e20/tasks/task-31%20-%20Page-and-search-the-saved-session-roster.md)
+- [TASK-32: Recover elapsed time for an interrupted tool call](https://github.com/SailorJoe6/prime-agent-pi/blob/9090e082d314b0e0008fa9973ecf808fafbb7e20/tasks/task-32%20-%20Recover-elapsed-time-for-an-interrupted-tool-call.md)
+- [TASK-33: Show elapsed time on each running tool card](https://github.com/SailorJoe6/prime-agent-pi/blob/9090e082d314b0e0008fa9973ecf808fafbb7e20/tasks/task-33%20-%20Show-elapsed-time-on-each-running-tool-card.md)
+- [TASK-34: Summarize executed shell commands on collapsed Python cards](https://github.com/SailorJoe6/prime-agent-pi/blob/9090e082d314b0e0008fa9973ecf808fafbb7e20/tasks/task-34%20-%20Summarize-executed-shell-commands-on-collapsed-Python-cards.md)
+- [TASK-35: Complete emoji shortcodes in editor prose](https://github.com/SailorJoe6/prime-agent-pi/blob/9090e082d314b0e0008fa9973ecf808fafbb7e20/tasks/task-35%20-%20Complete-emoji-shortcodes-in-editor-prose.md)
+- [TASK-36: Report program status to a supporting terminal](https://github.com/SailorJoe6/prime-agent-pi/blob/9090e082d314b0e0008fa9973ecf808fafbb7e20/tasks/task-36%20-%20Report-program-status-to-a-supporting-terminal.md)
+- [TASK-37: List and reopen saved sessions over ACP](https://github.com/SailorJoe6/prime-agent-pi/blob/9090e082d314b0e0008fa9973ecf808fafbb7e20/tasks/task-37%20-%20List-and-reopen-saved-sessions-over-ACP.md)
+- [TASK-38: Expose outstanding background jobs to ACP hosts](https://github.com/SailorJoe6/prime-agent-pi/blob/9090e082d314b0e0008fa9973ecf808fafbb7e20/tasks/task-38%20-%20Expose-outstanding-background-jobs-to-ACP-hosts.md)
+- [TASK-39: Classify ACP prompt failures for hosts](https://github.com/SailorJoe6/prime-agent-pi/blob/9090e082d314b0e0008fa9973ecf808fafbb7e20/tasks/task-39%20-%20Classify-ACP-prompt-failures-for-hosts.md)
+- [TASK-40: Wait for descendant replies before print exits](https://github.com/SailorJoe6/prime-agent-pi/blob/9090e082d314b0e0008fa9973ecf808fafbb7e20/tasks/task-40%20-%20Wait-for-descendant-replies-before-print-exits.md)
+
+### Models, providers, search and connectors
+
+- [TASK-6: Retry the same model on an explicitly permitted provider](https://github.com/SailorJoe6/prime-agent-pi/blob/9090e082d314b0e0008fa9973ecf808fafbb7e20/tasks/task-6%20-%20Retry-the-same-model-on-an-explicitly-permitted-provider.md)
+- [TASK-7: Enforce a configured model allowlist at daemon admission](https://github.com/SailorJoe6/prime-agent-pi/blob/9090e082d314b0e0008fa9973ecf808fafbb7e20/tasks/task-7%20-%20Enforce-a-configured-model-allowlist-at-daemon-admission.md)
+- [TASK-41: Explain fresh scoped default resolution](https://github.com/SailorJoe6/prime-agent-pi/blob/9090e082d314b0e0008fa9973ecf808fafbb7e20/tasks/task-41%20-%20Explain-fresh-scoped-default-resolution.md)
+- [TASK-42: Show the actual Prime serving route](https://github.com/SailorJoe6/prime-agent-pi/blob/9090e082d314b0e0008fa9973ecf808fafbb7e20/tasks/task-42%20-%20Show-the-actual-Prime-serving-route.md)
+- [TASK-43: Reflect current account-scoped private grants in ordinary catalog refresh](https://github.com/SailorJoe6/prime-agent-pi/blob/9090e082d314b0e0008fa9973ecf808fafbb7e20/tasks/task-43%20-%20Reflect-current-account-scoped-private-grants-in-ordinary-catalog-refresh.md)
+- [TASK-44: Supply session identity on session-scoped provider requests](https://github.com/SailorJoe6/prime-agent-pi/blob/9090e082d314b0e0008fa9973ecf808fafbb7e20/tasks/task-44%20-%20Supply-session-identity-on-session-scoped-provider-requests.md)
+- [TASK-45: Make bundled search availability follow selected credentials](https://github.com/SailorJoe6/prime-agent-pi/blob/9090e082d314b0e0008fa9973ecf808fafbb7e20/tasks/task-45%20-%20Make-bundled-search-availability-follow-selected-credentials.md)
+- [TASK-46: Choose Eco for web search](https://github.com/SailorJoe6/prime-agent-pi/blob/9090e082d314b0e0008fa9973ecf808fafbb7e20/tasks/task-46%20-%20Choose-Eco-for-web-search.md)
+- [TASK-47: Honor endpoint thinking-signature requirements for unsigned Anthropic-compatible history](https://github.com/SailorJoe6/prime-agent-pi/blob/9090e082d314b0e0008fa9973ecf808fafbb7e20/tasks/task-47%20-%20Honor-endpoint-thinking-signature-requirements-for-unsigned-Anthropic-compatible-history.md)
+- [TASK-48: Honor a registered fixed callback for a configured MCP connector](https://github.com/SailorJoe6/prime-agent-pi/blob/9090e082d314b0e0008fa9973ecf808fafbb7e20/tasks/task-48%20-%20Honor-a-registered-fixed-callback-for-a-configured-MCP-connector.md)
+- [TASK-49: Support offline consent for user-configured Workspace MCP](https://github.com/SailorJoe6/prime-agent-pi/blob/9090e082d314b0e0008fa9973ecf808fafbb7e20/tasks/task-49%20-%20Support-offline-consent-for-user-configured-Workspace-MCP.md)
+- [TASK-54: Select supported thinking levels for Gemini models](https://github.com/SailorJoe6/prime-agent-pi/blob/9090e082d314b0e0008fa9973ecf808fafbb7e20/tasks/task-54%20-%20Select-supported-thinking-levels-for-Gemini-models.md)
+- [TASK-55: Honor adaptive thinking for Haiku 5 on existing routes](https://github.com/SailorJoe6/prime-agent-pi/blob/9090e082d314b0e0008fa9973ecf808fafbb7e20/tasks/task-55%20-%20Honor-adaptive-thinking-for-Haiku-5-on-existing-routes.md)
+- [TASK-56: Use updated credentials on the next request to the same route](https://github.com/SailorJoe6/prime-agent-pi/blob/9090e082d314b0e0008fa9973ecf808fafbb7e20/tasks/task-56%20-%20Use-updated-credentials-on-the-next-request-to-the-same-route.md)
+
+### Telemetry and distribution
+
+- [TASK-8: Offer a rotating local log for enabled telemetry](https://github.com/SailorJoe6/prime-agent-pi/blob/9090e082d314b0e0008fa9973ecf808fafbb7e20/tasks/task-8%20-%20Offer-a-rotating-local-log-for-enabled-telemetry.md)
+- [TASK-50: Inspect and change effective telemetry settings from the CLI](https://github.com/SailorJoe6/prime-agent-pi/blob/9090e082d314b0e0008fa9973ecf808fafbb7e20/tasks/task-50%20-%20Inspect-and-change-effective-telemetry-settings-from-the-CLI.md)
+- [TASK-51: Check selected release channel without installation](https://github.com/SailorJoe6/prime-agent-pi/blob/9090e082d314b0e0008fa9973ecf808fafbb7e20/tasks/task-51%20-%20Check-selected-release-channel-without-installation.md)
+- [TASK-52: User-invoked update from local archive with explicit source](https://github.com/SailorJoe6/prime-agent-pi/blob/9090e082d314b0e0008fa9973ecf808fafbb7e20/tasks/task-52%20-%20User-invoked-update-from-local-archive-with-explicit-source.md)
+- [TASK-53: Include per-target dependency notices in assembled Pi payload](https://github.com/SailorJoe6/prime-agent-pi/blob/9090e082d314b0e0008fa9973ecf808fafbb7e20/tasks/task-53%20-%20Include-per-target-dependency-notices-in-assembled-Pi-payload.md)
+
+### Recommended order and exclusions
+
+Review named machine definitions (TASK-12) before run execution (TASK-13). The terminal page (TASK-14) needs run and state identities from TASK-13. Coordinate the refinement gate with TASK-17. Durable shell identity (TASK-25) precedes its roster and dock (TASK-26); bounded shell waits (TASK-24) do not depend on persistence. The executed-command card (TASK-34) concerns display only. Per-model prompts (TASK-19) can be reviewed independently of preview (TASK-18). The other specifications do not require completion of TASK-1 or a provider change.
+
+TASK-1 remains the separate repair audit, including signed replay, accounting, retry after credential rejection, and the ACP truncation stop reason. TASK-2 addresses orphan settlement, not cancellation history. TASK-3 concerns checkout location. TASK-5 addresses later Codex child selection, not provider entitlement. Keep the [open investigations](#review-decision-confirmed-differences-versus-investigations) separate; source inspection alone cannot settle them. Do not advance a public parity version until the required features and applicable fixes for that baseline are closed.
