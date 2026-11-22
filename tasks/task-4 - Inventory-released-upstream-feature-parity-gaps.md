@@ -1,10 +1,10 @@
 ---
 id: TASK-4
 title: Inventory released upstream feature-parity gaps
-status: Blocked
+status: In Progress
 assignee: []
 created_date: 2026-11-21 16:53
-updated_date: '2026-11-22T07:12:00Z'
+updated_date: '2026-11-22T07:49:00Z'
 labels: []
 dependencies: []
 references:
@@ -166,6 +166,19 @@ Read-only verification confirms that exact file exists in the canonical checkout
 Stopped without retry. The restored visible tab, exact durable session, operation, active ownership, host, worktree, branch, code base, specification and plan are preserved. No inventory work has started.
 
 Unblock condition: restore the existing canonical handoff workflow into this same Episode's ignored project-workflow location, verify its exact content and current native task/session/resource facts, and obtain an explicit informed operator decision for one canonical handoff re-invocation under the definite pre-admission refusal exception. This is not permission to resend the initial assignment, invoke raw execute, allocate resources, change product scope or upgrade/activate runtime code.
+
+---
+
+author: Ralph (owning Conversation)
+created: 2026-11-22T07:49:00Z
+
+---
+
+Joe explicitly authorized the local Orca include configuration, repair of this existing worktree, and continuation of the same Episode on TASK-4. Added repo-root .worktreeinclude listing only .prime-claw/workflows, and excluded the manifest through /.worktreeinclude in the shared Git info/exclude. Git confirms both the manifest and workflow directory are excluded. This is Orca's existing native copy mechanism for future new worktrees, not a product/runtime code change or a live copy test.
+
+Repaired this already-created Episode in place by copying all 10 existing canonical project workflow files into its previously absent .prime-claw/workflows directory; exact names and byte-for-byte equality were verified. Did not copy ownership or other local runtime state. No source code, specification, acceptance criteria, or plan changed. The existing active operation c88f1d99-e6a9-4710-81d0-471530d4ecdd, durable Episode 01a2020b-d277-775c-bd4c-62c44ab9aa07, selected host, original code base, branch and worktree remain intact.
+
+The missing-workflow blocker is cleared. Native session evidence shows the exact Episode idle with no unfinished actions and empty steering/follow-up queues before continuation. The prior handoff attempt stopped on the missing workflow before prompt admission; this authorization permits one canonical handoff re-invocation with the same approved inventory/confirmed-gap In Design specification scope. It does not resend the initial assignment, create another Episode, or authorize gap-feature implementation, merge, release or runtime activation. Restore In Progress and continue through the canonical handoff tool after verifying task publication.
 
 ---
 <!-- COMMENTS:END -->
