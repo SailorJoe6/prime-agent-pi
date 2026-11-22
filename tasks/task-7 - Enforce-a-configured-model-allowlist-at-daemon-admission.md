@@ -4,6 +4,7 @@ title: Enforce a configured model allowlist at daemon admission
 status: In Design
 assignee: []
 created_date: '2026-11-22T22:04:00Z'
+updated_date: '2026-11-22T22:15:00Z'
 labels: []
 dependencies: []
 references:
@@ -21,7 +22,7 @@ ordinal: 7000
 ## Description
 
 <!-- SECTION:DESCRIPTION:BEGIN -->
-Distinguish a global admission policy from picker cycling. Apply it at daemon model selection, including built-in explicit and auxiliary selections. Preserve normal selection when unset; do not redefine extension registration or use this as evidence about unverified extension entry modes.
+Distinguish a global admission policy from picker cycling. Apply it at daemon model selection, including built-in explicit and auxiliary selections. Preserve normal selection when policy is genuinely absent; do not redefine extension registration or use this as evidence about unverified extension entry modes.
 <!-- SECTION:DESCRIPTION:END -->
 
 ## Acceptance Criteria
@@ -29,4 +30,5 @@ Distinguish a global admission policy from picker cycling. Apply it at daemon mo
 - [ ] #1 With a fixture allowlist containing M, an explicit request for M is admitted.
 - [ ] #2 A request for an unlisted built-in model is refused with an explanation, not silently substituted; auxiliary resolution respects the same policy.
 - [ ] #3 Without an admission policy, enabledModels continues to control cycling without banning other explicit selections.
+- [ ] #4 When the global policy cannot be read, built-in selection is refused with a reason. A readable policy with a malformed allowlist also refuses built-in selection and explains why; neither state is treated as absence. No extension restriction is introduced.
 <!-- AC:END -->
