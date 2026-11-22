@@ -4,6 +4,7 @@ title: Classify ACP prompt failures for hosts
 status: In Design
 assignee: []
 created_date: '2026-11-22T22:19:00Z'
+updated_date: '2026-11-22T23:24:00Z'
 labels: []
 dependencies: []
 references:
@@ -21,7 +22,7 @@ ordinal: 39000
 ## Description
 
 <!-- SECTION:DESCRIPTION:BEGIN -->
-v0.10.2 retryable transport errors. ACP error responses. No automatic retry or provider change. Mixed upstream bug/new client-visible fields: reference TASK-1 without duplicating a repair task.
+v0.10.2 retryable transport errors. ACP error responses. No automatic retry or provider change. Mixed upstream bug/new client-visible fields: reference TASK-1 without duplicating a repair task. Report the fine error category separately from kind, advisory retryable and details.
 <!-- SECTION:DESCRIPTION:END -->
 
 ## Acceptance Criteria
@@ -29,4 +30,5 @@ v0.10.2 retryable transport errors. ACP error responses. No automatic retry or p
 - [ ] #1 A synthetic exhausted connection failure returns structured transport kind and advisory retryability.
 - [ ] #2 A harness fault is distinguishable and not labeled retryable transport.
 - [ ] #3 Existing error details remain available.
+- [ ] #4 Offline failed-prompt responses for a connection reset and a request timeout both report kind=model_transport and retryable=true; category is network versus timeout, respectively, and the original details remain available. Neither response triggers a retry.
 <!-- AC:END -->

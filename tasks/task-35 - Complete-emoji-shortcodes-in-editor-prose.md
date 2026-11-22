@@ -4,6 +4,7 @@ title: Complete emoji shortcodes in editor prose
 status: In Design
 assignee: []
 created_date: '2026-11-22T22:18:00Z'
+updated_date: '2026-11-22T23:24:00Z'
 labels: []
 dependencies: []
 references:
@@ -27,6 +28,7 @@ v0.10.4 emoji completer. Prompt editor/completion settings. Preserve extension c
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
 - [ ] #1 A word-start two-character prefix offers matching suggestions.
-- [ ] #2 Accepting or closing a known shortcode inserts its emoji.
-- [ ] #3 Fenced code and disabled setting leave text literal.
+- [ ] #2 Fenced code and disabled setting leave text literal.
+- [ ] #3 Only explicit menu acceptance replaces the shortcode with the selected emoji.
+- [ ] #4 Typing a closing colon or a space dismisses the menu and preserves the typed text, including the delimiter.
 <!-- AC:END -->

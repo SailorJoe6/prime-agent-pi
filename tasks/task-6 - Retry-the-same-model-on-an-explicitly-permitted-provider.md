@@ -4,7 +4,7 @@ title: Retry the same model on an explicitly permitted provider
 status: In Design
 assignee: []
 created_date: '2026-11-22T22:03:00Z'
-updated_date: '2026-11-22T22:15:00Z'
+updated_date: '2026-11-22T23:24:00Z'
 labels: []
 dependencies: []
 references:
@@ -16,7 +16,7 @@ references:
     https://github.com/SailorJoe6/prime-agent-pi/blob/6cd28f90e2391441850485c94b3ff099f579ef7a/packages/coding-agent/docs/settings.md#L250-L258
 documentation:
   - >-
-    https://github.com/SailorJoe6/prime-agent-pi/blob/df22fd7deca6a02e50a86375e36c7fecff0b8e5f/docs/upstream-feature-inventory.md#what-the-release-notes-leave-out
+    https://github.com/SailorJoe6/prime-agent-pi/blob/2982dadec68a9fb6b94ade67c1f733b6ca461893/docs/upstream-feature-inventory.md#what-the-release-notes-leave-out
 type: feature
 ordinal: 6000
 ---
