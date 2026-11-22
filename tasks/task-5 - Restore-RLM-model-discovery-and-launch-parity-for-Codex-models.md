@@ -1,9 +1,10 @@
 ---
 id: TASK-5
 title: Restore RLM model discovery and launch parity for Codex models
-status: In Design
+status: In Planning
 assignee: []
 created_date: '2026-11-22T06:52:00Z'
+updated_date: '2026-11-22T07:13:00Z'
 labels: []
 dependencies: []
 references:
@@ -39,3 +40,11 @@ Preserve existing provider and model IDs, exact selector and short-form rules, c
 - [ ] #3 `rlm.find_models("openai-codex astra")` finds both Astra rows, excludes matching models on other providers, and keeps exact selectors, ordinary single-term lookup, result shape, and limits working.
 - [ ] #4 Deterministic regressions reproduce the search/admission gaps on the old behavior and pass with the fix. Run the affected package tests and `npm run check`. Separately record a manual isolated same-provider acceptance check for discovery and a real Astra launch (no live credentials in CI; report any provider/account limit rather than claiming success).
 <!-- AC:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+1. Use the registry’s configured, auth-filtered model catalog for the shared RLM discovery and explicit launch path. Keep the existing catalog refresh and readiness waits; remove only the extra version-pinned Codex `/models` intersection and its now-unused code. Keep the stale/expired checks, private-model entitlements, exact and short-form launch rules, provider pins, and final `getApiKeyAndHeaders` preflight. Do not add a lookup, cache, version bump, or fallback.
+2. In `findRlmModelMatches`, support a whitespace-separated provider and family when the first term names a known provider. Match the remaining text against that provider’s model IDs and names. Keep existing exact-selector and single-term matching, ordering and limits. Add a coding-agent changelog fragment.
+3. Extend the existing model-registry and RLM selection regressions with deterministic fixtures for both Codex Astra rows, provider-scoped search, exact `create_session` and `spawn` selection, and auth rejection. Prove the new cases fail before the fix, then run the affected test files and `npm run check`. Separately, run the candidate in isolation with the same Codex auth route: compare CLI and RLM results, verify exact launch selection, and capture a real Astra response or the actual provider refusal. Record the evidence in TASK-5; do not merge, activate, or restart the running installation.
+<!-- SECTION:PLAN:END -->
