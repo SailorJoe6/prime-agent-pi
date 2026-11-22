@@ -4,7 +4,7 @@ title: Inventory released upstream feature-parity gaps
 status: In Progress
 assignee: []
 created_date: 2026-11-21 16:53
-updated_date: '2026-11-22T23:27:00Z'
+updated_date: '2026-11-22T23:43:00Z'
 labels: []
 dependencies: []
 references:
@@ -282,6 +282,15 @@ created: 2026-11-22T22:32:00Z
 ---
 
 Final review of 2982dadec by the owner and three same-provider Codex Astra reviewers found bounded corrections; do not treat the 6/6 checks as accepted yet. Inventory: record direct roster child rename (v0.10.0, 022c90b9; extend TASK-20 if appropriate), selected running child progress note display (v0.10.1, a8834c5b; no duplicate API), and Pi’s intentional retention of extension tool selection flags removed upstream (v0.10.0, a3700282; no removal task). Specifications: TASK-35 should insert emoji only on explicit menu acceptance; a closing colon or space dismisses the menu and keeps literal text. TASK-6 must link the corrected inventory evidence for providerBackupModel at 2982dadec or later. Record and map the v0.10.2 Bedrock Claude 5+ cache-point behavior (100e7053; offline request fixtures only, no billing claims or signer/profile repairs). TASK-47 must cover the model-level thinking signature override separately from signed replay repairs. TASK-39 must cover the released ACP error category as well as kind/retryable/details (07ae0688; representative network vs timeout; no retry mechanism). Preserve accepted specifications and update affected links and counts, then refresh stable provenance and reverify all six criteria. Source and fixtures inspected; no behavior tests or provider calls. TASK-4 remains In Progress.
+
+---
+
+author: Ralph (owning Conversation)
+created: 2026-11-22T23:43:00Z
+
+---
+
+Targeted owner and independent Codex Astra review of 977e7a68 verified all eight requested behavior corrections. One AC4 evidence-link issue remains: TASK-57 and TASK-58 link to inventory 2982dadec, which predates their respective gap assessments. Point their native documentation fields to the same anchors at 977e7a68, publish only those two spec changes, and update only the two corresponding immutable spec links in the inventory. No new gap, scope or behavior change. Keep the 53-spec set and other criteria unchanged; verify publication and the resulting exact links. Source and fixtures inspected; no behavior or provider tests.
 
 ---
 <!-- COMMENTS:END -->
