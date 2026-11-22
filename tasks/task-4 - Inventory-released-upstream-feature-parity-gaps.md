@@ -4,7 +4,7 @@ title: Inventory released upstream feature-parity gaps
 status: In Progress
 assignee: []
 created_date: 2026-11-21 16:53
-updated_date: '2026-11-22T08:03:00Z'
+updated_date: '2026-11-22T16:42:00Z'
 labels: []
 dependencies: []
 references:
@@ -204,6 +204,15 @@ Conversation review accepted bounded slice 1 at code candidate 93c4e7cbd5d27aa2c
 Read both changed documents and the complete native task contract. Independently re-enumerated stable GitHub release metadata and latest release; dates and six post-v0.9.8 releases v0.10.0–v0.10.5 agree with the table. Compared every listed source commit with upstream remote tag targets, verified commit object types, adjacent ancestry and baseline ancestry into the pinned Pi revision. Direct origin refs confirm candidate publication and task-history publication separately; primary main remains 6cd28f90e2391441850485c94b3ff099f579ef7a. Source diff changes only README and the inventory. The native task changes are compatible execution notes/documentation/modified paths, not specification or plan changes. Re-ran source diff --check and npm run check:test-policy successfully; no behavior checks or final parity claim. All six criteria remain unchecked, appropriately, because capability assessment and final release refresh remain outstanding.
 
 Fresh native list shows the exact existing Episode idle, no unfinished actions, no running children, and empty action queues. No material defect found in this checkpoint. Accept and advance the same Episode to one bounded approved slice: reconcile covered release notes with pinned source ranges, relevant docs, linked changes and tests; group observable capabilities and begin supported Pi-equivalence assessment. Preserve honest unresolved entries/next investigations and the assessment-only boundaries. Do not implement features, plan follow-up gap tasks, change policy or compatibility, merge, release or activate runtime code. Refresh current-stable coverage again before the final report.
+
+---
+
+author: Ralph (owning Conversation)
+created: 2026-11-22T16:42:00Z
+
+---
+
+Accepted the skill-discovery and invocation checkpoint at bc304a9052705be0c0d51035f91afda808a40a07 after owner and independent openai-codex/gpt-6.2-astra review. The pinned sources support three partial matches: skill override precedence, discovery diagnostics, and inline skill references. Switched Python import origin remains unresolved; the upstream fixture checks installer calls and records, not the module Pi imports. Preserve the documented override default. Diff and test-policy checks passed; behavior tests were inspected, not executed. This accepts only slice 2, not parity or merge readiness. Next: assess the released factory workflow and its session/TUI surfaces, keeping feature provenance distinct from the v0.10.5 factory skill repair.
 
 ---
 <!-- COMMENTS:END -->
