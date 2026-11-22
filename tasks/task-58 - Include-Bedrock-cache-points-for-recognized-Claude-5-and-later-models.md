@@ -4,6 +4,7 @@ title: Include Bedrock cache points for recognized Claude 5 and later models
 status: In Design
 assignee: []
 created_date: '2026-11-22T23:25:00Z'
+updated_date: '2026-11-22T23:46:00Z'
 labels: []
 dependencies: []
 references:
@@ -15,7 +16,7 @@ references:
     https://github.com/SailorJoe6/prime-agent-pi/blob/6cd28f90e2391441850485c94b3ff099f579ef7a/packages/ai/src/providers/amazon-bedrock.ts#L597-L611
 documentation:
   - >-
-    https://github.com/SailorJoe6/prime-agent-pi/blob/2982dadec68a9fb6b94ade67c1f733b6ca461893/docs/upstream-feature-inventory.md#adapter-and-mcp-findings
+    https://github.com/SailorJoe6/prime-agent-pi/blob/977e7a68c68068e159efa2d8a8e77b25841c8aed/docs/upstream-feature-inventory.md#adapter-and-mcp-findings
 type: feature
 ordinal: 58000
 ---
