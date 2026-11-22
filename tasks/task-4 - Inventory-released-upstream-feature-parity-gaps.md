@@ -4,7 +4,7 @@ title: Inventory released upstream feature-parity gaps
 status: In Progress
 assignee: []
 created_date: 2026-11-21 16:53
-updated_date: '2026-11-22T22:32:00Z'
+updated_date: '2026-11-22T23:27:00Z'
 labels: []
 dependencies: []
 references:
@@ -123,6 +123,12 @@ Candidate evidence for owner review:
 4. TASK-6–56 are 51 In Design specifications at 9090e082d314b0e0008fa9973ecf808fafbb7e20. TASK-6 preserves immediate configured different-model backup and primary restoration; only the expressly permitted new post-budget route requires the same model. TASK-7 requires an explained built-in refusal for unreadable or malformed policy, not absence. TASK-8/9 unchanged. Named definitions precede runs and terminal navigation; persistent shell identity precedes its roster.
 5. The README links the inventory. Its published index gives every exact task path, recommended order and separate investigations: https://github.com/SailorJoe6/prime-agent-pi/blob/2982dadec68a9fb6b94ade67c1f733b6ca461893/docs/upstream-feature-inventory.md#published-gap-specifications.
 6. Both repositories passed git diff --check; npm run check:test-policy passed. The candidate did not edit TASK-1/2/3/5, restore the archived contract record or change standing policy. No feature implementation, gap plan, release or live runtime/provider test.
+
+Recheck of consolidated owner findings at 04d7f2e9ec04feb072dbc43032b882b3b7643d75 against the published candidate 2982dadec68a9fb6b94ade67c1f733b6ca461893:
+1. Original Pi 6cd28f90e2391441850485c94b3ff099f579ef7a and all seven release pins match the refreshed release/tag list. Latest stable: v0.10.5 at 2026-11-22 23:24:48 UTC.
+2–3. Compared the reviewed changes to pinned source and fixture definitions. TASK-20 now includes direct roster child rename; TASK-57 covers selected-child progress display using existing notes. Pi intentionally retains its functional extension tool-selection flags. TASK-35 requires explicit emoji acceptance; a closing colon or space remains literal. TASK-6 now links the corrected backup evidence. TASK-58 covers Bedrock Claude 5+ cache-point eligibility in offline request shapes only. TASK-47 covers the model-level signature override; TASK-39 distinguishes network and timeout categories without retry implementation.
+4–5. Verified all 53 immutable specification paths in the README-linked inventory. Five existing specs changed and two were added at 73c3d8fd1fcb4eb0802127ce59073b50f678d40e; the other 46 and prior ordering are unchanged. Revised index: https://github.com/SailorJoe6/prime-agent-pi/blob/977e7a68c68068e159efa2d8a8e77b25841c8aed/docs/upstream-feature-inventory.md#published-gap-specifications.
+6. Only the inventory and targeted Backlog records changed. TASK-1 repairs and standing policy are unchanged. Both stores passed git diff --check; npm run check:test-policy passed. Sources and offline fixtures were inspected, not executed. No live provider calls, feature implementation, merge, release, or runtime changes. Pending targeted final owner review.
 <!-- SECTION:NOTES:END -->
 
 ## Comments
@@ -283,5 +289,5 @@ Final review of 2982dadec by the owner and three same-provider Codex Astra revie
 ## Final Summary
 
 <!-- SECTION:FINAL_SUMMARY:BEGIN -->
-Inventory candidate for owner review: https://github.com/SailorJoe6/prime-agent-pi/blob/2982dadec68a9fb6b94ade67c1f733b6ca461893/docs/upstream-feature-inventory.md#published-gap-specifications. Compared original Pi 6cd28f90e2391441850485c94b3ff099f579ef7a with all six stable releases after v0.9.8 through v0.10.5. The 51 linked In Design specifications describe proposed outcomes, not implemented parity. No lifecycle, runtime or release change.
+Targeted revision for final owner review: https://github.com/SailorJoe6/prime-agent-pi/blob/977e7a68c68068e159efa2d8a8e77b25841c8aed/docs/upstream-feature-inventory.md#published-gap-specifications. The inventory links 53 In Design specifications (TASK-6–58). All six inventory criteria were rechecked; this is not owner acceptance or implemented parity.
 <!-- SECTION:FINAL_SUMMARY:END -->
