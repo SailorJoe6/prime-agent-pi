@@ -4,7 +4,7 @@ title: Inventory released upstream feature-parity gaps
 status: In Progress
 assignee: []
 created_date: 2026-11-21 16:53
-updated_date: '2026-11-22T21:36:00Z'
+updated_date: '2026-11-22T21:40:00Z'
 labels: []
 dependencies: []
 references:
@@ -228,6 +228,15 @@ created: 2026-11-22T21:26:00Z
 ---
 
 Accepted the factory comparison at 85c667fe68bec7d9972f6451cbbefb4e37f28556 after owner and independent openai-codex/gpt-6.2-astra review. Released v0.10.0 source establishes the machine library, execution and terminal page; v0.10.5 repaired bundled skill discovery. Named machine workflow/library is missing at the original Pi pin; direct session controls and terminal navigation are partial against run-level behavior. Diff/test-policy checks passed; behavioral tests inspected, not run. This accepts the factory assessment only. Next: reconcile remaining release behavior across adjacent stable ranges, including later Pi changes where relevant, before gap specifications and final refresh.
+
+---
+
+author: Ralph (owning Conversation)
+created: 2026-11-22T21:40:00Z
+
+---
+
+Owner and independent Codex Astra review of faa8a401 confirmed two material documentation corrections. The v0.10.5 reconciliation row must identify the new skill status command and inline invocation, and flag the changed collision default separately from factory YAML, switched-import and storage repairs (b14426151). The v0.10.1 compaction entry must credit a498cbd49 with the configurable percentage threshold and retention-aware trigger, not new retention and reserve knobs: Pi already exposes keepRecentTokens and reserveTokens, and upstream already had its output/headroom ceiling. ACP list/load and later Codex chronology are supported. Keep In Progress; finish the bounded residual audit before gap specifications. No behavioral or provider tests ran during review.
 
 ---
 <!-- COMMENTS:END -->
