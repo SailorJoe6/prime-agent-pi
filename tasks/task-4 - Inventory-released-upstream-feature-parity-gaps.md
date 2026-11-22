@@ -1,10 +1,10 @@
 ---
 id: TASK-4
 title: Inventory released upstream feature-parity gaps
-status: In Progress
+status: Ready for Merge
 assignee: []
 created_date: 2026-11-21 16:53
-updated_date: '2026-11-22T23:47:00Z'
+updated_date: '2026-11-22T23:49:00Z'
 labels: []
 dependencies: []
 references:
@@ -293,6 +293,15 @@ created: 2026-11-22T23:43:00Z
 ---
 
 Targeted owner and independent Codex Astra review of 977e7a68 verified all eight requested behavior corrections. One AC4 evidence-link issue remains: TASK-57 and TASK-58 link to inventory 2982dadec, which predates their respective gap assessments. Point their native documentation fields to the same anchors at 977e7a68, publish only those two spec changes, and update only the two corresponding immutable spec links in the inventory. No new gap, scope or behavior change. Keep the 53-spec set and other criteria unchanged; verify publication and the resulting exact links. Source and fixtures inspected; no behavior or provider tests.
+
+---
+
+author: Ralph (owning Conversation)
+created: 2026-11-22T23:49:00Z
+
+---
+
+Accepted the inventory and all six criteria after independent review and verification of the final two evidence-link fixes. Verified 53 published In Design specs; latest stable upstream v0.10.5 at the documented cutoff; diff and test-policy checks passed, behavior fixtures inspected but not run. Documentation-only candidate c8cf010ed54d5db2e09a6f58e5acddf5a7b085b5 against main f59ad56ec6f99f7d9f9b7f739f38ab01c2c03b47. No parity, release or merge claim.
 
 ---
 <!-- COMMENTS:END -->
