@@ -4,7 +4,7 @@ title: Inventory released upstream feature-parity gaps
 status: In Progress
 assignee: []
 created_date: 2026-11-21 16:53
-updated_date: '2026-11-22T22:06:00Z'
+updated_date: '2026-11-22T22:10:00Z'
 labels: []
 dependencies: []
 references:
@@ -250,6 +250,15 @@ created: 2026-11-22T21:55:00Z
 ---
 
 Owner and independent Codex Astra review of df22fd7d confirmed the skills and compaction corrections and the four additional comparisons. Proceed to confirmed-gap specifications after two bounded inventory repairs: separate v0.10.2 unsigned-endpoint handling from v0.10.3 signed replay fixes (61e94ce8a and a4272b48f; cross-reference TASK-1), and record the v0.10.0 helper-driven shell card partial gap (d38bcb56e: executed commands versus Pi source preview) under terminal display work. Neither requires product changes. Keep unresolved investigations out of specifications and reconcile existing native tasks before creating any. No behavioral tests ran in review.
+
+---
+
+author: Ralph (owning Conversation)
+created: 2026-11-22T22:10:00Z
+
+---
+
+Owner and independent Codex Astra review of dfba53a4 and TASK-6 through TASK-9 confirmed both inventory repairs and found no material defect in TASK-8 or TASK-9. Correct TASK-6 and the inventory to distinguish Pi’s existing explicit providerBackupModel (which can switch model before the retry budget is exhausted and restore the primary) from the proposed permitted same-model route after the retry budget. Scope the different-model exclusion to the new mechanism and preserve the existing configured backup when the new policy is unset. In TASK-7 distinguish a genuinely absent policy from an unreadable or malformed global allowlist: preserve current selection only for absence, and require a clear refusal of built-in selection for unreadable or malformed policy. No extension restriction. After these bounded corrections, complete remaining confirmed-gap specification coverage and final validation. Tests inspected, not executed during this review.
 
 ---
 <!-- COMMENTS:END -->
