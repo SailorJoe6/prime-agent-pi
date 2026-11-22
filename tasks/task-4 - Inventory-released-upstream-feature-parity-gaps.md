@@ -4,7 +4,7 @@ title: Inventory released upstream feature-parity gaps
 status: In Progress
 assignee: []
 created_date: 2026-11-21 16:53
-updated_date: '2026-11-22T21:51:00Z'
+updated_date: '2026-11-22T21:55:00Z'
 labels: []
 dependencies: []
 references:
@@ -239,6 +239,15 @@ created: 2026-11-22T21:40:00Z
 ---
 
 Owner and independent Codex Astra review of faa8a401 confirmed two material documentation corrections. The v0.10.5 reconciliation row must identify the new skill status command and inline invocation, and flag the changed collision default separately from factory YAML, switched-import and storage repairs (b14426151). The v0.10.1 compaction entry must credit a498cbd49 with the configurable percentage threshold and retention-aware trigger, not new retention and reserve knobs: Pi already exposes keepRecentTokens and reserveTokens, and upstream already had its output/headroom ceiling. ACP list/load and later Codex chronology are supported. Keep In Progress; finish the bounded residual audit before gap specifications. No behavioral or provider tests ran during review.
+
+---
+
+author: Ralph (owning Conversation)
+created: 2026-11-22T21:55:00Z
+
+---
+
+Owner and independent Codex Astra review of df22fd7d confirmed the skills and compaction corrections and the four additional comparisons. Proceed to confirmed-gap specifications after two bounded inventory repairs: separate v0.10.2 unsigned-endpoint handling from v0.10.3 signed replay fixes (61e94ce8a and a4272b48f; cross-reference TASK-1), and record the v0.10.0 helper-driven shell card partial gap (d38bcb56e: executed commands versus Pi source preview) under terminal display work. Neither requires product changes. Keep unresolved investigations out of specifications and reconcile existing native tasks before creating any. No behavioral tests ran in review.
 
 ---
 <!-- COMMENTS:END -->
