@@ -1,16 +1,16 @@
 ---
 id: TASK-4
 title: Inventory released upstream feature-parity gaps
-status: Blocked
+status: In Planning
 assignee: []
-created_date: '2026-11-21 16:53'
-updated_date: '2026-11-21 20:50'
+created_date: 2026-11-21 16:53
+updated_date: '2026-11-22T06:56:00Z'
 labels: []
 dependencies: []
 references:
-  - 'https://github.com/PrimeIntellect-ai/prime-agent/releases'
-  - 'https://github.com/SailorJoe6/prime-agent-pi'
-  - 'https://github.com/SailorJoe6/prime-agent-upstream'
+  - https://github.com/PrimeIntellect-ai/prime-agent/releases
+  - https://github.com/SailorJoe6/prime-agent-pi
+  - https://github.com/SailorJoe6/prime-agent-upstream
 documentation:
   - docs/product-contract.md
 type: task
@@ -100,7 +100,9 @@ This plan has no dependency on completion of TASK-1. It plans execution of the f
 <!-- COMMENTS:BEGIN -->
 author: Ralph (owning Conversation)
 created: 2026-11-21 20:50
+
 ---
+
 Creation blocked before a durable Episode could be bound.
 
 The approved TASK-4 inventory/specification scope passed semantic readiness. One creation operation, `83f29689-f471-440f-a78e-e2195141b84e`, published In Progress in task-history commit `0f92046a0526f79df8efb96cbd83bff0aaa06c27`, created branch `JLanders/prime-agent-task-4-episode-83f29689` and its Orca worktree, then timed out binding a fresh Prime Agent session and connected tab. Ownership remains `uncertain`; no durable Episode/routing identity or initial execute admission was established by the returned ownership evidence.
@@ -110,5 +112,17 @@ Read-only inspection of the exact recorded launch run `3185cd35-f513-4daf-9b90-a
 Both code workspaces remain clean at `6cd28f90e2391441850485c94b3ff099f579ef7a`. No inventory work or gap specifications have been produced. Existing worktree, branch, launch automation/run, task history, selected host, and uncertain ownership are preserved.
 
 Unblock condition: repair the fresh-worktree runtime dependency-resolution problem through an operator-approved setup/runtime action, and obtain supported owner-led creation recovery for this same operation and unchanged resources. The loaded oversight guidance refers to an Owner-led creation recovery section, but the current project implement-task workflow does not contain it. Before any continuation, establish exact existing session/launch/assignment facts and use only a supported continuation for the remaining creation step; do not infer non-delivery from an absent session ID, allocate a replacement Episode, promote ownership manually, resend an initial assignment, or use ordinary handoff. TASK-4 remains paused pending this recovery decision; its implementation authority and scope are unchanged.
+
+---
+
+author: Ralph (owning Conversation)
+created: 2026-11-22T06:56:00Z
+
+---
+
+Joe explicitly confirmed discarding the failed TASK-4 setup and creating a fresh Episode from the approved plan. The failed attempt was operation `83f29689-f471-440f-a78e-e2195141b84e`, at code base `6cd28f90e2391441850485c94b3ff099f579ef7a`. Its disabled launch automation and exact empty Orca worktree/branch were removed through Orca, and absence of that worktree and branch was verified. No Episode session was identified in native live/saved-session evidence; no old prompt was resent. Only this owner's stale failed-attempt registry entry was removed, under the existing exclusive registry lock after an immediate exact-entry comparison, preserving other owners.
+
+The current TASK-4 specification, acceptance criteria and implementation plan remain intact. The archived historical contract task has already been deleted at Joe's separate explicit request; active TASK-4 resolves normally. Fresh worktrees can resolve existing canonical packages through the project's worktree-parent dependency link; no packages were installed/upgraded and no product code, launcher or runtime version was changed. Restoring In Planning permits the explicitly approved fresh creation attempt. This does not reopen design or broaden the inventory/confirmed-gap-specification scope.
+
 ---
 <!-- COMMENTS:END -->
