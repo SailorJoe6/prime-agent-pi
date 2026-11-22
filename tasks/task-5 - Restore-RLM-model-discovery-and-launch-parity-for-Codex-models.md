@@ -1,10 +1,10 @@
 ---
 id: TASK-5
 title: Restore RLM model discovery and launch parity for Codex models
-status: In Planning
+status: In Progress
 assignee: []
 created_date: '2026-11-22T06:52:00Z'
-updated_date: '2026-11-22T07:13:00Z'
+updated_date: '2026-11-22T07:15:00Z'
 labels: []
 dependencies: []
 references:
