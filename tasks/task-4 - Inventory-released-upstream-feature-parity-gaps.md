@@ -1,10 +1,10 @@
 ---
 id: TASK-4
 title: Inventory released upstream feature-parity gaps
-status: Blocked
+status: In Progress
 assignee: []
 created_date: 2026-11-21 16:53
-updated_date: '2026-11-22T07:00:00Z'
+updated_date: '2026-11-22T07:11:00Z'
 labels: []
 dependencies: []
 references:
@@ -138,6 +138,19 @@ Operation: c88f1d99-e6a9-4710-81d0-471530d4ecdd. Durable Episode: 01a2020b-d277-
 The Episode explicitly reported receipt and stopped before assessment or code/task/registry writes. Current native list evidence identifies that same live durable session at the exact CWD, idle, no unfinished actions, and empty steering/follow-up queues. Orca lists the recorded agent terminal term_7767022c-7b67-4470-9ef3-d9e3cff05f0f as connected but orphaned; the visual layout retains only the default shell tab. Registry remains uncertain. The earlier dependency-resolution failure did not recur. Neither the initial assignment nor creation was retried.
 
 Unblock condition: restore or attach an Orca tab to this same durable session and complete supported same-operation binding after exact native session, assignment, worktree and tab evidence is reconciled. Preserve the existing session, operation, host, code base, worktree and branch; do not resend the initial assignment, allocate another Episode or promote ownership from the receipt alone. The project workflow still lacks its referenced Owner-led creation recovery section. Any setup/workflow repair and subsequent continuation must use supported guidance and operator authority, not an invented recovery interface. Inventory work has not started; the approved specification and plan remain unchanged.
+
+---
+
+author: Ralph (owning Conversation)
+created: 2026-11-22T07:11:00Z
+
+---
+
+Joe approved repair of the fresh Episode's tab attachment. Created a background Orca terminal running only `prime-agent attach 01a2020b-d277-775c-bd4c-62c44ab9aa07`, attaching to the existing durable session without creating an agent or sending task input. Native terminal/layout and screen observations prove a visible, connected Prime Agent tab in the exact recorded worktree. The original orphaned terminal and default shell were preserved.
+
+The supported existing-operation session-binding call returned active ownership for operation c88f1d99-e6a9-4710-81d0-471530d4ecdd and the same durable session, route f35b1b242fd0, provider/task, original code base, selected host, branch and worktree. Current terminal is term_425519ca-4dc7-46d1-8f8c-4e79c7f41d05. It explicitly sent no new execute assignment. Initial delivery is independently established by the native session transcript and the Episode's earlier receipt. No manual ownership edit, workflow upgrade, product-code change or runtime cutover was needed.
+
+The recorded creation blocker is cleared. Restoring In Progress for continuation of the same approved TASK-4 inventory and confirmed-gap In Design specification scope through canonical task handoff. The Episode had stopped before assessment; current native observations show idle, empty queues and no unfinished actions. Specification, acceptance criteria and plan remain unchanged. Historical planning-only wording is superseded by Joe's explicit implementation approval; no gap-feature implementation is authorized.
 
 ---
 <!-- COMMENTS:END -->
