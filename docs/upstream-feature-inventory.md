@@ -208,7 +208,7 @@ The 53 `In Design` specifications below cover the confirmed gaps at the pinned P
 
 ### Session browsing, terminal and headless clients
 
-- [TASK-57: Show the selected running child’s progress note in the roster](https://github.com/SailorJoe6/prime-agent-pi/blob/73c3d8fd1fcb4eb0802127ce59073b50f678d40e/tasks/task-57%20-%20Show-the-selected-running-child%E2%80%99s-progress-note-in-the-roster.md)
+- [TASK-57: Show the selected running child’s progress note in the roster](https://github.com/SailorJoe6/prime-agent-pi/blob/156811c7e1436f980849fb4c8a59e5241014c7f1/tasks/task-57%20-%20Show-the-selected-running-child%E2%80%99s-progress-note-in-the-roster.md)
 - [TASK-29: Create a user-owned session inside the roster scope](https://github.com/SailorJoe6/prime-agent-pi/blob/9090e082d314b0e0008fa9973ecf808fafbb7e20/tasks/task-29%20-%20Create-a-user-owned-session-inside-the-roster-scope.md)
 - [TASK-30: Route a text copy to the attached terminal](https://github.com/SailorJoe6/prime-agent-pi/blob/9090e082d314b0e0008fa9973ecf808fafbb7e20/tasks/task-30%20-%20Route-a-text-copy-to-the-attached-terminal.md)
 - [TASK-31: Page and search the saved-session roster](https://github.com/SailorJoe6/prime-agent-pi/blob/9090e082d314b0e0008fa9973ecf808fafbb7e20/tasks/task-31%20-%20Page-and-search-the-saved-session-roster.md)
@@ -224,7 +224,7 @@ The 53 `In Design` specifications below cover the confirmed gaps at the pinned P
 
 ### Models, providers, search and connectors
 
-- [TASK-58: Include Bedrock cache points for recognized Claude 5 and later models](https://github.com/SailorJoe6/prime-agent-pi/blob/73c3d8fd1fcb4eb0802127ce59073b50f678d40e/tasks/task-58%20-%20Include-Bedrock-cache-points-for-recognized-Claude-5-and-later-models.md)
+- [TASK-58: Include Bedrock cache points for recognized Claude 5 and later models](https://github.com/SailorJoe6/prime-agent-pi/blob/156811c7e1436f980849fb4c8a59e5241014c7f1/tasks/task-58%20-%20Include-Bedrock-cache-points-for-recognized-Claude-5-and-later-models.md)
 - [TASK-6: Retry the same model on an explicitly permitted provider](https://github.com/SailorJoe6/prime-agent-pi/blob/73c3d8fd1fcb4eb0802127ce59073b50f678d40e/tasks/task-6%20-%20Retry-the-same-model-on-an-explicitly-permitted-provider.md)
 - [TASK-7: Enforce a configured model allowlist at daemon admission](https://github.com/SailorJoe6/prime-agent-pi/blob/9090e082d314b0e0008fa9973ecf808fafbb7e20/tasks/task-7%20-%20Enforce-a-configured-model-allowlist-at-daemon-admission.md)
 - [TASK-41: Explain fresh scoped default resolution](https://github.com/SailorJoe6/prime-agent-pi/blob/9090e082d314b0e0008fa9973ecf808fafbb7e20/tasks/task-41%20-%20Explain-fresh-scoped-default-resolution.md)
