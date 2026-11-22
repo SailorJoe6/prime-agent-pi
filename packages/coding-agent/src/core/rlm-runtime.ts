@@ -210,12 +210,27 @@ function normalizeModelSearchText(value: string): string {
 	return value.toLowerCase().replace(/[^a-z0-9]+/g, "");
 }
 
-export function findRlmModelMatches(query: string, models: Model<Api>[], limit: number): RlmModelMatch[] {
-	const normalizedQuery = normalizeModelSearchText(query.trim());
-	return models
+export function findRlmModelMatches(
+	query: string,
+	models: Model<Api>[],
+	limit: number,
+	catalogModels: readonly Pick<Model<Api>, "provider">[] = [],
+): RlmModelMatch[] {
+	const [providerTerm, ...familyTerms] = query.trim().toLowerCase().split(/\s+/);
+	const matchesProvider = (model: Pick<Model<Api>, "provider">) => model.provider.toLowerCase() === providerTerm;
+	// The catalog recognizes provider scope; only eligible models can supply results.
+	const provider =
+		familyTerms.length > 0
+			? (models.find(matchesProvider) ?? catalogModels.find(matchesProvider))?.provider
+			: undefined;
+	const normalizedQuery = normalizeModelSearchText(provider ? familyTerms.join(" ") : query);
+	if (provider && !normalizedQuery) return [];
+	const candidates = provider ? models.filter((model) => model.provider === provider) : models;
+	return candidates
 		.map((model) => {
 			const selector = `${model.provider}/${model.id}`;
-			const fields = [selector, model.id, model.name || model.id];
+			const name = model.name || model.id;
+			const fields = provider ? [model.id, name] : [selector, model.id, name];
 			const normalizedFields = fields.map(normalizeModelSearchText);
 			let score = normalizedQuery ? Number.POSITIVE_INFINITY : 0;
 			if (normalizedQuery) {

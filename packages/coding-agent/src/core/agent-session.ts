@@ -12538,8 +12538,9 @@ export class AgentSession {
 	}
 
 	async findRlmModels(query: string, limit: number): Promise<RlmFindModelsResult> {
+		const models = await this._authenticatedRlmModels();
 		return {
-			models: findRlmModelMatches(query, await this._authenticatedRlmModels(), limit),
+			models: findRlmModelMatches(query, models, limit, this._modelRegistry.getAll()),
 		};
 	}
 
@@ -12562,7 +12563,11 @@ export class AgentSession {
 			// expired provider has to fail the spawn here instead of starting
 			// a child that fails its first model request.
 			const status = this._modelRegistry.getProviderAuthStatus(parentModel.provider);
-			if (status.source === "stale" || status.label === "expired") {
+			if (
+				status.source === "stale" ||
+				status.label === "expired" ||
+				(parentModel.provider === "openai-codex" && !(await this._modelRegistry.hasUsableCodexOAuth()))
+			) {
 				throw new Error(`Requested ${target} model "${reference}" is unavailable, unauthenticated, or expired`);
 			}
 			const auth = await this._modelRegistry.getApiKeyAndHeaders(parentModel);
@@ -12580,7 +12585,12 @@ export class AgentSession {
 			candidates.find(
 				(candidate) => `${candidate.provider}/${candidate.id}`.toLowerCase() === normalizedReference,
 			) ?? findUniqueRlmShortFormModelMatch(reference, candidates, parentModel);
-		if (!model) {
+		if (
+			!model ||
+			(model === parentModel &&
+				model.provider === "openai-codex" &&
+				!(await this._modelRegistry.hasUsableCodexOAuth()))
+		) {
 			throw new Error(formatRlmModelUnavailableError(reference, target, candidates));
 		}
 
