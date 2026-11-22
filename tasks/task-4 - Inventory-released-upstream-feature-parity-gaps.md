@@ -4,7 +4,7 @@ title: Inventory released upstream feature-parity gaps
 status: In Progress
 assignee: []
 created_date: 2026-11-21 16:53
-updated_date: '2026-11-22T07:49:00Z'
+updated_date: '2026-11-22T07:52:00Z'
 labels: []
 dependencies: []
 references:
@@ -13,6 +13,10 @@ references:
   - https://github.com/SailorJoe6/prime-agent-upstream
 documentation:
   - docs/product-contract.md
+  - docs/upstream-feature-inventory.md
+modified_files:
+  - README.md
+  - docs/upstream-feature-inventory.md
 type: task
 ordinal: 4000
 ---
@@ -94,6 +98,12 @@ Authoring these follow-up specifications does not approve them, advance them int
 
 This plan has no dependency on completion of TASK-1. It plans execution of the finite inventory and gap-specification work only; the current operator request authorizes planning, not starting that execution.
 <!-- SECTION:PLAN:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Slice 1 — assessment baseline and release coverage pinned. `docs/upstream-feature-inventory.md` (linked from `README.md`) records Pi `6cd28f90e2391441850485c94b3ff099f579ef7a`, final TypeScript baseline v0.9.8 `7d442aafa985f9342134fac16c2ef41f03fb45c1`, and the six subsequent published stable upstream releases v0.10.0 through v0.10.5 at 2026-11-22 07:52:00 UTC, with publication URLs, exact source commits and adjacent comparison ranges. Verified from the paginated GitHub Releases list, `releases/latest`, upstream remote tags, local commit type and ancestry; repeated the remote release/tag query before writing this checkpoint and got the same coverage. `git diff --check`, `git diff --cached --check`, and `npm run check:test-policy` passed for the documentation changes. No behavioral checks ran. No acceptance criteria checked yet: the final cutoff must be refreshed after the capabilities are audited. Next slice: reconcile release notes against the pinned source ranges and start grouping and assessing observable capabilities. No confirmed-gap specifications created; TASK-1 stays separate.
+<!-- SECTION:NOTES:END -->
 
 ## Comments
 
