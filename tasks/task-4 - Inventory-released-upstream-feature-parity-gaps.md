@@ -4,7 +4,7 @@ title: Inventory released upstream feature-parity gaps
 status: In Progress
 assignee: []
 created_date: 2026-11-21 16:53
-updated_date: '2026-11-22T23:43:00Z'
+updated_date: '2026-11-22T23:47:00Z'
 labels: []
 dependencies: []
 references:
@@ -129,6 +129,8 @@ Recheck of consolidated owner findings at 04d7f2e9ec04feb072dbc43032b882b3b7643d
 2–3. Compared the reviewed changes to pinned source and fixture definitions. TASK-20 now includes direct roster child rename; TASK-57 covers selected-child progress display using existing notes. Pi intentionally retains its functional extension tool-selection flags. TASK-35 requires explicit emoji acceptance; a closing colon or space remains literal. TASK-6 now links the corrected backup evidence. TASK-58 covers Bedrock Claude 5+ cache-point eligibility in offline request shapes only. TASK-47 covers the model-level signature override; TASK-39 distinguishes network and timeout categories without retry implementation.
 4–5. Verified all 53 immutable specification paths in the README-linked inventory. Five existing specs changed and two were added at 73c3d8fd1fcb4eb0802127ce59073b50f678d40e; the other 46 and prior ordering are unchanged. Revised index: https://github.com/SailorJoe6/prime-agent-pi/blob/977e7a68c68068e159efa2d8a8e77b25841c8aed/docs/upstream-feature-inventory.md#published-gap-specifications.
 6. Only the inventory and targeted Backlog records changed. TASK-1 repairs and standing policy are unchanged. Both stores passed git diff --check; npm run check:test-policy passed. Sources and offline fixtures were inspected, not executed. No live provider calls, feature implementation, merge, release, or runtime changes. Pending targeted final owner review.
+
+AC4 link repair for owner review: 7a0ad80d507b64c2883a9fab536b7cb6d86bd256 updates only the inventory links to TASK-57 and TASK-58 at 156811c7e1436f980849fb4c8a59e5241014c7f1. Verified each published specification links back to its assessment at 977e7a68c68068e159efa2d8a8e77b25841c8aed with its original anchor. All 53 inventory specifications remain In Design; no behavior or criteria changed. git diff --check passed in both stores; npm run check:test-policy passed. Latest upstream stable observed at 2026-11-22 23:46:11 UTC: v0.10.5. No behavior fixtures or provider tests run.
 <!-- SECTION:NOTES:END -->
 
 ## Comments
@@ -298,5 +300,5 @@ Targeted owner and independent Codex Astra review of 977e7a68 verified all eight
 ## Final Summary
 
 <!-- SECTION:FINAL_SUMMARY:BEGIN -->
-Targeted revision for final owner review: https://github.com/SailorJoe6/prime-agent-pi/blob/977e7a68c68068e159efa2d8a8e77b25841c8aed/docs/upstream-feature-inventory.md#published-gap-specifications. The inventory links 53 In Design specifications (TASK-6–58). All six inventory criteria were rechecked; this is not owner acceptance or implemented parity.
+Targeted revision for final owner review: https://github.com/SailorJoe6/prime-agent-pi/blob/7a0ad80d507b64c2883a9fab536b7cb6d86bd256/docs/upstream-feature-inventory.md#published-gap-specifications. The inventory links 53 In Design specifications (TASK-6–58). All six inventory criteria were rechecked; this is not owner acceptance or implemented parity.
 <!-- SECTION:FINAL_SUMMARY:END -->
