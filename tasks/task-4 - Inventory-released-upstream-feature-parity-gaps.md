@@ -1,10 +1,10 @@
 ---
 id: TASK-4
 title: Inventory released upstream feature-parity gaps
-status: In Planning
+status: In Progress
 assignee: []
 created_date: 2026-11-21 16:53
-updated_date: '2026-11-22T06:56:00Z'
+updated_date: '2026-11-22T06:57:00Z'
 labels: []
 dependencies: []
 references:
