@@ -1,7 +1,13 @@
 import { type Api, fauxAssistantMessage, type Model } from "@earendil-works/pi-ai";
 import { describe, expect, it, vi } from "vitest";
 import type { HostRequestHandlers } from "../../../src/core/kernel/index.js";
-import { findUniqueRlmShortFormModelMatch, formatRlmModelUnavailableError } from "../../../src/core/rlm-runtime.js";
+import {
+	type CreateRlmRootSessionOptions,
+	createRlmFindModelsHostHandler,
+	findRlmModelMatches,
+	findUniqueRlmShortFormModelMatch,
+	formatRlmModelUnavailableError,
+} from "../../../src/core/rlm-runtime.js";
 import { SessionManager } from "../../../src/core/session-manager.js";
 import { createHarness } from "../harness.js";
 
@@ -19,6 +25,28 @@ function openAICodexToken(accountId: string): string {
 }
 
 describe("ENG-4649 subagent model selection", () => {
+	const catalog = [
+		{ provider: "openai-codex", id: "gpt-6.2-astra", name: "GPT 6.2 Astra Next Generation" },
+		{ provider: "faux", id: "openai-codex-astra", name: "Astra" },
+		{ provider: "openai-codex", id: "gpt-6-astra", name: "GPT 6 Astra" },
+	] as Model<Api>[];
+	const matches = catalog.map(({ provider, id, name }) => ({ provider, id, name, selector: `${provider}/${id}` }));
+	const [newer, other, older] = matches;
+	const findModels = createRlmFindModelsHostHandler((query, limit) => ({
+		models: findRlmModelMatches(query, catalog, limit),
+	}));
+
+	it.each([
+		{ query: "openai-codex astra", limit: 8, expected: [older, newer] },
+		{ query: "  OPENAI-CODEX\tNEXT GENERATION  ", limit: 8, expected: [newer] },
+		{ query: "openai-codex astra", limit: 1, expected: [older] },
+		{ query: "openai-codex/gpt-6.2-astra", limit: 8, expected: [newer] },
+		{ query: "astra", limit: 8, expected: [other, older, newer] },
+		{ query: "gpt 6.2", limit: 8, expected: [newer] },
+	])("TASK-5 returns model results for $query (limit $limit)", async ({ query, limit, expected }) => {
+		await expect(findModels({ query, limit })).resolves.toEqual({ models: expected });
+	});
+
 	it("searches a bounded authenticated catalog without advertising it", async () => {
 		const harness = await createHarness({
 			provider,
@@ -70,45 +98,75 @@ describe("ENG-4649 subagent model selection", () => {
 				source: "stale",
 				label: "expired",
 			});
-			await expect(harness.session.findRlmModels("", 8)).resolves.toEqual({ models: [] });
+			await expect(harness.session.findRlmModels("child-model", 8)).resolves.toEqual({ models: [] });
 		} finally {
 			harness.cleanup();
 		}
 	});
 
-	it("limits ChatGPT discovery and execution to the account model catalog", async () => {
+	it.each(["spawn", "create_session"])("TASK-5 resolves exact Codex Astra models for %s", async (operation) => {
 		const codexProvider = "openai-codex";
+		const ids = ["gpt-6-astra", "gpt-6.2-astra"];
+		const createRlmRootSession = vi.fn(async ({ model }: CreateRlmRootSessionOptions) => ({
+			active_session_id: "fixture-active",
+			session_id: "fixture-session",
+			name: "fixture",
+			session_file: "/fixture.jsonl",
+			model: `${model.provider}/${model.id}`,
+		}));
 		const harness = await createHarness({
 			provider: codexProvider,
-			models: [{ id: "parent-model" }, { id: "unsupported-model" }],
+			models: [{ id: "parent-model" }, ...ids.map((id) => ({ id }))],
+			...(operation === "create_session"
+				? {
+						subagentRuntimeHost: {
+							createRlmRootSession,
+							createRlmSubagentRuntime: async () => {
+								throw new Error("Unexpected child host request");
+							},
+							deleteRlmSubagentRuntime: async () => {},
+						},
+					}
+				: {}),
 		});
-		const fetchModels = vi.fn(
-			async () =>
-				new Response(JSON.stringify({ models: [{ slug: "parent-model" }] }), {
-					status: 200,
-					headers: { "content-type": "application/json" },
-				}),
-		);
-		vi.stubGlobal("fetch", fetchModels);
+		vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("offline")));
 		try {
-			harness.authStorage.setRuntimeApiKey(codexProvider, openAICodexToken("account-1"));
-			const discovered = await harness.session.findRlmModels("", 20);
-			expect(discovered.models.map((model) => model.selector)).toEqual([`${codexProvider}/parent-model`]);
-			expect(fetchModels).toHaveBeenCalledWith(
-				expect.stringMatching(/\/codex\/models\?client_version=/),
-				expect.objectContaining({
-					headers: expect.objectContaining({ "chatgpt-account-id": "account-1" }),
-				}),
+			const access = openAICodexToken("account-1");
+			harness.authStorage.removeRuntimeApiKey(codexProvider);
+			harness.authStorage.set(codexProvider, {
+				type: "oauth",
+				access,
+				refresh: "fixture-refresh",
+				expires: Date.now() + 60_000,
+			});
+			const preflight = vi.spyOn(harness.session.modelRegistry, "getApiKeyAndHeaders");
+			harness.setResponses(ids.map(() => fauxAssistantMessage("Astra reply")));
+			for (const id of ids) {
+				const model = `${codexProvider}/${id}`;
+				const options = { model };
+				const result =
+					operation === "spawn"
+						? await harness.session.runRlmChild("reply with the selected model", options)
+						: await harness.session.createRlmSession("reply with the selected model", options);
+				expect(result.model).toBe(model);
+				expect(preflight).toHaveBeenCalledWith(expect.objectContaining({ provider: codexProvider, id }));
+			}
+			const unavailable = { model: `${codexProvider}/unconfigured-model` };
+			const launch =
+				operation === "spawn"
+					? harness.session.runRlmChild.bind(harness.session)
+					: harness.session.createRlmSession.bind(harness.session);
+			await expect(launch("reject unknown model", unavailable)).rejects.toThrow("is unavailable");
+			// The faux harness supplies an API key fallback in addition to the stored OAuth fixture.
+			expect(harness.session.modelRegistry.markProviderAuthStale(codexProvider)).toBe(true);
+			expect(harness.session.modelRegistry.markProviderAuthStale(codexProvider)).toBe(true);
+			expect(harness.session.modelRegistry.getProviderAuthStatus(codexProvider)).toMatchObject({
+				source: "stale",
+				label: "expired",
+			});
+			await expect(launch("reject expired credentials", { model: `${codexProvider}/${ids[1]}` })).rejects.toThrow(
+				"is unavailable",
 			);
-
-			await expect(
-				harness.session.runRlmChild("reject unsupported account model", {
-					model: `${codexProvider}/unsupported-model`,
-				}),
-			).rejects.toThrow(
-				`Requested subagent model "${codexProvider}/unsupported-model" is unavailable, unauthenticated, or expired`,
-			);
-			expect((await harness.session.listRlmSubagents()).subagents).toEqual([]);
 		} finally {
 			vi.unstubAllGlobals();
 			harness.cleanup();
@@ -144,52 +202,10 @@ describe("ENG-4649 subagent model selection", () => {
 		}
 	});
 
-	it("does not reuse an expired ChatGPT model catalog after a refresh failure", async () => {
-		const codexProvider = "openai-codex";
-		const harness = await createHarness({ provider: codexProvider, models: [{ id: "parent-model" }] });
-		const codexCatalogCalls = vi
-			.fn()
-			.mockResolvedValueOnce(
-				new Response(JSON.stringify({ models: [{ slug: "parent-model" }] }), {
-					status: 200,
-					headers: { "content-type": "application/json" },
-				}),
-			)
-			.mockRejectedValueOnce(new Error("offline"));
-		const fetchModels = vi.fn((input: string | URL | Request) => {
-			const url = String(input);
-			// Catalog refreshes (provider catalog, default-model pointer) run in the
-			// background; reject them so the codex discovery under test is the only
-			// source of codex models.
-			if (url.includes("prime-agent-catalog/main/")) {
-				return Promise.reject(new Error("catalog refresh offline"));
-			}
-			return codexCatalogCalls();
-		});
-		vi.stubGlobal("fetch", fetchModels);
-		let now = Date.now();
-		const dateNow = vi.spyOn(Date, "now").mockImplementation(() => now);
-		try {
-			harness.authStorage.setRuntimeApiKey(codexProvider, openAICodexToken("account-1"));
-			await expect(harness.session.findRlmModels("parent", 8)).resolves.toMatchObject({
-				models: [{ selector: `${codexProvider}/parent-model` }],
-			});
-
-			now += 300_001;
-			await expect(harness.session.findRlmModels("parent", 8)).resolves.toEqual({ models: [] });
-			expect(codexCatalogCalls).toHaveBeenCalledTimes(2);
-		} finally {
-			dateNow.mockRestore();
-			vi.unstubAllGlobals();
-			harness.cleanup();
-		}
-	});
-
 	it("does not warn when an unavailable selector is already the parent model", async () => {
 		const codexProvider = "openai-codex";
 		const harness = await createHarness({ provider: codexProvider, models: [{ id: "parent-model" }] });
-		const fetchModels = vi.fn().mockRejectedValue(new Error("offline"));
-		vi.stubGlobal("fetch", fetchModels);
+		const catalog = vi.spyOn(harness.session.modelRegistry, "getExecutableModels").mockResolvedValue([]);
 		try {
 			harness.authStorage.setRuntimeApiKey(codexProvider, openAICodexToken("account-1"));
 			await expect(harness.session.findRlmModels("parent", 8)).resolves.toEqual({ models: [] });
@@ -203,7 +219,7 @@ describe("ENG-4649 subagent model selection", () => {
 				expect((await harness.session.listRlmSubagents()).subagents[0]?.status).toBe("completed");
 			});
 		} finally {
-			vi.unstubAllGlobals();
+			catalog.mockRestore();
 			harness.cleanup();
 		}
 	});
@@ -211,8 +227,7 @@ describe("ENG-4649 subagent model selection", () => {
 	it("resolves the parent model as its own short form when the catalog lacks it", async () => {
 		const codexProvider = "openai-codex";
 		const harness = await createHarness({ provider: codexProvider, models: [{ id: "parent-model" }] });
-		const fetchModels = vi.fn().mockRejectedValue(new Error("offline"));
-		vi.stubGlobal("fetch", fetchModels);
+		const catalog = vi.spyOn(harness.session.modelRegistry, "getExecutableModels").mockResolvedValue([]);
 		try {
 			harness.authStorage.setRuntimeApiKey(codexProvider, openAICodexToken("account-1"));
 			await expect(harness.session.findRlmModels("parent", 8)).resolves.toEqual({ models: [] });
@@ -232,7 +247,7 @@ describe("ENG-4649 subagent model selection", () => {
 				{ timeout: 5_000 },
 			);
 		} finally {
-			vi.unstubAllGlobals();
+			catalog.mockRestore();
 			harness.cleanup();
 		}
 	});

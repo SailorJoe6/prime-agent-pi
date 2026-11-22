@@ -133,7 +133,9 @@ The kernel bootstrap places the `rlm` object in the user namespace, so a cell ca
 - `model`: an exact `provider/model` selector from `rlm.find_models()`; and
 - `thinking`: an explicit child reasoning level; must be valid for the resolved child model, defaults to the parent level (clamped to the child model).
 
-Unknown options fail instead of being ignored. Model search is bounded to active, non-expired credentials. If an exact selection is unavailable or fails auth preflight, spawn fails instead of silently falling back to another model. A child otherwise inherits the parent model.
+Unknown options fail instead of being ignored. Search by model family (`astra`), exact selector (`openai-codex/gpt-6-astra`), or provider and family (`openai-codex astra`). A provider and family query matches only models from that provider.
+
+RLM discovery and explicit launches use the configured model catalog, with discovery limited to active, non-expired credentials. Codex selection does not depend on a separate Codex model-list request. Both `rlm.spawn` and `rlm.create_session` check authentication before an explicit launch and fail rather than substituting another model. Admission does not guarantee a response from the provider. Without a requested or configured child model, a child inherits the parent model.
 
 ## Child Execution
 

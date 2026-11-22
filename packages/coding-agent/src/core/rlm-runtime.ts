@@ -211,11 +211,19 @@ function normalizeModelSearchText(value: string): string {
 }
 
 export function findRlmModelMatches(query: string, models: Model<Api>[], limit: number): RlmModelMatch[] {
-	const normalizedQuery = normalizeModelSearchText(query.trim());
-	return models
+	const [providerTerm, ...familyTerms] = query.trim().toLowerCase().split(/\s+/);
+	const provider =
+		familyTerms.length > 0
+			? models.find((model) => model.provider.toLowerCase() === providerTerm)?.provider
+			: undefined;
+	const normalizedQuery = normalizeModelSearchText(provider ? familyTerms.join(" ") : query);
+	if (provider && !normalizedQuery) return [];
+	const candidates = provider ? models.filter((model) => model.provider === provider) : models;
+	return candidates
 		.map((model) => {
 			const selector = `${model.provider}/${model.id}`;
-			const fields = [selector, model.id, model.name || model.id];
+			const name = model.name || model.id;
+			const fields = provider ? [model.id, name] : [selector, model.id, name];
 			const normalizedFields = fields.map(normalizeModelSearchText);
 			let score = normalizedQuery ? Number.POSITIVE_INFINITY : 0;
 			if (normalizedQuery) {

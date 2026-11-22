@@ -1234,64 +1234,59 @@ describe("subagent Prime Inference discovery", () => {
 	});
 });
 
-describe("issue #702 codex model discovery client version", () => {
-	const originalFetch = globalThis.fetch;
-	let codexTempDir: string;
-
-	beforeEach(() => {
-		codexTempDir = mkdtempSync(join(tmpdir(), "codex-client-version-"));
-	});
-
-	afterEach(() => {
-		globalThis.fetch = originalFetch;
-		rmSync(codexTempDir, { recursive: true, force: true });
-	});
-
-	function codexAccessToken(accountId: string): string {
-		const payload = Buffer.from(
-			JSON.stringify({ "https://api.openai.com/auth": { chatgpt_account_id: accountId } }),
-		).toString("base64url");
-		return `header.${payload}.signature`;
-	}
-
-	test("sends a Codex CLI client version on the discovery request instead of the package version", async () => {
-		const authPath = join(codexTempDir, "auth.json");
-		writeFileSync(
-			authPath,
-			JSON.stringify({
-				"openai-codex": {
-					type: "oauth",
-					access: codexAccessToken("account-123"),
-					refresh: "refresh-token",
-					expires: Date.now() + 60 * 60 * 1000,
-					accountId: "account-123",
-				},
-			}),
-		);
-		const registry = ModelRegistry.create(AuthStorage.create(authPath), join(codexTempDir, "models.json"));
-		const codexModels = registry.getAvailable().filter((model) => model.provider === "openai-codex");
-		expect(codexModels.length).toBeGreaterThan(0);
-		const requestedUrls: string[] = [];
-		globalThis.fetch = (async (input: Parameters<typeof globalThis.fetch>[0]) => {
-			requestedUrls.push(input instanceof Request ? input.url : input.toString());
-			return new Response(JSON.stringify({ models: codexModels.map((model) => ({ slug: model.id })) }), {
-				status: 200,
-				headers: { "content-type": "application/json" },
+describe("TASK-5 Codex catalog parity", () => {
+	test.each(["partial", "empty", "failed"])(
+		"keeps configured OAuth models with a %s Codex discovery response",
+		async (response) => {
+			const dir = mkdtempSync(join(tmpdir(), "codex-catalog-parity-"));
+			const fetchModels = vi.fn(async (input: Parameters<typeof fetch>[0]) => {
+				if (!String(input).includes("/codex/models")) throw new Error("provider catalog offline");
+				if (response === "failed") throw new Error("Codex discovery offline");
+				return Response.json({ models: response === "partial" ? [{ slug: "gpt-6-astra" }] : [] });
 			});
-		}) as typeof globalThis.fetch;
+			vi.stubGlobal("fetch", fetchModels);
+			try {
+				const provider = "openai-codex";
+				const ids = ["gpt-6-astra", "gpt-6.2-astra"];
+				const modelsPath = join(dir, "models.json");
+				writeFileSync(
+					modelsPath,
+					JSON.stringify({ providers: { [provider]: { models: ids.map((id) => ({ id })) } } }),
+				);
+				const auth = AuthStorage.inMemory();
+				const registry = ModelRegistry.create(auth, modelsPath);
+				const astraIds = (models: Model<Api>[]) =>
+					models
+						.filter((model) => model.provider === provider && ids.includes(model.id))
+						.map((model) => model.id)
+						.sort();
+				const oauth = (accountId: string) => ({
+					type: "oauth" as const,
+					access: `header.${Buffer.from(JSON.stringify({ "https://api.openai.com/auth": { chatgpt_account_id: accountId } })).toString("base64url")}.signature`,
+					refresh: "fixture-refresh",
+					expires: Date.now() + 60 * 60 * 1000,
+					accountId,
+				});
 
-		const executable = await registry.getExecutableModels();
-
-		const discoveryUrl = requestedUrls.find((url) => url.includes("/codex/models"));
-		expect(discoveryUrl).toBeDefined();
-		const clientVersion = new URL(discoveryUrl ?? "").searchParams.get("client_version");
-		// Prime Agent's own version is 0.x well below this floor, so comparing against VERSION
-		// would pass today and break silently once the package version reaches the pinned constant.
-		expect(clientVersion).toMatch(/^\d+\.\d+\.\d+$/);
-		const [major, minor] = (clientVersion ?? "0.0.0").split(".").map(Number);
-		// 0.155.x is the floor at which ChatGPT discovery also lists GPT-6 Sol and Luna (discussion
-		// #2544); 0.153.x only listed GPT-6 Astra (discussion #2062).
-		expect((major ?? 0) > 0 || (minor ?? 0) >= 155).toBe(true);
-		expect(executable.some((model) => model.provider === "openai-codex")).toBe(true);
-	});
+				for (const account of ["first-account", "second-account"]) {
+					const credentials = oauth(account);
+					auth.set(provider, credentials);
+					expect(astraIds(registry.getAvailable())).toEqual([...ids].sort());
+					const executable = await registry.getExecutableModels();
+					expect(astraIds(executable)).toEqual([...ids].sort());
+					const selected = executable.find((model) => model.provider === provider && model.id === ids[1]);
+					if (!selected) throw new Error("Expected newer Astra in executable catalog");
+					await expect(registry.getApiKeyAndHeaders(selected)).resolves.toMatchObject({
+						ok: true,
+						apiKey: credentials.access,
+					});
+				}
+				auth.remove(provider);
+				expect(astraIds(await registry.getExecutableModels())).toEqual([]);
+			} finally {
+				vi.unstubAllGlobals();
+				rmSync(dir, { recursive: true, force: true });
+			}
+		},
+	);
 });
