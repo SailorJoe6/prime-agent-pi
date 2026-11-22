@@ -1,10 +1,10 @@
 ---
 id: TASK-4
 title: Inventory released upstream feature-parity gaps
-status: Ready for Merge
+status: Done
 assignee: []
 created_date: 2026-11-21 16:53
-updated_date: '2026-11-22T23:49:00Z'
+updated_date: '2026-11-22T23:53:00Z'
 labels: []
 dependencies: []
 references:
