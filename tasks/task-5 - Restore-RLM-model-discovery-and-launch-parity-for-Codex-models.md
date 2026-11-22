@@ -4,7 +4,7 @@ title: Restore RLM model discovery and launch parity for Codex models
 status: In Progress
 assignee: []
 created_date: '2026-11-22T06:52:00Z'
-updated_date: '2026-11-22T07:22:00Z'
+updated_date: '2026-11-22T07:54:00Z'
 labels: []
 dependencies: []
 references:
@@ -69,6 +69,21 @@ Preserve existing provider and model IDs, exact selector and short-form rules, c
 - Green: from `packages/coding-agent`, `npx tsx ../../node_modules/vitest/dist/cli.js --run test/model-registry.test.ts test/suite/regressions/4649-subagent-model-selection.test.ts` passed (89 tests). `npm run check` passed from the repository root. CI used fixture credentials only.
 - Isolated source acceptance: temporary HOME, config, cwd and sessions; only the existing Codex model overrides and stored Codex OAuth route, with no live refresh grant carried over. `prime-agent.sh model list "openai-codex astra"` and the candidate SDK’s RLM search both returned `openai-codex/gpt-6-astra` and `openai-codex/gpt-6.2-astra`. Exact lookups returned each requested selector first. The real RLM spawn used `openai-codex/gpt-6.2-astra`, stopped normally, and returned `TASK5_ASTRA_OK`. Both exact selectors were tested through both launch surfaces in deterministic tests; only spawn was exercised against the live provider. No activation or restart.
 <!-- SECTION:NOTES:END -->
+
+## Comments
+
+<!-- COMMENTS:BEGIN -->
+author: Prime Claw Conversation
+created: 2026-11-22T07:54:00Z
+
+---
+
+Independent review of `c44cc78ec241e97ff9bb28cae8be89073b47bbb8` on `openai-codex/gpt-6.2-sol` confirmed two in-scope defects: require usable Codex OAuth for discovery and explicit launch after failed refresh, without restoring version-pinned discovery; and return no matches when provider-plus-family names a known provider with no eligible models. Preserve launch preflight and existing search behavior elsewhere. Candidate is not ready to merge.
+
+The canonical revision handoff stopped before the first prompt: the existing Episode worktree lacks `.prime-claw/workflows/handoff.md`. The installed implementation checks this file before prompt delivery; neither handoff nor execute was sent. The Episode remains intact and idle; no retry was made. Restore the missing managed workflow for this worktree and obtain explicit authorization before a single retry of the same bounded handoff. Status and Episode-owned content are unchanged.
+
+---
+<!-- COMMENTS:END -->
 
 ## Final Summary
 
