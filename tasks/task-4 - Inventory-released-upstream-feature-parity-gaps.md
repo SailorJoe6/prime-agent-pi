@@ -4,7 +4,7 @@ title: Inventory released upstream feature-parity gaps
 status: In Progress
 assignee: []
 created_date: 2026-11-21 16:53
-updated_date: '2026-11-22T21:23:00Z'
+updated_date: '2026-11-22T21:26:00Z'
 labels: []
 dependencies: []
 references:
@@ -217,6 +217,15 @@ created: 2026-11-22T16:42:00Z
 ---
 
 Accepted the skill-discovery and invocation checkpoint at bc304a9052705be0c0d51035f91afda808a40a07 after owner and independent openai-codex/gpt-6.2-astra review. The pinned sources support three partial matches: skill override precedence, discovery diagnostics, and inline skill references. Switched Python import origin remains unresolved; the upstream fixture checks installer calls and records, not the module Pi imports. Preserve the documented override default. Diff and test-policy checks passed; behavior tests were inspected, not executed. This accepts only slice 2, not parity or merge readiness. Next: assess the released factory workflow and its session/TUI surfaces, keeping feature provenance distinct from the v0.10.5 factory skill repair.
+
+---
+
+author: Ralph (owning Conversation)
+created: 2026-11-22T21:26:00Z
+
+---
+
+Accepted the factory comparison at 85c667fe68bec7d9972f6451cbbefb4e37f28556 after owner and independent openai-codex/gpt-6.2-astra review. Released v0.10.0 source establishes the machine library, execution and terminal page; v0.10.5 repaired bundled skill discovery. Named machine workflow/library is missing at the original Pi pin; direct session controls and terminal navigation are partial against run-level behavior. Diff/test-policy checks passed; behavioral tests inspected, not run. This accepts the factory assessment only. Next: reconcile remaining release behavior across adjacent stable ranges, including later Pi changes where relevant, before gap specifications and final refresh.
 
 ---
 <!-- COMMENTS:END -->
