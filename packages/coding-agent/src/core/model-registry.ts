@@ -1175,7 +1175,24 @@ export class ModelRegistry {
 		// refresh as the picker, even when no picker has opened in this session.
 		await this.refreshAvailableModels();
 		await this.waitForPendingModelRefreshes(5_000);
-		return this.getAvailable();
+		const models = this.getAvailable();
+		if (!models.some((model) => model.provider === "openai-codex") || (await this.hasUsableCodexOAuth())) {
+			return models;
+		}
+		return models.filter((model) => model.provider !== "openai-codex");
+	}
+
+	/** Resolve the selected Codex OAuth credential, not a fallback key, when OAuth is in use. */
+	async hasUsableCodexOAuth(): Promise<boolean> {
+		const provider = "openai-codex";
+		if (
+			this.authStorage.get(provider)?.type !== "oauth" ||
+			this.authStorage.getAuthStatus(provider).source !== "stored"
+		) {
+			return true;
+		}
+		const auth = await this.authStorage.getApiKeyWithSourceToken(provider, { includeFallback: false });
+		return auth.credentialType === "oauth" && Boolean(auth.apiKey);
 	}
 
 	/**

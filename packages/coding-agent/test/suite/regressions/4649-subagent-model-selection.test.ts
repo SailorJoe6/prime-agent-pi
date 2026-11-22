@@ -47,6 +47,25 @@ describe("ENG-4649 subagent model selection", () => {
 		await expect(findModels({ query, limit })).resolves.toEqual({ models: expected });
 	});
 
+	it("TASK-5 does not search other providers when a known provider has no eligible rows", async () => {
+		const id = "openai-codex-astra";
+		const harness = await createHarness({ provider, models: [{ id }] });
+		try {
+			const registry = harness.session.modelRegistry;
+			const eligible = registry.find(provider, id);
+			if (!eligible || !registry.getAll().some((model) => model.provider === "openai-codex")) {
+				throw new Error("Expected both providers in the configured catalog");
+			}
+			vi.spyOn(registry, "getExecutableModels").mockResolvedValue([eligible]);
+			await expect(harness.session.findRlmModels("openai-codex astra", 8)).resolves.toEqual({ models: [] });
+			await expect(harness.session.findRlmModels("astra", 8)).resolves.toMatchObject({
+				models: [{ selector: `${provider}/${id}` }],
+			});
+		} finally {
+			harness.cleanup();
+		}
+	});
+
 	it("searches a bounded authenticated catalog without advertising it", async () => {
 		const harness = await createHarness({
 			provider,
@@ -129,7 +148,10 @@ describe("ENG-4649 subagent model selection", () => {
 					}
 				: {}),
 		});
-		vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("offline")));
+		const fetchOffline = vi.fn(async (_input: Parameters<typeof fetch>[0]) => {
+			throw new Error("offline");
+		});
+		vi.stubGlobal("fetch", fetchOffline);
 		try {
 			const access = openAICodexToken("account-1");
 			harness.authStorage.removeRuntimeApiKey(codexProvider);
@@ -140,8 +162,8 @@ describe("ENG-4649 subagent model selection", () => {
 				expires: Date.now() + 60_000,
 			});
 			const preflight = vi.spyOn(harness.session.modelRegistry, "getApiKeyAndHeaders");
-			harness.setResponses(ids.map(() => fauxAssistantMessage("Astra reply")));
-			for (const id of ids) {
+			harness.setResponses([...ids, "parent-model"].map(() => fauxAssistantMessage("Codex reply")));
+			for (const id of [...ids, "parent-model"]) {
 				const model = `${codexProvider}/${id}`;
 				const options = { model };
 				const result =
@@ -157,6 +179,24 @@ describe("ENG-4649 subagent model selection", () => {
 					? harness.session.runRlmChild.bind(harness.session)
 					: harness.session.createRlmSession.bind(harness.session);
 			await expect(launch("reject unknown model", unavailable)).rejects.toThrow("is unavailable");
+			harness.authStorage.set(codexProvider, {
+				type: "oauth",
+				access,
+				refresh: "fixture-refresh",
+				expires: Date.now() - 1_000,
+			});
+			const outcomes = [];
+			for (const id of [ids[1], "parent-model"]) {
+				const [outcome] = await Promise.allSettled([
+					launch("reject failed OAuth refresh", { model: `${codexProvider}/${id}` }),
+				]);
+				outcomes.push({ id, status: outcome?.status });
+			}
+			expect(outcomes).toEqual([
+				{ id: ids[1], status: "rejected" },
+				{ id: "parent-model", status: "rejected" },
+			]);
+			expect(fetchOffline).toHaveBeenCalledWith("https://auth.openai.com/oauth/token", expect.anything());
 			// The faux harness supplies an API key fallback in addition to the stored OAuth fixture.
 			expect(harness.session.modelRegistry.markProviderAuthStale(codexProvider)).toBe(true);
 			expect(harness.session.modelRegistry.markProviderAuthStale(codexProvider)).toBe(true);

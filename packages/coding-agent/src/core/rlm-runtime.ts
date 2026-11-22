@@ -210,11 +210,18 @@ function normalizeModelSearchText(value: string): string {
 	return value.toLowerCase().replace(/[^a-z0-9]+/g, "");
 }
 
-export function findRlmModelMatches(query: string, models: Model<Api>[], limit: number): RlmModelMatch[] {
+export function findRlmModelMatches(
+	query: string,
+	models: Model<Api>[],
+	limit: number,
+	catalogModels: readonly Pick<Model<Api>, "provider">[] = [],
+): RlmModelMatch[] {
 	const [providerTerm, ...familyTerms] = query.trim().toLowerCase().split(/\s+/);
+	const matchesProvider = (model: Pick<Model<Api>, "provider">) => model.provider.toLowerCase() === providerTerm;
+	// The catalog recognizes provider scope; only eligible models can supply results.
 	const provider =
 		familyTerms.length > 0
-			? models.find((model) => model.provider.toLowerCase() === providerTerm)?.provider
+			? (models.find(matchesProvider) ?? catalogModels.find(matchesProvider))?.provider
 			: undefined;
 	const normalizedQuery = normalizeModelSearchText(provider ? familyTerms.join(" ") : query);
 	if (provider && !normalizedQuery) return [];

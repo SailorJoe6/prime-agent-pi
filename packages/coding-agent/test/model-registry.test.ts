@@ -1281,6 +1281,11 @@ describe("TASK-5 Codex catalog parity", () => {
 						apiKey: credentials.access,
 					});
 				}
+				const expired = { ...oauth("second-account"), expires: Date.now() - 1_000 };
+				auth.set(provider, expired);
+				expect(astraIds(await registry.getExecutableModels())).toEqual([]);
+				expect(fetchModels).toHaveBeenCalledWith("https://auth.openai.com/oauth/token", expect.anything());
+				expect(fetchModels.mock.calls.some(([input]) => String(input).includes("/codex/models"))).toBe(false);
 				auth.remove(provider);
 				expect(astraIds(await registry.getExecutableModels())).toEqual([]);
 			} finally {
