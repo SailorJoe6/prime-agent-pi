@@ -4,7 +4,7 @@ title: Restore RLM model discovery and launch parity for Codex models
 status: In Progress
 assignee: []
 created_date: '2026-11-22T06:52:00Z'
-updated_date: '2026-11-22T07:54:00Z'
+updated_date: '2026-11-22T16:33:00Z'
 labels: []
 dependencies: []
 references:
@@ -57,6 +57,8 @@ Preserve existing provider and model IDs, exact selector and short-form rules, c
 1. Use the registry’s configured, auth-filtered model catalog for the shared RLM discovery and explicit launch path. Keep the existing catalog refresh and readiness waits; remove only the extra version-pinned Codex `/models` intersection and its now-unused code. Keep the stale/expired checks, private-model entitlements, exact and short-form launch rules, provider pins, and final `getApiKeyAndHeaders` preflight. Do not add a lookup, cache, version bump, or fallback.
 2. In `findRlmModelMatches`, support a whitespace-separated provider and family when the first term names a known provider. Match the remaining text against that provider’s model IDs and names. Keep existing exact-selector and single-term matching, ordering and limits. Add a coding-agent changelog fragment.
 3. Extend the existing model-registry and RLM selection regressions with deterministic fixtures for both Codex Astra rows, provider-scoped search, exact `create_session` and `spawn` selection, and auth rejection. Prove the new cases fail before the fix, then run the affected test files and `npm run check`. Separately, run the candidate in isolation with the same Codex auth route: compare CLI and RLM results, verify exact launch selection, and capture a real Astra response or the actual provider refusal. Record the evidence in TASK-5; do not merge, activate, or restart the running installation.
+
+4. Revise `c44cc78` for the two accepted review findings only. Require a usable Codex OAuth credential for discovery and both explicit launches, including an exact parent match, when real timestamp expiry requires refresh. Keep final launch preflight; do not restore the Codex `/models` gate. Add offline failed-refresh denial coverage and retain valid-OAuth coverage. Recognize known provider prefixes from existing catalog facts even when there are no eligible rows; search only eligible rows, and preserve generic, exact and single-term behavior. Add a regression for a known provider with no eligible rows. Run focused tests and `npm run check`; verify same-Codex acceptance from isolated candidate source without starting a second Prime Agent instance or daemon, or record the actual limit. Preserve the owner review comment and publish code and task evidence separately. No merge, activation or restart.
 <!-- SECTION:PLAN:END -->
 
 ## Implementation Notes
