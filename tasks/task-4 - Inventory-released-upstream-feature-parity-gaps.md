@@ -4,7 +4,7 @@ title: Inventory released upstream feature-parity gaps
 status: In Progress
 assignee: []
 created_date: 2026-11-21 16:53
-updated_date: '2026-11-22T22:27:00Z'
+updated_date: '2026-11-22T22:32:00Z'
 labels: []
 dependencies: []
 references:
@@ -267,6 +267,15 @@ created: 2026-11-22T22:10:00Z
 ---
 
 Owner and independent Codex Astra review of dfba53a4 and TASK-6 through TASK-9 confirmed both inventory repairs and found no material defect in TASK-8 or TASK-9. Correct TASK-6 and the inventory to distinguish Pi’s existing explicit providerBackupModel (which can switch model before the retry budget is exhausted and restore the primary) from the proposed permitted same-model route after the retry budget. Scope the different-model exclusion to the new mechanism and preserve the existing configured backup when the new policy is unset. In TASK-7 distinguish a genuinely absent policy from an unreadable or malformed global allowlist: preserve current selection only for absence, and require a clear refusal of built-in selection for unreadable or malformed policy. No extension restriction. After these bounded corrections, complete remaining confirmed-gap specification coverage and final validation. Tests inspected, not executed during this review.
+
+---
+
+author: Ralph (owning Conversation)
+created: 2026-11-22T22:32:00Z
+
+---
+
+Final review of 2982dadec by the owner and three same-provider Codex Astra reviewers found bounded corrections; do not treat the 6/6 checks as accepted yet. Inventory: record direct roster child rename (v0.10.0, 022c90b9; extend TASK-20 if appropriate), selected running child progress note display (v0.10.1, a8834c5b; no duplicate API), and Pi’s intentional retention of extension tool selection flags removed upstream (v0.10.0, a3700282; no removal task). Specifications: TASK-35 should insert emoji only on explicit menu acceptance; a closing colon or space dismisses the menu and keeps literal text. TASK-6 must link the corrected inventory evidence for providerBackupModel at 2982dadec or later. Record and map the v0.10.2 Bedrock Claude 5+ cache-point behavior (100e7053; offline request fixtures only, no billing claims or signer/profile repairs). TASK-47 must cover the model-level thinking signature override separately from signed replay repairs. TASK-39 must cover the released ACP error category as well as kind/retryable/details (07ae0688; representative network vs timeout; no retry mechanism). Preserve accepted specifications and update affected links and counts, then refresh stable provenance and reverify all six criteria. Source and fixtures inspected; no behavior tests or provider calls. TASK-4 remains In Progress.
 
 ---
 <!-- COMMENTS:END -->
