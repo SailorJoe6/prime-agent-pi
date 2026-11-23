@@ -171,6 +171,23 @@ describe("PAPI-7 daemon model admission", () => {
 		await expect(fixture.start(blocked).then((state) => state.runtime.session.model?.id)).rejects.toThrow(refusal);
 	});
 
+	it.each([
+		[first, true],
+		["faux-model", true],
+		["family/deep/faux-model", true],
+		[blocked, false],
+	])("PAPI-7: matches brace alternatives containing recursive directories for %s", async (id, admitted) => {
+		const fixture = setup();
+		fixture.writeSettings({ allowedModels: [`${fixture.provider}/{${first},**/faux-model}`] });
+
+		const selection = fixture.start(id).then((state) => state.runtime.session.model?.id);
+		if (admitted) {
+			await expect(selection).resolves.toBe(id);
+		} else {
+			await expect(selection).rejects.toThrow(refusal);
+		}
+	});
+
 	it("PAPI-7: uses current global policy for explicit switches and scoped cycling without reloading the session", async () => {
 		const fixture = setup();
 		const { provider } = fixture;

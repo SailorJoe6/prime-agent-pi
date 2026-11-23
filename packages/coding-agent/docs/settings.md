@@ -370,6 +370,8 @@ Use case-insensitive exact names or globs. A pattern can match the full
 `provider/model-id` or the bare model ID, including any slashes in that ID.
 Ordinary `*` can span slashes. A recursive directory wildcard `**/` matches
 zero or more directory segments: `provider/**/model` also matches `provider/model`.
+Use brace alternatives such as `provider/{other,**/model}` to allow either
+`provider/other` or a `model` at any directory depth.
 Whitespace around patterns is trimmed and blank entries are ignored. A missing
 file or key, `null`, `[]`, or a list of only blank strings leaves admission unrestricted.
 

@@ -1,4 +1,4 @@
-import { minimatch } from "minimatch";
+import { braceExpand, minimatch } from "minimatch";
 import type { SettingsManager } from "../../core/settings-manager.js";
 
 export class DaemonModelAdmissionError extends Error {}
@@ -17,6 +17,12 @@ function matchesFlatGlob(value: string, pattern: string): boolean {
 function matchesModelPattern(value: string, pattern: string): boolean {
 	if (!/[*?[]/.test(pattern)) return value.toLowerCase() === pattern.toLowerCase();
 
+	// Resolve alternatives before splitting at recursive directory boundaries.
+	const alternatives = pattern.includes("**/") ? braceExpand(pattern) : [pattern];
+	return alternatives.some((alternative) => matchesDirectoryGlob(value, alternative));
+}
+
+function matchesDirectoryGlob(value: string, pattern: string): boolean {
 	// A whole **/ component can skip zero or more directories. Keep the
 	// ordinary glob rules for the runs between recursive components.
 	let rest = pattern;
