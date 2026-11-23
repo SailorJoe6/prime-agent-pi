@@ -88,7 +88,7 @@ describe("PAPI-7 daemon model admission", () => {
 		const settingsPath = join(tempDir, "settings.json");
 		const faux = registerFauxProvider({
 			provider: "papi7-faux",
-			models: [first, second, blocked, nested].map((id) => ({ id })),
+			models: [first, second, blocked, nested, "faux-model", "family/deep/faux-model"].map((id) => ({ id })),
 		});
 		vi.stubEnv("HOME", tempDir);
 		vi.stubEnv(ENV_AGENT_DIR, tempDir);
@@ -134,8 +134,9 @@ describe("PAPI-7 daemon model admission", () => {
 			provider,
 			settingsPath,
 			writeSettings: (settings: object) => writeFileSync(settingsPath, JSON.stringify(settings)),
-			start: (model: string) =>
-				daemon.createRuntime({ type: "create", noSession: true, config: { provider, model } }),
+			start: (model: string, noSession = true) =>
+				daemon.createRuntime({ type: "create", noSession, config: { provider, model } }),
+			setResponses: faux.setResponses,
 			command: (command: Extract<DaemonCommand, { type: "set_model" | "cycle_model" }>) =>
 				daemon.handleCommand(makeClient("papi7-client", command.activeSessionId), command),
 			createSavedSession: () => SessionManager.create(tempDir, sessionDir),
@@ -158,6 +159,35 @@ describe("PAPI-7 daemon model admission", () => {
 
 		const state = await fixture.start(nested);
 		expect(state.runtime.session.model).toMatchObject({ provider: fixture.provider, id: nested });
+	});
+
+	it("PAPI-7: matches recursive directory globs at zero and multiple levels without admitting unrelated models", async () => {
+		const fixture = setup();
+		fixture.writeSettings({ allowedModels: [`${fixture.provider}/**/faux-model`] });
+
+		for (const id of ["faux-model", nested, "family/deep/faux-model"]) {
+			await expect(fixture.start(id).then((state) => state.runtime.session.model?.id)).resolves.toBe(id);
+		}
+		await expect(fixture.start(blocked).then((state) => state.runtime.session.model?.id)).rejects.toThrow(refusal);
+	});
+
+	it("PAPI-7: uses current global policy for explicit switches and scoped cycling without reloading the session", async () => {
+		const fixture = setup();
+		const { provider } = fixture;
+		fixture.writeSettings({ allowedModels: [first, second], enabledModels: [first, second] });
+		const { activeSessionId, runtime } = await fixture.start(first);
+		const switchTo = (modelId: string) => fixture.command({ type: "set_model", activeSessionId, provider, modelId });
+		const cycle = () => fixture.command({ type: "cycle_model", activeSessionId });
+
+		fixture.writeSettings({ allowedModels: [first] });
+		await expect(switchTo(second)).rejects.toThrow(refusal);
+		await expect(cycle()).rejects.toThrow(refusal);
+		expect(runtime.session.model?.id).toBe(first);
+
+		writeFileSync(fixture.settingsPath, "{");
+		await expect(switchTo(second)).rejects.toThrow(/global settings\.json/);
+		fixture.writeSettings({});
+		await expect(cycle()).resolves.toMatchObject({ success: true, data: { model: { id: second }, isScoped: true } });
 	});
 
 	it("refuses to restore a saved model outside the allowlist without rewriting the transcript", async () => {
@@ -229,6 +259,44 @@ describe("PAPI-7 daemon model admission", () => {
 			fixture.command({ type: "set_model", activeSessionId, provider, modelId: blocked }),
 		).resolves.toMatchObject({ success: true, data: { provider, id: blocked } });
 		expect(runtime.session.model?.id).toBe(blocked);
+	});
+
+	it.each(["explicit", "configured default"])(
+		"PAPI-7 refuses a blocked %s RLM child before allocation",
+		async (selection) => {
+			const fixture = setup();
+			fixture.writeSettings({ allowedModels: [first], subagentDefaultModel: `${fixture.provider}/${blocked}` });
+			const {
+				runtime: { session },
+			} = await fixture.start(first, false);
+			const artifactDir = session.sessionManager.getSessionArtifactDir()!;
+			const before = existsSync(artifactDir) ? readdirSync(artifactDir).sort() : [];
+			const name = "admission-child";
+
+			await expect(
+				session.runRlmChild("do the work", { name, ...(selection === "explicit" ? { model: blocked } : {}) }),
+			).rejects.toThrow(refusal);
+			expect(existsSync(artifactDir) ? readdirSync(artifactDir).sort() : []).toEqual(before);
+			expect((await session.listRlmSubagents()).subagents).toEqual([]);
+
+			// A refusal must also release the name for a later valid spawn.
+			fixture.setResponses([fauxAssistantMessage("child answer")]);
+			const handle = await session.runRlmChild("do the work", { name, model: first });
+			expect(handle).toMatchObject({ name, model: `${fixture.provider}/${first}` });
+			await session.collectRlmChildren([handle.rlm_child_id], 10_000);
+		},
+	);
+
+	it("PAPI-7 admits an explicitly selected RLM child when the policy is absent", async () => {
+		const fixture = setup();
+		const {
+			runtime: { session },
+		} = await fixture.start(first, false);
+		fixture.setResponses([fauxAssistantMessage("child answer")]);
+
+		const handle = await session.runRlmChild("do the work", { name: "admission-child", model: second });
+		expect(handle.model).toBe(`${fixture.provider}/${second}`);
+		await session.collectRlmChildren([handle.rlm_child_id], 10_000);
 	});
 
 	it.each([

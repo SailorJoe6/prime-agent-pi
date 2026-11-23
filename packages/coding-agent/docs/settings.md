@@ -368,12 +368,16 @@ in project settings.
 
 Use case-insensitive exact names or globs. A pattern can match the full
 `provider/model-id` or the bare model ID, including any slashes in that ID.
+Ordinary `*` can span slashes. A recursive directory wildcard `**/` matches
+zero or more directory segments: `provider/**/model` also matches `provider/model`.
 Whitespace around patterns is trimmed and blank entries are ignored. A missing
 file or key, `null`, `[]`, or a list of only blank strings leaves admission unrestricted.
 
 Unlike `enabledModels`, which only controls cycling, `allowedModels` checks the
 model selected by the daemon at startup, restore, or a built-in model change.
-Built-in auxiliary models used for summaries and refinement must also pass the check.
+The daemon reads the current global policy at each built-in selection, so edits
+apply without a session restart. Built-in image overrides, RLM child models,
+and auxiliary models used for summaries and refinement must also pass the check.
 The daemon explains refusals and does not substitute a different model. If the
 file cannot be read or parsed, is not a JSON object, or `allowedModels` is neither
 `null` nor an array of strings, fix the global settings file and retry. Extension

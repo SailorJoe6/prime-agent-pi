@@ -2721,7 +2721,7 @@ export class AgentSession {
 			extraMessages.some((message) => messageCarriesImages(message)) ||
 			turns.some((action) => action.payload.records.some((record) => messageCarriesImages(record.message)));
 		if (!carriesImages) return undefined;
-		return resolveImageModelOverride({
+		const override = resolveImageModelOverride({
 			sessionModel,
 			thinkingLevel: this.thinkingLevel,
 			serviceTier: this.serviceTier,
@@ -2730,6 +2730,8 @@ export class AgentSession {
 			hasConfiguredAuth: (model) => this._modelRegistry.hasConfiguredAuth(model),
 			blockImages: this.settingsManager.getBlockImages(),
 		});
+		if (override) this._validateBuiltInModel?.(override.model);
+		return override;
 	}
 
 	/**
@@ -12660,6 +12662,7 @@ export class AgentSession {
 			modelSelection = await this._resolveRlmSubagentModel(
 				requestedModel ?? this.settingsManager.getSubagentDefaultModel(),
 			);
+			this._validateBuiltInModel?.(modelSelection.model);
 			if (requestedThinkingLevel !== undefined) {
 				const supported = getSupportedThinkingLevels(modelSelection.model) as ThinkingLevel[];
 				if (!supported.includes(requestedThinkingLevel)) {

@@ -439,7 +439,6 @@ export class SettingsManager {
 	private globalSettings: Settings;
 	private projectSettings: Settings;
 	private settings: Settings;
-	private modelAdmissionPolicy: ModelAdmissionPolicy;
 	private runtimeOverrides: Settings = {};
 	private modifiedFields = new Set<keyof Settings>(); // Track global fields modified during session
 	private modifiedNestedFields = new Map<keyof Settings, Set<string>>(); // Track global nested field modifications
@@ -454,7 +453,6 @@ export class SettingsManager {
 		storage: SettingsStorage,
 		initialGlobal: Settings,
 		initialProject: Settings,
-		modelAdmissionPolicy: ModelAdmissionPolicy,
 		globalLoadError: Error | null = null,
 		projectLoadError: Error | null = null,
 		initialErrors: SettingsError[] = [],
@@ -462,7 +460,6 @@ export class SettingsManager {
 		this.storage = storage;
 		this.globalSettings = initialGlobal;
 		this.projectSettings = initialProject;
-		this.modelAdmissionPolicy = modelAdmissionPolicy;
 		this.globalSettingsLoadError = globalLoadError;
 		this.projectSettingsLoadError = projectLoadError;
 		this.errors = [...initialErrors];
@@ -491,7 +488,6 @@ export class SettingsManager {
 			storage,
 			globalLoad.settings,
 			projectLoad.settings,
-			globalLoad.modelAdmissionPolicy,
 			globalLoad.error,
 			projectLoad.error,
 			initialErrors,
@@ -509,31 +505,17 @@ export class SettingsManager {
 	private static tryLoadFromStorage(
 		storage: SettingsStorage,
 		scope: SettingsScope,
-	): { settings: Settings; error: Error | null; modelAdmissionPolicy: ModelAdmissionPolicy } {
-		let modelAdmissionPolicy: ModelAdmissionPolicy = {
-			error: "Could not read global settings.json for allowedModels.",
-		};
+	): { settings: Settings; error: Error | null } {
 		try {
 			let content: string | undefined;
 			storage.withLock(scope, (current) => {
 				content = current;
 				return undefined;
 			});
-
-			modelAdmissionPolicy = { error: "Invalid JSON in global settings.json; could not load allowedModels." };
-			if (!content) {
-				// Empty content has historically loaded as default settings, but is not valid policy JSON.
-				return {
-					settings: {},
-					error: null,
-					modelAdmissionPolicy: content === undefined ? { patterns: [] } : modelAdmissionPolicy,
-				};
-			}
-			const settings = JSON.parse(content);
-			if (scope === "global") modelAdmissionPolicy = parseModelAdmissionPolicy(settings);
-			return { settings: SettingsManager.migrateSettings(settings), error: null, modelAdmissionPolicy };
+			if (!content) return { settings: {}, error: null };
+			return { settings: SettingsManager.migrateSettings(JSON.parse(content)), error: null };
 		} catch (error) {
-			return { settings: {}, error: error as Error, modelAdmissionPolicy };
+			return { settings: {}, error: error as Error };
 		}
 	}
 
@@ -619,7 +601,6 @@ export class SettingsManager {
 	async reload(): Promise<void> {
 		await this.writeQueue;
 		const globalLoad = SettingsManager.tryLoadFromStorage(this.storage, "global");
-		this.modelAdmissionPolicy = globalLoad.modelAdmissionPolicy;
 		if (!globalLoad.error) {
 			this.globalSettings = globalLoad.settings;
 			this.globalSettingsLoadError = null;
@@ -1424,10 +1405,23 @@ export class SettingsManager {
 		this.save();
 	}
 
-	/** Admission policy from the last global load, independent of cycling and workspace settings. */
+	/** Read the live global admission policy without reloading session or workspace settings. */
 	getModelAdmissionPolicy(): ModelAdmissionPolicy {
-		const policy = this.modelAdmissionPolicy;
-		return "error" in policy ? { error: policy.error } : { patterns: [...policy.patterns] };
+		let content: string | undefined;
+		try {
+			this.storage.withLock("global", (current) => {
+				content = current;
+				return undefined;
+			});
+		} catch {
+			return { error: "Could not read global settings.json for allowedModels." };
+		}
+		if (content === undefined) return { patterns: [] };
+		try {
+			return parseModelAdmissionPolicy(JSON.parse(content));
+		} catch {
+			return { error: "Invalid JSON in global settings.json; could not load allowedModels." };
+		}
 	}
 
 	getEnabledModels(): string[] | undefined {
