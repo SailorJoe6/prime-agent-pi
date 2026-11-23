@@ -1,0 +1,1 @@
+- Fixed long Python cell output dropping final diagnostics by keeping the end of stdout and stderr alongside the beginning.
