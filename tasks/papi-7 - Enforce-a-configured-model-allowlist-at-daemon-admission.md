@@ -1,10 +1,10 @@
 ---
 id: PAPI-7
 title: Enforce a configured model allowlist at daemon admission
-status: In Planning
+status: In Progress
 assignee: []
 created_date: '2026-11-22T22:04:00Z'
-updated_date: '2026-11-23T22:33:00Z'
+updated_date: '2026-11-23T22:34:00Z'
 labels: []
 dependencies: []
 references:
