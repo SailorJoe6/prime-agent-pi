@@ -4,7 +4,7 @@ title: Enforce a configured model allowlist at daemon admission
 status: In Progress
 assignee: []
 created_date: '2026-11-22T22:04:00Z'
-updated_date: '2026-11-23T22:41:00Z'
+updated_date: '2026-11-23T22:47:00Z'
 labels: []
 dependencies: []
 references:
@@ -57,6 +57,8 @@ Distinguish a global admission policy from picker cycling. Apply it at daemon mo
 2. Check the final resolved `provider/model-id` before accepting a built-in selection. Use case-insensitive exact or model-glob matching on the full selector and bare model ID, preserving IDs that contain slashes. Cover daemon session startup/restore and model changes (`set_model` and cycling), and built-in auxiliary resolution such as the session summarizer. Gate candidates before state is changed or a provider request is made. Surface refusals through existing error paths with a reason; do not substitute a different model or let a fallback swallow a policy refusal. Leave selection and picker cycling unchanged when policy is absent. Do not alter extension registration, provider retry behavior, or the daemon wire format.
 3. Add deterministic faux-provider tests in the existing settings and daemon suites: allowed explicit selection, refused explicit/auxiliary selection without fallback or side effects, absent-policy cycling plus an explicit model outside `enabledModels`, and separate unreadable and malformed global policy cases. Cover missing, null, empty and blank-only policy, mixed blank and nonblank patterns, exact and glob matching, and global versus workspace scope. Inject a read failure rather than relying on filesystem permissions. Show new regressions fail without enforcement; run changed suites directly, `npm run check`, and `npm run check:test-policy`.
 4. Document global `allowedModels`, refusal behavior, and its difference from `enabledModels` in coding-agent settings docs. Add a coding-agent changelog fragment and record exact test evidence on PAPI-7. No version bump or release.
+
+Accepted v0.10.5 review revision (pending): PAPI-7: revise code candidate 6acf63425c6ce52e5472c6984ff71090182e2100 (reviewed task evidence 5316b01d662c2b7f0dc71832a29260b2cbd710dc). Implement only four accepted v0.10.5 parity findings: (1) gate the final built-in image override before arming it (image_route.rs); (2) read the current global policy at built-in selection rather than using a stale settings snapshot (model_switch.rs); (3) support recursive directory wildcards matching zero or more segments while preserving ordinary wildcards on slash-bearing IDs; (4) gate final built-in RLM child model before allocation or successful handle publication while retaining worker validation (rlm_children/host.rs). Preserve allowed/absent policy behavior and extension, retry, and wire boundaries. Prove with narrow offline faux-model tests, required checks, and exact independent code/task publication; no merge/release.
 <!-- SECTION:PLAN:END -->
 
 ## Implementation Notes
@@ -65,6 +67,8 @@ Distinguish a global admission policy from picker cycling. Apply it at daemon mo
 Implemented the daemon runtime policy callback for startup and restore, daemon set_model, scoped/unscoped cycling, idle session summarization, and the shared refinement/compaction/branch-summary auxiliary resolver. Refusals do not pick a substitute. Extension registration, provider retry behavior, and wire format were not modified.
 
 Validation (Node v25.6.0, npm ci, npm run catalog:assets): from packages/coding-agent use an empty HOME and env -i with PATH and PI_OFFLINE=1, then ../../node_modules/.bin/tsx ../../node_modules/vitest/dist/cli.js --run test/settings-manager.test.ts test/daemon-session-summarizer-lifecycle.test.ts test/daemon-session-summarizer.test.ts test/suite/agent-session-refine-auxiliary-model.test.ts test/suite/agent-session-compaction-auxiliary-model.test.ts test/suite/agent-session-branch-summary-auxiliary-model.test.ts test/daemon-mode.test.ts. Seven files, 185 tests passed. On the archived base 1777d1a4a380634904e10b87c76a6769d4b2620d, the same daemon test file with -t PAPI-7 failed seven rejection cases; two positive controls passed. Settings tests red: 24 failures; summarizer denial and two refinement refusals also failed before their guards. npm run check, npm run check:test-policy and git diff --check passed. An exploratory ambient-env run of the unmodified runtime suite showed a cycling mismatch and a provider auth error; the cycling characterization passed on both base and candidate under the isolated environment. No live-provider or extension-entry claims.
+
+Prior candidate and its validation remain historical evidence; owner accepted four in-scope parity fixes for the next execute pass. See pending revision in Implementation Plan.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
