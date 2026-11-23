@@ -4,7 +4,7 @@ title: Enforce a configured model allowlist at daemon admission
 status: In Progress
 assignee: []
 created_date: '2026-11-22T22:04:00Z'
-updated_date: '2026-11-23T22:56:00Z'
+updated_date: '2026-11-23T23:00:00Z'
 labels: []
 dependencies: []
 references:
@@ -61,7 +61,7 @@ Distinguish a global admission policy from picker cycling. Apply it at daemon mo
 
 Accepted v0.10.5 review revision (implemented; awaiting review): PAPI-7: revise code candidate 6acf63425c6ce52e5472c6984ff71090182e2100 (reviewed task evidence 5316b01d662c2b7f0dc71832a29260b2cbd710dc). Implement only four accepted v0.10.5 parity findings: (1) gate the final built-in image override before arming it (image_route.rs); (2) read the current global policy at built-in selection rather than using a stale settings snapshot (model_switch.rs); (3) support recursive directory wildcards matching zero or more segments while preserving ordinary wildcards on slash-bearing IDs; (4) gate final built-in RLM child model before allocation or successful handle publication while retaining worker validation (rlm_children/host.rs). Preserve allowed/absent policy behavior and extension, retry, and wire boundaries. Prove with narrow offline faux-model tests, required checks, and exact independent code/task publication; no merge/release.
 
-Accepted matcher-only review revision (pending): In candidate 066705c5e52feed4f9cd478cf7155adb1c4766ba (reviewed task ea822cc92d9db9f2eab22d37ad713510a5e633f3), splitting recursive components before recognizing brace alternatives breaks valid released v0.10.5 glob syntax. Preserve alternative boundaries and zero/nonzero recursive directory depths and keep ordinary wildcard matching across slashes. Add offline faux-config cases for a literal alternative, both recursive depths and a nonmatch. Keep the three other reviewed fixes unchanged. Record baseline and candidate checks and exact separate code/task publication; no scope expansion, live provider, exploit work, merge or release.
+Accepted matcher-only review revision (implemented; awaiting review): In candidate 066705c5e52feed4f9cd478cf7155adb1c4766ba (reviewed task ea822cc92d9db9f2eab22d37ad713510a5e633f3), splitting recursive components before recognizing brace alternatives breaks valid released v0.10.5 glob syntax. Preserve alternative boundaries and zero/nonzero recursive directory depths and keep ordinary wildcard matching across slashes. Add offline faux-config cases for a literal alternative, both recursive depths and a nonmatch. Keep the three other reviewed fixes unchanged. Record baseline and candidate checks and exact separate code/task publication; no scope expansion, live provider, exploit work, merge or release.
 <!-- SECTION:PLAN:END -->
 
 ## Implementation Notes
@@ -78,10 +78,14 @@ PAPI-7 v0.10.5 parity revision validated against upstream tag v0.10.5 (033eea170
 Validation from packages/coding-agent: env -i PATH="$PATH" HOME=<empty-temp> PI_OFFLINE=1 ../../node_modules/.bin/tsx ../../node_modules/vitest/dist/cli.js --run test/settings-manager.test.ts test/daemon-session-summarizer-lifecycle.test.ts test/daemon-session-summarizer.test.ts test/suite/agent-session-refine-auxiliary-model.test.ts test/suite/agent-session-compaction-auxiliary-model.test.ts test/suite/agent-session-branch-summary-auxiliary-model.test.ts test/daemon-mode.test.ts test/image-model-override.test.ts. 204/204 in eight suites. Focused daemon and image tests with -t PAPI-7 --sequence.shuffle --sequence.seed=17 and then =29: 16/16 each. Scoped tests copied into git archive of 6acf63425c6ce52e5472c6984ff71090182e2100: stale-policy/glob 2 expected failures, image 1 expected failure and 1 positive passed, child 2 expected failures and 1 positive passed. npm run check, npm run check:test-policy, and git diff --check passed. Offline faux provider; no live calls or wire, retry, or extension registration change.
 
 Prior validation remains historical evidence. The accepted next revision is limited to recursive glob matching inside brace alternatives; see the pending Implementation Plan entry.
+
+Matcher-only revision: expand brace alternatives using the existing minimatch library before splitting recursive directory components. Released reference: v0.10.5 (033eea1705c5ae953fe7cd7a5e7e7c45317e0dfe), crates/pa-core/src/models/allowlist.rs, globset 0.4.20. Verified provider/{literal,**/model}: literal branch, zero and multiple directories, and blocked unrelated ID. Existing provider/* slash-spanning coverage still passes. No edits to live global policy reads, image admission, RLM child admission or worker validation.
+
+Offline baseline: archived 066705c5e52feed4f9cd478cf7155adb1c4766ba with installed workspace dependencies, existing catalog assets and only the new tests copied in. From packages/coding-agent ran `env -i PATH="$PATH" HOME=<empty-temp> PI_OFFLINE=1 ../../node_modules/.bin/tsx ../../node_modules/vitest/dist/cli.js --run test/daemon-mode.test.ts -t "brace alternatives containing recursive directories"`: expected failure at zero directory depth; 3 other cases passed. Candidate: same command without -t, 90/90 passed. `npm run check`, `npm run check:test-policy` and `git diff --check` passed. Publish task-path-only to refs/heads/prime-claw/tasks, separately from Episode code; no force, merge or release.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
 
 <!-- SECTION:FINAL_SUMMARY:BEGIN -->
-Global daemon allowedModels blocks disallowed built-in selections without substitution and stays separate from enabledModels cycling. The v0.10.5 parity revision reads current global policy, handles recursive directory globs, and gates the final image override and RLM child model before arming/allocation, preserving worker checks. Eight offline suites passed (204 tests).
+Global daemon allowedModels blocks disallowed built-in selections without substitution and stays separate from enabledModels cycling. The v0.10.5 parity revision reads current global policy, handles recursive directory globs, and gates the final image override and RLM child model before arming/allocation, preserving worker checks. Eight offline suites passed (204 tests). The matcher-only follow-up fixes recursive directory globs inside brace alternatives; the updated offline daemon suite passed 90/90.
 <!-- SECTION:FINAL_SUMMARY:END -->
