@@ -1,9 +1,10 @@
 ---
 id: TASK-9
 title: Preserve the end of truncated Python cell output
-status: In Design
+status: In Planning
 assignee: []
 created_date: '2026-11-22T22:04:00Z'
+updated_date: '2026-11-23T00:12:00Z'
 labels: []
 dependencies: []
 references:
@@ -30,3 +31,11 @@ Keep the first and last portions of long cell stdout and stderr so a final diagn
 - [ ] #2 The omission marker reports the number of characters omitted, including for multibyte text.
 - [ ] #3 At or below the limit the cell returns the original text without an omission marker.
 <!-- AC:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+1. At the Python cell stream boundary in `ReplKernelManager`, replace head-only stdout/stderr capture with two independent bounded accumulators. Keep the existing `maxOutputChars` default and per-stream budget: count Unicode code points, use `floor(limit / 4)` for the tail and the remainder for the head, and retain only that much payload across frames. On overflow return the prefix, an omission marker reporting total received minus retained code points, and the final suffix. At or below the limit return the original text without a marker. Do not retain the omitted middle or change live `onStream` delivery. Preserve attachment diagnostics and leave result truncation, background output, shell and sessions unchanged.
+2. Add unconditional, self-contained regressions at the kernel execution boundary using deterministic protocol input. Cover stdout and stderr independently, exact fill followed by another frame, at/below-limit identity, and multibyte BMP and supplementary characters at cut points. Check exact retained lengths, valid cut boundaries, accurate omission counts, the final marker text from the stream, and unchanged live delivery. Prove the regressions fail with the old capture behavior and pass with the fix. Run the modified test file directly, use multiple shuffle seeds for process-based tests, and run `npm run check` and `npm run check:test-policy`.
+3. Add a coding-agent changelog fragment. Record the executed checks and acceptance evidence in TASK-9 and publish the isolated candidate for review; do not merge, bump a version, release, or activate it.
+<!-- SECTION:PLAN:END -->
