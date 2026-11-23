@@ -111,6 +111,44 @@ function capCellSourceCode(code: string | undefined): string | undefined {
 	return `${code.slice(0, MAX_CELL_SOURCE_CHARS)}${CELL_SOURCE_TRUNCATION_MARKER}`;
 }
 
+/** Retains a fixed prefix and a rolling suffix, in Unicode code points. */
+class CellStreamCapture {
+	private readonly head: string[] = [];
+	private readonly tail: string[] = [];
+	private readonly headLimit: number;
+	private readonly tailLimit: number;
+	private nextTail = 0;
+	private received = 0;
+
+	constructor(limit: number) {
+		const budget = Math.max(0, Math.floor(limit));
+		this.tailLimit = Math.floor(budget / 4);
+		this.headLimit = budget - this.tailLimit;
+	}
+
+	append(text: string): void {
+		for (const char of text) {
+			this.received += 1;
+			if (this.head.length < this.headLimit) {
+				this.head.push(char);
+			} else if (this.tailLimit > 0) {
+				this.tail[this.nextTail] = char;
+				this.nextTail = (this.nextTail + 1) % this.tailLimit;
+			}
+		}
+	}
+
+	format(): string {
+		const head = this.head.join("");
+		const omitted = this.received - this.head.length - this.tail.length;
+		if (omitted === 0) return head + this.tail.join("");
+		const marker = `\n[... ${omitted} characters omitted ...]`;
+		if (this.tail.length === 0) return head + marker;
+		const tail = this.tail.slice(this.nextTail).join("") + this.tail.slice(0, this.nextTail).join("");
+		return `${head}${marker}\n${tail}`;
+	}
+}
+
 /** ExecuteResult plus the raw fields of the request's `done` event (state ops). */
 interface InternalExecuteResult extends ExecuteResult {
 	doneFields?: Record<string, unknown>;
@@ -123,10 +161,9 @@ interface ActiveExecution {
 	started: number;
 	maxChars: number;
 	opts: ExecuteOptions;
-	stdout: string;
-	stderr: string;
-	stdoutTruncated: boolean;
-	stderrTruncated: boolean;
+	stdout: CellStreamCapture;
+	stderr: CellStreamCapture;
+	droppedAttachments: number;
 	result?: string;
 	diffs: KernelDiffDisplay[];
 	attachments: KernelAttachment[];
@@ -918,28 +955,7 @@ export class ReplKernelManager {
 		}
 		if (type === "stdout" || type === "stderr") {
 			const text = typeof event.text === "string" ? event.text : "";
-			if (type === "stdout") {
-				if (execution.stdout.length < execution.maxChars) {
-					execution.stdout += text;
-					if (execution.stdout.length > execution.maxChars) {
-						execution.stdout = execution.stdout.slice(0, execution.maxChars);
-						execution.stdoutTruncated = true;
-					}
-				} else if (text.length > 0) {
-					// The buffer filled exactly on an earlier frame; the dropped remainder still counts as truncation.
-					execution.stdoutTruncated = true;
-				}
-			} else {
-				if (execution.stderr.length < execution.maxChars) {
-					execution.stderr += text;
-					if (execution.stderr.length > execution.maxChars) {
-						execution.stderr = execution.stderr.slice(0, execution.maxChars);
-						execution.stderrTruncated = true;
-					}
-				} else if (text.length > 0) {
-					execution.stderrTruncated = true;
-				}
-			}
+			execution[type].append(text);
 			execution.opts.onStream?.(text, type);
 		} else if (type === "result") {
 			if (typeof event.text === "string") execution.result = event.text;
@@ -949,7 +965,7 @@ export class ReplKernelManager {
 			if (diff) execution.diffs.push(diff);
 			const attachment = parseAttachmentDisplay(data[ATTACHMENT_DISPLAY_MIME]);
 			if (attachment === "oversized") {
-				execution.stderr += `${execution.stderr ? "\n" : ""}attachment dropped: exceeds ${MAX_ATTACHMENT_DATA_CHARS} base64 chars`;
+				execution.droppedAttachments += 1;
 				execution.status = "error";
 			} else if (attachment) {
 				execution.attachments.push(attachment);
@@ -1088,10 +1104,9 @@ export class ReplKernelManager {
 			started,
 			maxChars,
 			opts,
-			stdout: "",
-			stderr: "",
-			stdoutTruncated: false,
-			stderrTruncated: false,
+			stdout: new CellStreamCapture(maxChars),
+			stderr: new CellStreamCapture(maxChars),
+			droppedAttachments: 0,
 			diffs: [],
 			attachments: [],
 			sentAgentMessages: [],
@@ -1203,12 +1218,16 @@ export class ReplKernelManager {
 				this.registerLateSentAgentMessageHandler(execution.requestId, execution.opts.onLateSentAgentMessage);
 			}
 
-			let stdout = execution.stdout;
-			let stderr = execution.stderr;
+			const stdout = execution.stdout.format();
+			let stderr = execution.stderr.format();
+			// Host diagnostics are not part of the Python stderr stream budget.
+			if (execution.droppedAttachments > 0) {
+				const diagnostic = `\nattachment dropped: exceeds ${MAX_ATTACHMENT_DATA_CHARS} base64 chars`;
+				const diagnostics = diagnostic.repeat(execution.droppedAttachments);
+				stderr += stderr ? diagnostics : diagnostics.slice(1);
+			}
 			let result = execution.result;
 			let status = execution.status;
-			if (execution.stdoutTruncated) stdout += `\n[... output truncated at ${execution.maxChars} chars ...]`;
-			if (execution.stderrTruncated) stderr += `\n[... output truncated at ${execution.maxChars} chars ...]`;
 			if (result !== undefined && result.length > execution.maxChars) {
 				result = `${result.slice(0, execution.maxChars)}\n[... output truncated at ${execution.maxChars} chars ...]`;
 			}

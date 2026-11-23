@@ -42,6 +42,19 @@ const input = readline.createInterface({ input: process.stdin });
 input.on("line", (line) => {
   const request = JSON.parse(line);
   if (request.type === "execute") {
+    if (request.code === "stream-overflow" || request.code === "stream-within-limit") {
+      emit({ event: "stdout", id: request.id, text: "abcdefgh" });
+      const stderr = request.code === "stream-overflow" ? "é1234\\u{1f600}" : "é12\\u{1f600}3\\u{1f9ea}\\u{1f6a8}";
+      emit({ event: "stderr", id: request.id, text: stderr });
+      if (request.code === "stream-overflow") {
+        emit({ event: "stdout", id: request.id, text: "!" });
+        emit({ event: "stdout", id: request.id, text: "END" });
+        emit({ event: "stderr", id: request.id, text: "界\\u{1f9ea}尾✓" });
+        emit({ event: "stderr", id: request.id, text: "\\u{1f6a8}" });
+      }
+      emit({ event: "done", id: request.id, status: "ok" });
+      return;
+    }
     if (request.code === "hang") {
       emit({ event: "stdout", id: request.id, text: "hanging" });
       return;
@@ -223,6 +236,41 @@ describe("ReplKernelManager corrupt protocol repair", () => {
 			snapshotPath,
 		};
 	}
+
+	it("TASK-9 keeps the head and final markers of overlong cell streams without changing live delivery", async () => {
+		const { manager } = newManager();
+		const chunks: [string, string][] = [];
+		try {
+			const result = await manager.execute("stream-overflow", {
+				maxOutputChars: 8,
+				onStream: (text, stream) => chunks.push([stream, text]),
+			});
+			expect(result.status).toBe("ok");
+			const capture = /^([^\n]+)\n\[[^\n]*?\b(\d+)\b[^\n]*\]\n([^\n]+)$/u;
+			expect(capture.exec(result.stdout)?.slice(1)).toEqual(["abcdef", "4", "ND"]);
+			expect(capture.exec(result.stderr)?.slice(1)).toEqual(["é1234\u{1f600}", "3", "✓\u{1f6a8}"]);
+			expect(chunks).toEqual([
+				["stdout", "abcdefgh"],
+				["stderr", "é1234\u{1f600}"],
+				["stdout", "!"],
+				["stdout", "END"],
+				["stderr", "界\u{1f9ea}尾✓"],
+				["stderr", "\u{1f6a8}"],
+			]);
+		} finally {
+			await manager.shutdown({ snapshot: true, drainHostRequests: true });
+		}
+	});
+
+	it("TASK-9 returns cell streams unchanged at and below the character limit", async () => {
+		const { manager } = newManager();
+		try {
+			const result = await manager.execute("stream-within-limit", { maxOutputChars: 8 });
+			expect(result).toMatchObject({ status: "ok", stdout: "abcdefgh", stderr: "é12\u{1f600}3\u{1f9ea}\u{1f6a8}" });
+		} finally {
+			await manager.shutdown({ snapshot: true, drainHostRequests: true });
+		}
+	});
 
 	it("rejects an active request, replaces the child, and restores the last snapshot", async () => {
 		const { manager, countPath, restoreLogPath, snapshotPath } = newManager({ snapshot: true });

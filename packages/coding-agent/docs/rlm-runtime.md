@@ -87,6 +87,8 @@ The manager owns the child process and a bounded stderr tail. Shutdown sends a `
 
 ## Stdio Transport
 
+Returned Python cell stdout and stderr each have a separate capture limit (65,536 Unicode code points by default). Over the limit, the last quarter of the budget (rounded down) keeps the end of the stream. The rest keeps its beginning. A marker between them reports how many code points were omitted. Output at or below the limit is returned as-is, and live stream callbacks still receive every chunk unchanged.
+
 Requests flow to the runtime on stdin and events return on stdout, one JSON object per line:
 
 ```text
