@@ -1,10 +1,10 @@
 ---
 id: TASK-9
 title: Preserve the end of truncated Python cell output
-status: In Planning
+status: In Progress
 assignee: []
 created_date: '2026-11-22T22:04:00Z'
-updated_date: '2026-11-23T00:12:00Z'
+updated_date: '2026-11-23T00:15:00Z'
 labels: []
 dependencies: []
 references:
