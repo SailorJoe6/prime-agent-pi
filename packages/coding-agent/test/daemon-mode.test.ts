@@ -18,7 +18,7 @@ import { tmpdir } from "node:os";
 import { basename, join, resolve } from "node:path";
 import { PassThrough } from "node:stream";
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
-import type { Api, Model } from "@earendil-works/pi-ai";
+import { type Api, fauxAssistantMessage, type Model, registerFauxProvider } from "@earendil-works/pi-ai";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ENV_AGENT_DIR } from "../src/config.js";
 import { AGENT_FAMILY_REACH_ERROR, type AgentSessionMessageController } from "../src/core/agent-messages.js";
@@ -37,6 +37,7 @@ import {
 	SessionManager,
 } from "../src/core/session-manager.js";
 import { SettingsManager } from "../src/core/settings-manager.js";
+import { createDefaultRuntimeFactory } from "../src/main.js";
 import type { ActiveSessionState, DaemonSocketClient } from "../src/modes/daemon/active-session-state.js";
 import { bindActiveSessionState } from "../src/modes/daemon/daemon-extension-binding.js";
 import {
@@ -50,6 +51,7 @@ import {
 	type DaemonAttachResult,
 	type DaemonCommand,
 	type DaemonOutbound,
+	type DaemonResponse,
 } from "../src/modes/daemon/daemon-protocol.js";
 import type { SessionSummary } from "../src/modes/daemon/daemon-session-list.js";
 import { DaemonSupervisor } from "../src/modes/daemon/daemon-supervisor.js";
@@ -63,6 +65,182 @@ import {
 
 import { type PrivateFrame, PrivateFrameDecoder } from "../src/modes/session-worker/private-framing.js";
 import { seedSupervisorRoster } from "./fixtures/roster-seed.js";
+
+describe("PAPI-7 daemon model admission", () => {
+	const first = "faux-first";
+	const second = "faux-second";
+	const blocked = "faux-blocked";
+	const nested = "family/faux-model";
+	const refusal = /allowedModels|global settings\.json/;
+	const cleanups: Array<() => Promise<void>> = [];
+
+	afterEach(async () => {
+		try {
+			while (cleanups.length > 0) await cleanups.pop()?.();
+		} finally {
+			vi.unstubAllEnvs();
+		}
+	});
+
+	function setup() {
+		const tempDir = mkdtempSync(join(tmpdir(), "papi7-daemon-"));
+		const sessionDir = join(tempDir, "sessions");
+		const settingsPath = join(tempDir, "settings.json");
+		const faux = registerFauxProvider({
+			provider: "papi7-faux",
+			models: [first, second, blocked, nested].map((id) => ({ id })),
+		});
+		vi.stubEnv("HOME", tempDir);
+		vi.stubEnv(ENV_AGENT_DIR, tempDir);
+		vi.stubEnv("PI_OFFLINE", "1");
+		const provider = faux.getModel().provider;
+		const config = {
+			cwd: tempDir,
+			agentDir: tempDir,
+			sessionDir,
+			noTools: true,
+			noSkills: true,
+			noPromptTemplates: true,
+			noThemes: true,
+			telemetryDisabled: true as const,
+		};
+		const daemon = new AgentDaemon(join(tempDir, "daemon.sock"), {
+			defaultSessionConfig: config,
+			createRuntime: createDefaultRuntimeFactory(config, [
+				(pi) => {
+					pi.registerProvider(provider, {
+						baseUrl: faux.getModel().baseUrl,
+						apiKey: "faux-key",
+						api: faux.api,
+						models: [...faux.models],
+					});
+				},
+			]),
+		}) as unknown as {
+			sessions: Map<string, ActiveSessionState>;
+			createRuntime(command: Extract<DaemonCommand, { type: "create" }>): Promise<ActiveSessionState>;
+			handleCommand(client: DaemonSocketClient, command: DaemonCommand): Promise<DaemonResponse | undefined>;
+			closeSession(state: ActiveSessionState, reason: "shutdown"): Promise<void>;
+		};
+		cleanups.push(async () => {
+			try {
+				await Promise.all([...daemon.sessions.values()].map((state) => daemon.closeSession(state, "shutdown")));
+			} finally {
+				faux.unregister();
+				rmSync(tempDir, { recursive: true, force: true });
+			}
+		});
+		return {
+			provider,
+			settingsPath,
+			writeSettings: (settings: object) => writeFileSync(settingsPath, JSON.stringify(settings)),
+			start: (model: string) =>
+				daemon.createRuntime({ type: "create", noSession: true, config: { provider, model } }),
+			command: (command: Extract<DaemonCommand, { type: "set_model" | "cycle_model" }>) =>
+				daemon.handleCommand(makeClient("papi7-client", command.activeSessionId), command),
+			createSavedSession: () => SessionManager.create(tempDir, sessionDir),
+			restore: (sessionPath: string) => daemon.createRuntime({ type: "create", sessionPath }),
+		};
+	}
+
+	it("admits a case-folded bare exact match on startup but refuses an explicit model outside the allowlist", async () => {
+		const fixture = setup();
+		fixture.writeSettings({ allowedModels: [first.toUpperCase()] });
+
+		const state = await fixture.start(first);
+		expect(state.runtime.session.model).toMatchObject({ provider: fixture.provider, id: first });
+		await expect(fixture.start(blocked).then((state) => state.runtime.session.model?.id)).rejects.toThrow(refusal);
+	});
+
+	it("admits a nested model ID with a provider/* allowlist pattern", async () => {
+		const fixture = setup();
+		fixture.writeSettings({ allowedModels: [`${fixture.provider}/*`] });
+
+		const state = await fixture.start(nested);
+		expect(state.runtime.session.model).toMatchObject({ provider: fixture.provider, id: nested });
+	});
+
+	it("refuses to restore a saved model outside the allowlist without rewriting the transcript", async () => {
+		const fixture = setup();
+		fixture.writeSettings({ allowedModels: [first], defaultProvider: fixture.provider, defaultModel: first });
+		const saved = fixture.createSavedSession();
+		saved.appendModelChange(fixture.provider, blocked);
+		saved.appendMessage({ role: "user", content: "saved prompt", timestamp: 1 });
+		saved.appendMessage({ ...fauxAssistantMessage("saved reply"), provider: fixture.provider, model: blocked });
+		const sessionPath = saved.getSessionFile()!;
+		const before = readFileSync(sessionPath, "utf8");
+
+		await expect(fixture.restore(sessionPath).then((state) => state.runtime.session.model?.id)).rejects.toThrow(
+			refusal,
+		);
+		expect(readFileSync(sessionPath, "utf8")).toBe(before);
+	});
+
+	it("refuses the next cycling candidate without skipping it or mutating session and settings state", async () => {
+		const fixture = setup();
+		fixture.writeSettings({ allowedModels: [first, second], enabledModels: [first, blocked, second] });
+		const { activeSessionId, runtime } = await fixture.start(first);
+		const { session } = runtime;
+		const settingsBefore = readFileSync(fixture.settingsPath, "utf8");
+		const entriesBefore = session.sessionManager.getEntries();
+		const thinkingBefore = session.thinkingLevel;
+		const serviceTierBefore = session.serviceTier;
+
+		await expect(fixture.command({ type: "cycle_model", activeSessionId })).rejects.toThrow(refusal);
+		await session.settingsManager.flush();
+		expect(session.model?.id).toBe(first);
+		expect(session.thinkingLevel).toBe(thinkingBefore);
+		expect(session.serviceTier).toBe(serviceTierBefore);
+		expect(session.sessionManager.getEntries()).toEqual(entriesBefore);
+		expect(readFileSync(fixture.settingsPath, "utf8")).toBe(settingsBefore);
+	});
+
+	it("cycles without enabledModels and admits or refuses explicit set_model by the allowlist", async () => {
+		const fixture = setup();
+		const { provider } = fixture;
+		fixture.writeSettings({ allowedModels: [first, second] });
+		const { activeSessionId, runtime } = await fixture.start(first);
+
+		await expect(fixture.command({ type: "cycle_model", activeSessionId })).resolves.toMatchObject({
+			success: true,
+			data: { model: { provider, id: second }, isScoped: false },
+		});
+		await expect(fixture.command({ type: "set_model", activeSessionId, provider, modelId: blocked })).rejects.toThrow(
+			refusal,
+		);
+		expect(runtime.session.model?.id).toBe(second);
+		await expect(
+			fixture.command({ type: "set_model", activeSessionId, provider, modelId: first }),
+		).resolves.toMatchObject({ success: true, data: { provider, id: first } });
+		expect(runtime.session.model?.id).toBe(first);
+	});
+
+	it("keeps enabledModels as a cycling scope, not an admission policy, when allowedModels is absent", async () => {
+		const fixture = setup();
+		const { provider } = fixture;
+		fixture.writeSettings({ enabledModels: [first, second] });
+		const { activeSessionId, runtime } = await fixture.start(first);
+
+		await expect(fixture.command({ type: "cycle_model", activeSessionId })).resolves.toMatchObject({
+			success: true,
+			data: { model: { provider, id: second }, isScoped: true },
+		});
+		await expect(
+			fixture.command({ type: "set_model", activeSessionId, provider, modelId: blocked }),
+		).resolves.toMatchObject({ success: true, data: { provider, id: blocked } });
+		expect(runtime.session.model?.id).toBe(blocked);
+	});
+
+	it.each([
+		["malformed JSON", (path: string) => writeFileSync(path, '{"allowedModels":')],
+		["a malformed allowedModels field", (path: string) => writeFileSync(path, '{"allowedModels":[123]}')],
+		["unreadable settings", (path: string) => mkdirSync(path)],
+	] as const)("fails closed when global settings contain %s", async (_case, setUpSettings) => {
+		const fixture = setup();
+		setUpSettings(fixture.settingsPath);
+		await expect(fixture.start(first).then((state) => state.runtime.session.model?.id)).rejects.toThrow(refusal);
+	});
+});
 
 describe("daemon mode helpers", () => {
 	it("persists a real child completion for passive discovery, roster, and listing", async () => {

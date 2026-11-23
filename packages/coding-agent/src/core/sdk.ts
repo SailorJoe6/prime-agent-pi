@@ -222,6 +222,9 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 		}
 	}
 
+	const validateModel = options.validateBuiltInModel;
+	if (model) validateModel?.(settingsManager, model);
+
 	let thinkingLevel = options.thinkingLevel;
 
 	if (thinkingLevel === undefined && hasExistingSession) {
@@ -361,6 +364,7 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 		agent,
 		sessionManager,
 		settingsManager,
+		validateBuiltInModel: validateModel ? (candidate) => validateModel(settingsManager, candidate) : undefined,
 		serviceTierPreference,
 		cwd,
 		// Only the explicit dir — the default may not match injected custom storage.

@@ -1,6 +1,6 @@
 import { join } from "node:path";
 import type { ThinkingLevel } from "@earendil-works/pi-agent-core";
-import type { Model, ServiceTier } from "@earendil-works/pi-ai";
+import type { Api, Model, ServiceTier } from "@earendil-works/pi-ai";
 import { getAgentDir } from "../config.js";
 import type { AgentSessionMessageController } from "./agent-messages.js";
 import type { AgentObserveController } from "./agent-observe.js";
@@ -53,6 +53,8 @@ export interface CreateAgentSessionServicesOptions {
 }
 
 export interface AgentSessionCreationOptions {
+	/** @internal Host policy for built-in model selections. */
+	validateBuiltInModel?: (settings: SettingsManager, model: Pick<Model<Api>, "provider" | "id">) => void;
 	model?: Model<any>;
 	thinkingLevel?: ThinkingLevel;
 	serviceTier?: ServiceTier;
@@ -266,6 +268,7 @@ export async function createAgentSessionFromServices(
 		mcpManager: options.services.mcpManager,
 		sessionManager: options.sessionManager,
 		model: options.model,
+		validateBuiltInModel: options.validateBuiltInModel,
 		thinkingLevel: options.thinkingLevel,
 		serviceTier: options.serviceTier,
 		scopedModels: options.scopedModels,

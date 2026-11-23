@@ -58,9 +58,9 @@ describe("DaemonSessionSummarizer lifecycle", () => {
 	});
 
 	test.each([
-		{ enabled: false, maxRetries: 3 },
-		{ enabled: true, maxRetries: 0 },
-	])("honors session retry settings %j on a transient summary failure", async (retry) => {
+		{ retry: { enabled: false, maxRetries: 3 } },
+		{ retry: { enabled: true, maxRetries: 0 }, allowedModels: ["openai/gpt-4o-mini"] },
+	])("honors session retry settings %j on a transient summary failure", async ({ retry, allowedModels }) => {
 		vi.useFakeTimers();
 		const model = openAiMini;
 		const complete = vi.spyOn(ai, "completeSimple").mockResolvedValue({
@@ -83,7 +83,7 @@ describe("DaemonSessionSummarizer lifecycle", () => {
 			timestamp: 0,
 		});
 		const state = makeState();
-		Object.assign(state.runtime.session, { settingsManager: SettingsManager.inMemory({ retry }) });
+		Object.assign(state.runtime.session, { settingsManager: SettingsManager.inMemory({ retry, allowedModels }) });
 		Object.assign(state.runtime.session.modelRegistry, {
 			find: () => model,
 			hasConfiguredAuth: () => true,
@@ -96,6 +96,41 @@ describe("DaemonSessionSummarizer lifecycle", () => {
 
 		expect(complete).toHaveBeenCalledOnce();
 		expect(state.summaryState).toMatchObject({ summary: "", taskState: "needs_input", basedOnMessageCount: 2 });
+	});
+
+	test("PAPI-7 refuses a disallowed summary model before auth or provider use", async () => {
+		vi.useFakeTimers();
+		const model = {
+			...openAiMini,
+			provider: "prime-inference",
+			id: "qwen/qwen3-30b-a3b-instruct-2507",
+		};
+		const complete = vi.spyOn(ai, "completeSimple").mockRejectedValue(new Error("Unexpected provider call"));
+		const log = vi.fn();
+		const hasConfiguredAuth = vi.fn(() => true);
+		const getApiKeyAndHeaders = vi.fn(async () => ({ ok: true, apiKey: "test-key" }));
+		const state = makeState();
+		Object.assign(state.runtime.session, {
+			model: openAiMini,
+			settingsManager: SettingsManager.inMemory({ allowedModels: ["openai/gpt-4o-mini"] }),
+		});
+		Object.assign(state.runtime.session.modelRegistry, {
+			find: (provider: string, id: string) => (provider === model.provider && id === model.id ? model : openAiMini),
+			hasConfiguredAuth,
+			getApiKeyAndHeaders,
+		});
+		const summarizer = new DaemonSessionSummarizer(() => [state], undefined, undefined, log);
+
+		summarizer.notifyActivity(state);
+		await vi.runAllTimersAsync();
+
+		expect(complete).not.toHaveBeenCalled();
+		expect(hasConfiguredAuth).not.toHaveBeenCalled();
+		expect(getApiKeyAndHeaders).not.toHaveBeenCalled();
+		expect(log).toHaveBeenCalledWith(expect.stringContaining(`${model.provider}/${model.id}`));
+		expect(log).toHaveBeenCalledWith(expect.stringContaining("allowedModels"));
+		expect(state.summaryState).toBeUndefined();
+		expect((state as unknown as { appendedStatuses: unknown[] }).appendedStatuses).toHaveLength(0);
 	});
 
 	test("runs the model call after the settle debounce and records the verdict", async () => {

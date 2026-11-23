@@ -4,7 +4,9 @@ import { completeSimple } from "@earendil-works/pi-ai";
 import type { ModelRegistry } from "../../core/model-registry.js";
 import { completeWithProviderRetry, type ProviderRetryPolicy, providerRetryPolicy } from "../../core/provider-retry.js";
 import type { AgentStatus, AgentTaskState } from "../../core/session-manager.js";
+import type { SettingsManager } from "../../core/settings-manager.js";
 import type { ActiveSessionState } from "./active-session-state.js";
+import { assertAllowedDaemonModel, DaemonModelAdmissionError } from "./daemon-model-allowlist.js";
 
 const SWEEP_INTERVAL_MS = 25_000;
 // Fleet-wide cap on concurrent model calls: bursty turn ends across many sessions must
@@ -46,12 +48,13 @@ export interface AgentStatusResult {
 }
 
 /** Resolve the cheap summary model, or undefined when it has no configured auth. */
-export function resolveSummaryModel(registry: ModelRegistry): Model<Api> | undefined {
+export function resolveSummaryModel(registry: ModelRegistry, settingsManager: SettingsManager): Model<Api> | undefined {
 	const model = registry.find(SUMMARY_MODEL_PROVIDER, SUMMARY_MODEL_ID);
-	if (model && registry.hasConfiguredAuth(model)) {
-		return model;
+	if (!model) {
+		return undefined;
 	}
-	return undefined;
+	assertAllowedDaemonModel(settingsManager, model);
+	return registry.hasConfiguredAuth(model) ? model : undefined;
 }
 
 function messageText(content: unknown): { text: string; tools: string[] } {
@@ -150,6 +153,7 @@ export function parseAgentStatusResponse(text: string, isWorking: boolean): Agen
 
 export interface GenerateAgentStatusParams {
 	registry: ModelRegistry;
+	settingsManager: SettingsManager;
 	messages: readonly AgentMessage[];
 	isWorking: boolean;
 	retryPolicy?: ProviderRetryPolicy;
@@ -158,11 +162,11 @@ export interface GenerateAgentStatusParams {
 
 /** One cheap model call for a fresh status, or undefined if unavailable/empty/failed. */
 export async function generateAgentStatus(params: GenerateAgentStatusParams): Promise<AgentStatusResult | undefined> {
-	const { registry, messages, isWorking, retryPolicy, signal } = params;
+	const { registry, settingsManager, messages, isWorking, retryPolicy, signal } = params;
 	if (messages.length === 0) {
 		return undefined;
 	}
-	const model = resolveSummaryModel(registry);
+	const model = resolveSummaryModel(registry, settingsManager);
 	if (!model) {
 		return undefined;
 	}
@@ -259,6 +263,7 @@ export class DaemonSessionSummarizer {
 		private readonly generate: (
 			params: GenerateAgentStatusParams,
 		) => Promise<AgentStatusResult | undefined> = generateAgentStatus,
+		private readonly log: (message: string) => void = console.warn,
 	) {}
 
 	start(): void {
@@ -403,6 +408,7 @@ export class DaemonSessionSummarizer {
 		try {
 			const generated = await this.generate({
 				registry: session.modelRegistry,
+				settingsManager: session.settingsManager,
 				messages: contextMessages,
 				isWorking,
 				retryPolicy: providerRetryPolicy(session.settingsManager),
@@ -450,6 +456,9 @@ export class DaemonSessionSummarizer {
 				{ summary: result.summary, taskState, basedOnMessageCount: messageCount },
 				{ isWorking, previous, persist: generated !== undefined },
 			);
+		} catch (error) {
+			if (!(error instanceof DaemonModelAdmissionError)) throw error;
+			this.log(`Session summary skipped: ${error.message}`);
 		} finally {
 			this.inFlight.delete(id);
 			this.admitNextWaitingSession();

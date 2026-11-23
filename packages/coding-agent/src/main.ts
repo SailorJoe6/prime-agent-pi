@@ -700,6 +700,7 @@ export function resolveRuntimeSessionOptions(
 ): CreateAgentSessionOptions {
 	return {
 		model: runtimeSessionOptions?.model ?? sessionOptions.model,
+		validateBuiltInModel: runtimeSessionOptions?.validateBuiltInModel,
 		thinkingLevel: runtimeSessionOptions?.thinkingLevel ?? sessionOptions.thinkingLevel,
 		serviceTier: runtimeSessionOptions?.serviceTier ?? sessionOptions.serviceTier,
 		scopedModels: runtimeSessionOptions?.scopedModels ?? sessionOptions.scopedModels,

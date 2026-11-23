@@ -154,6 +154,7 @@ import {
 	UPDATE_RESTART_PREPARING_MESSAGE,
 } from "./daemon-errors.js";
 import { bindActiveSessionState } from "./daemon-extension-binding.js";
+import { assertAllowedDaemonModel } from "./daemon-model-allowlist.js";
 import {
 	collectDaemonLaunchEnv,
 	createDaemonEventMeta,
@@ -513,7 +514,14 @@ export class AgentDaemon {
 				recap: state.summaryState?.summary,
 			});
 		},
+		undefined,
+		(message) => this.log(message),
 	);
+	private readonly createPolicyBoundRuntime: CreateAgentSessionRuntimeFactory = (options) =>
+		this.options.createRuntime({
+			...options,
+			sessionOptions: { ...options.sessionOptions, validateBuiltInModel: assertAllowedDaemonModel },
+		});
 	private readonly recoveryJournal?: WorkerRecoveryJournal;
 	private readonly rosterReporter: WorkerRosterReporterState = {
 		lastComposed: new Map(),
@@ -1936,7 +1944,7 @@ export class AgentDaemon {
 			// while the runtime loads them, so it must be in process.env for the
 			// duration; withClientEnv restores it after.
 			const runtime = await withClientEnv(clientEnv, () =>
-				createAgentSessionRuntime(this.options.createRuntime, {
+				createAgentSessionRuntime(this.createPolicyBoundRuntime, {
 					cwd: sessionManager.getCwd(),
 					agentDir,
 					sessionManager,
@@ -2848,7 +2856,7 @@ export class AgentDaemon {
 		// Subagents inherit the parent's client env (e.g. herdr pane identity).
 		const runtime = await withClientEnv(parentState.clientEnv, () => {
 			const spec = rlmSubagentRuntimeSpec(options);
-			return createAgentSessionRuntime(this.options.createRuntime, {
+			return createAgentSessionRuntime(this.createPolicyBoundRuntime, {
 				cwd: sessionManager.getCwd(),
 				agentDir: parentState.runtime.services.agentDir,
 				sessionManager,
@@ -3243,7 +3251,7 @@ export class AgentDaemon {
 				}
 			}
 			runtime = await withClientEnv(hydrationEnv, () =>
-				createAgentSessionRuntime(this.options.createRuntime, {
+				createAgentSessionRuntime(this.createPolicyBoundRuntime, {
 					cwd: sessionManager.getCwd(),
 					agentDir: parentState.runtime.services.agentDir,
 					sessionManager,
@@ -5121,6 +5129,7 @@ export class AgentDaemon {
 				if (!model) {
 					throw new Error(`Model not found: ${command.provider}/${command.modelId}`);
 				}
+				assertAllowedDaemonModel(session.settingsManager, model);
 				await session.setModel(model, {
 					waitForExtensions: !(session.isStreaming || session.isCompacting),
 				});
