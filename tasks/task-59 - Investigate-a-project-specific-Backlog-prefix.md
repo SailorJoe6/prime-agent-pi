@@ -4,6 +4,7 @@ title: Investigate a project-specific Backlog prefix
 status: In Design
 assignee: []
 created_date: '2026-11-23T16:06:00Z'
+updated_date: '2026-11-23T16:08:00Z'
 labels: []
 dependencies: []
 type: spike
@@ -18,7 +19,15 @@ Find the simplest safe way to move this project’s Backlog IDs from TASK to PAP
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Rehearse several approaches on disposable copies and record which existing task lookups and new task creation work for each.
-- [ ] #2 Prove the chosen method preserves task contents, status, numbering, archive history, and native relationships; account for published links and verify rollback on the copy.
-- [ ] #3 Record the shortest safe cutover procedure and any real blocker. Do not switch the live prefix as part of the investigation.
+- [x] #1 Rehearse several approaches on disposable copies and record which existing task lookups and new task creation work for each.
+- [x] #2 Prove the chosen method preserves task contents, status, numbering, archive history, and native relationships; account for published links and verify rollback on the copy.
+- [x] #3 Record the shortest safe cutover procedure and any real blocker. Do not switch the live prefix as part of the investigation.
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Backlog 1.55.3 has no supported in-place prefix or ID rename command. Changing only the config hides existing TASK records, including archived ones; mixed prefixes did not work and doctor did not flag the missing records. On disposable copies, one coordinated change to the prefix, task filenames, and native IDs/relationship fields retained all 59 native task views except expected ID/path changes. New allocation was PAPI-60. Reversing the change restored all 59 original native views. A separate fixture preserved dotted subtask IDs, parent/dependency links, and archive lookup/restore; doctor passed on the migrated fixture. Published inventory links use immutable Git commit IDs and can keep pointing to the original snapshots. Prime Claw source review found native ID resolution and exact ownership checks, not a TASK-only filter; this was source inspection, not a live Prime Claw test.
+
+Cutover: finish the existing TASK-9 Episode before changing its bound task ID/path. From the latest clean published task history, verify no active old-ID owner or concurrent writer; repeat the number-preserving migration and native checks in a disposable copy. Publish one normal Git commit on the existing task-history ref with prefix, filename and native relationship changes together. Keep historical URLs intact. Verify the remote commit, every mapped native task view, and the next allocation using a copy. If rollback is needed before further task writes, revert the migration commit without rewriting history. Do not change product main.
+<!-- SECTION:NOTES:END -->
