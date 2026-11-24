@@ -4,7 +4,7 @@ title: Define and share named factory machines
 status: In Progress
 assignee: []
 created_date: '2026-11-22T22:17:00Z'
-updated_date: '2026-11-24T21:01:00Z'
+updated_date: '2026-11-24T21:05:00Z'
 labels: []
 milestone: m-0
 dependencies: []
@@ -84,6 +84,8 @@ Filesystem canonical lookup is repaired and regression-tested. Stop for review b
 Independent Astra review accepted the inert Python MACHINE.md slice at ca981f59a65d187744c68e6cf957101bf6295683. Advance only to the remaining inert TypeScript CLI (steps 4–5): factory list, import <path>, export <name> --out <path>, with help, text/JSON output and actionable nonzero failures. Reuse Pi kernel Python discovery and the existing validated Python library, and keep CLI export library-only. Prove formatting graph and byte round trips, no persistence on invalid references, no-clobber export, stored-first selection and library-only selection without a harness write. Finish documentation and a coding-agent changelog fragment, run focused native tests and both repository checks, and publish exact code and task evidence for review. Preserve Pi/public API and lifecycle status. No execution, terminal controls, packaging, product policy, merge, release or activation.
 
 Steps 4–5 are implemented and tested. Stop for independent review; both criteria remain unchecked.
+
+Accepted Astra revision against a4c5903ba4575452b91b5dfc51888fc52b900272, bounded to two CLI findings. Match released 763094e1: expose repo/user source labels at the CLI boundary without changing Pi library naming, roots or precedence. Import returns created=true for first installation and false for replacement, from the validated write, without altering Python public signatures, destination protection or selection. List emits one warning per broken file path in text and JSON even when files declare the same name; keep name-based resolution unchanged. Add benign formatting CLI regressions for both source levels, first/replacement import, and two broken files declaring one name. Preserve demonstrated AC behavior. Publish exact code and task evidence and stop for independent review; keep In Progress and both criteria unchecked. No workflow execution, offensive work, merge, release, activation or other task changes.
 <!-- SECTION:PLAN:END -->
 
 ## Implementation Notes
