@@ -4,7 +4,7 @@ title: Build and validate the Prime Agent Pi packaging and release pipeline
 status: In Progress
 assignee: []
 created_date: '2026-11-24T00:57:00Z'
-updated_date: '2026-11-24T01:50:00Z'
+updated_date: '2026-11-24T01:54:00Z'
 labels: []
 dependencies: []
 documentation:
@@ -53,4 +53,6 @@ Build and validate without publishing as part of this design task's initial engi
 
 <!-- SECTION:NOTES:BEGIN -->
 Slice 1 (AC1–2, partial): defined the shared Pi release identity comparator, stable-default/preview-opt-in selection, and npm-compatible encoding in packages/coding-agent/src/utils/pi-release-version.ts. Local Darwin arm64, Node v25.6.0/npm 11.19.0: npm run check and npm run check:test-policy passed; test/pi-release-version.test.ts passed all 29 cases with Vitest shuffle seeds 61, 62 and 63. A temporary encoding/ordering/selection mutation failed 28 cases and was restored before seed 63. This is fixture evidence only; no package artifacts, registry-independent lockstep staging, CI, Docker lifecycle, or consumer wiring proven. Next: stage the pack-only manifests and prove local pack/install of the lockstep dependencies before building the platform matrix. No acceptance box checked, version bumped, or release published.
+
+Handoff: the owning Conversation accepted slice 1 at code e835c05a8b5b523db3a088494e15ad2604d004b5 / Backlog 9acd30662ead83977c4e0fb330bd7cf0131519fb after independent review found no material versioning defect. The next bounded slice is isolated pack-only lockstep manifest staging and local pack/install without using a registry as a distribution endpoint; keep Prime Agent Pi branding, the prime-agent executable, source versions and public extension imports. Record actual evidence and limits and stop before the eight-target matrix. No inherited publishing, public version bump, tag, release, merge or live install/activation.
 <!-- SECTION:NOTES:END -->
