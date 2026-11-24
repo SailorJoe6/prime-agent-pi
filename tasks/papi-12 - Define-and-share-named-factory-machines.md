@@ -4,7 +4,7 @@ title: Define and share named factory machines
 status: In Progress
 assignee: []
 created_date: '2026-11-22T22:17:00Z'
-updated_date: '2026-11-24T14:54:00Z'
+updated_date: '2026-11-24T14:56:00Z'
 labels: []
 milestone: m-0
 dependencies: []
@@ -57,6 +57,8 @@ Slice checkpoint: Python definition validation implemented and tested. Continue 
 Slice checkpoint: harness save/get/list implemented. Stored-first selection remains pending until the validated library reader is available. Continue with the MACHINE.md slice only after review.
 
 Accepted slice 2 review finding at 72bd16368: save_factory publishes the candidate to its in-memory cache before the atomic write; when the write raises, a later unrelated harness save can persist the rejected candidate. The next execute pass must revise only this failure path. Preserve the original exception and the prior definition or absence in memory and on disk. Prove replacement and initial-save failures with benign formatting fixtures and a subsequent unrelated successful write. Publish the revision and stop for review before library or CLI work.
+
+Storage revision checkpoint: the accepted atomic write failure finding is addressed and regression-tested. Stop for review; stored-first selection, library and CLI remain pending. Both task criteria remain unchecked.
 <!-- SECTION:PLAN:END -->
 
 ## Implementation Notes
@@ -65,4 +67,6 @@ Accepted slice 2 review finding at 72bd16368: save_factory publishes the candida
 Slice 1: implemented only the inert v0.10.0 Python schema validation and DAG compiler in rlm.factory_spec. Formatting fixtures prove input preservation, one effective-predecessor join, bounded guard/loop/fan-out handling, and rejection of invalid explicit and DAG references. No prompt or guard execution, storage, library, CLI, or wire changes. Retained the released rules; use isdecimal for spawned-label suffix checks to avoid int() on nondecimal digit glyphs. Validation: cd prime-agent-runtime && uv run --locked python -m unittest discover -s test -p test_factory_spec.py -v (5 tests pass; temporary validation, join and mutation breaks gave 18 failures; restored and reran successfully). npm run check and npm run check:test-policy passed. Both ACs remain unchecked pending persistence, sharing and selection evidence. Next: add validated harness save/get/list through existing storage.
 
 Slice 2: added validated HarnessState save_factory/get_factory/list_factories for session-local and explicitly global named definitions in the existing harness_state.json. Stores authored explicit machines and DAGs as opaque JSON strings in an optional field so TypeScript /refine preserves them without introducing prompt or refinement entries. No migration, execution, stored/library selector, library IO, or CLI. Document-formatting graph and DAG round-trip after reopen; invalid references neither create a file nor change prior bytes; existing entries and refinement events survive. Passed 57 harness, 5 factory validation, and 87 host refinement tests; temporarily broke validation, persistence, scope routing, and host preservation and observed the four focused regressions fail, then restored and reran all three suites. Commands: (cd prime-agent-runtime && uv run --locked python -m unittest discover -s test -p test_harness.py); (cd prime-agent-runtime && uv run --locked python -m unittest discover -s test -p test_factory_spec.py -v); (cd packages/coding-agent && npx tsx ../../node_modules/vitest/dist/cli.js --run test/refinement.test.ts); npm run check; npm run check:test-policy.
+
+Accepted Astra storage finding at 72bd16368d79b80d0634795f7b0c8b4d993276f9 fixed: save_factory restores the previous cached value or removes a newly inserted name if save raises, then re-raises the original exception. Atomic writer and storage format unchanged. The benign formatting regression injects failure at os.replace and checks the same exception object, unchanged file bytes or absence, cached value or absence, and reopened value or absence after a successful unrelated create_memory. Before the fix all four cache/reopen subcases failed; after the fix they passed. Passed 58 harness (also shuffled at seeds 12, 42, 73), 5 factory spec and 87 host refinement tests, npm run check, and npm run check:test-policy. Commands: (cd prime-agent-runtime && uv run --locked python -m unittest discover -s test -p test_harness.py); (cd prime-agent-runtime && uv run --locked python -m unittest discover -s test -p test_factory_spec.py -v); (cd packages/coding-agent && npx tsx ../../node_modules/vitest/dist/cli.js --run test/refinement.test.ts). Focused reproduction: (cd prime-agent-runtime && uv run --locked python -m unittest discover -s test -p test_harness.py -v -k test_papi_12_failed_factory_write_cannot_leak_into_a_later_save).
 <!-- SECTION:NOTES:END -->
