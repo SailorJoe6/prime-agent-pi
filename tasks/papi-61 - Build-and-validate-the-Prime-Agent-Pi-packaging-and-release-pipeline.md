@@ -4,7 +4,7 @@ title: Build and validate the Prime Agent Pi packaging and release pipeline
 status: In Progress
 assignee: []
 created_date: '2026-11-24T00:57:00Z'
-updated_date: '2026-11-24T02:01:00Z'
+updated_date: '2026-11-24T02:05:00Z'
 labels: []
 dependencies: []
 documentation:
@@ -60,4 +60,6 @@ Slice 1 (AC1–2, partial): defined the shared Pi release identity comparator, s
 Handoff: the owning Conversation accepted slice 1 at code e835c05a8b5b523db3a088494e15ad2604d004b5 / Backlog 9acd30662ead83977c4e0fb330bd7cf0131519fb after independent review found no material versioning defect. The next bounded slice is isolated pack-only lockstep manifest staging and local pack/install without using a registry as a distribution endpoint; keep Prime Agent Pi branding, the prime-agent executable, source versions and public extension imports. Record actual evidence and limits and stop before the eight-target matrix. No inherited publishing, public version bump, tag, release, merge or live install/activation.
 
 Slice 2 (AC1–2, partial): isolated pack-only local Pi manifests and SHA-256 receipt; all four staged packages used 0.10.2-preview.3+pi.10 for public fixture 0.10.2.10 preview 3; source manifests and lockfile unchanged. On Darwin arm64 (Node 25.6.0/npm 11.19.0), npm installed 272 packages offline with lifecycle scripts disabled using the workspace lock and warm third-party npm cache. The installed lock resolved every Pi package to its local tarball, and the installed prime-agent loaded a fixture extension importing runtime exports under the four existing public package names. A tampered tarball failed checksum verification. Both npm run check and npm run check:test-policy passed. Commands, four hashes and limits are in docs/pi-release-engineering.md. Fixture only, not native matrix, runtime public version display, release CI, or Docker lifecycle proof. No version bump, release, tag, merge or live runtime change; all ACs remain unchecked.
+
+Handoff: the owning Conversation accepted slice 2 at code 8110435d5bbda284bae3f34b813220bb3c425725 / Backlog c46ec0be4b2ccd851b9dc97f1172055cf4fa4d45. Independent review matched the four fixture checksums and internal tarball dependencies and found no material defect. The warm-cache local fixture is not exact-commit release evidence. Next bounded slice: wire and validate the nonpublishing eight-target native archive build using existing builders, with Pi artifact identity, the prime-agent executable, runtime assets, licenses, and per-target checksum/source receipts. Report actual coverage and any unavailable runners or production catalog inputs; do not count fixtures as release proof. Stop for review before installer/feed integration. No inherited R2/npm publication, public bump, release, tag, merge, or operator-runtime install/activation.
 <!-- SECTION:NOTES:END -->
