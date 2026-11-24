@@ -1,10 +1,10 @@
 ---
 id: PAPI-12
 title: Define and share named factory machines
-status: In Planning
+status: In Progress
 assignee: []
 created_date: '2026-11-22T22:17:00Z'
-updated_date: '2026-11-24T14:38:00Z'
+updated_date: '2026-11-24T14:39:00Z'
 labels: []
 milestone: m-0
 dependencies: []
