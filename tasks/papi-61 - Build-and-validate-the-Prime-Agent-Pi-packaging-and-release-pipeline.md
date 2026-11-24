@@ -4,7 +4,7 @@ title: Build and validate the Prime Agent Pi packaging and release pipeline
 status: In Progress
 assignee: []
 created_date: '2026-11-24T00:57:00Z'
-updated_date: '2026-11-24T14:03:00Z'
+updated_date: '2026-11-24T14:20:00Z'
 labels: []
 dependencies: []
 documentation:
@@ -195,6 +195,8 @@ Preflight verified the Linux ARM64 musl archive SHA-256 `19e07756831f09e65f01ebc
 The exact driver cannot enforce the admitted offline-only boundary for the whole Docker run. `scripts/test-tier1.sh:797–802` invokes `docker build` with no offline constraint; `docs/testing-strategy.md` explicitly allows network for the public dependency build. `scripts/test-tier1.sh:819–864` starts the container with default network attachment and only later disconnects and verifies it before installing or running the candidate. A warm cache would not enforce offline behavior. No Docker build, container, candidate execution, or probe was started; this is an isolation/preflight blocker, not an observed incompatibility. Unblock with a reviewed official offline route that enforces no network from build/start, or explicit approval of the exact runner's public dependency and pre-probe network behavior (candidate apply/check/discovery would still remain offline). No substitute or tooling modification used.
 
 No evidence of tool invocation, full Prime Claw qualification, release approval, or closure of full hosted CI, exact Orca, parity, or publication gates. No code/release/host activation change.
+
+Bounded continuation of preflight blocker `f4d6782f8e15a0c3ef90cc0feddde815771bd6d4` (no Docker probe launched). Use only the independently reviewed offline-from-start Prime Claw tooling at `/private/var/folders/4_/twy0wz3s1mq650wnqzn1b8rr0000gq/T/prime-claw-papi61-tcz07orq/prime-claw`, clean at `4ed96f720d799f3da4aebcab8eb845448017f70c`. Test the same exact Pi archive `/private/tmp/papi61-candidate-53s68gn9/matrix/pi-native-linux-arm64-musl/prime-agent-pi-0.10.2.3-linux-arm64-musl.tar.gz`, archive SHA-256 `19e07756831f09e65f01ebc68aa040dcc63b0d1002917031a8d3c557f396699f`, executable SHA-256 `38456840752e24347461d4022ecb7e090b1ba005b7ca304ebe12cad0215227c1`, Pi source `ce83fb61f5ec28265c0cbf5af140f12a107577f4`, catalog `01f4d46dd5157ec73f8faf440214088237c81d59`. Use the documented external Pi selector and official standalone `scripts/test-tier1.sh --probe --pi-local-image=sha256:1822bbcb9182c2d1e564935fe5b09fe6c3e796eeda2db096bef771094ab6c248` with the exact cached local image. No build, pull, startup network, fallback, live credentials/state or socket mounts, or provider calls. Retain exact offline-from-start and teardown receipts and publish scoped PAPI-61 task evidence; stop at result or concrete blocker. PRIMECLAW-70 evidence is local only; do not edit, push or reconcile that separate task. Discovery only, not tool invocation, qualification, merge, release, host install/activation, or code/policy change. Full hosted CI, exact Orca, parity and release gates remain open.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
