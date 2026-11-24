@@ -4,7 +4,7 @@ title: Define and share named factory machines
 status: In Progress
 assignee: []
 created_date: '2026-11-22T22:17:00Z'
-updated_date: '2026-11-24T20:50:00Z'
+updated_date: '2026-11-24T21:01:00Z'
 labels: []
 milestone: m-0
 dependencies: []
@@ -31,6 +31,11 @@ modified_files:
   - packages/coding-agent/test/refinement.test.ts
   - prime-agent-runtime/src/rlm/machine_library.py
   - prime-agent-runtime/test/test_machine_library.py
+  - packages/coding-agent/.changes/papi-12-factory-definitions.md
+  - packages/coding-agent/src/cli/command-registry.ts
+  - packages/coding-agent/src/cli/public-command.ts
+  - packages/coding-agent/src/cli/factory-command.ts
+  - packages/coding-agent/test/factory-command.test.ts
 type: feature
 ordinal: 12000
 ---
@@ -77,6 +82,8 @@ Accepted Astra follow-up on code 1ee9b24078f126ebd57343226ecf3a3b60323f69: on a 
 Filesystem canonical lookup is repaired and regression-tested. Stop for review before CLI work. Both criteria remain unchecked.
 
 Independent Astra review accepted the inert Python MACHINE.md slice at ca981f59a65d187744c68e6cf957101bf6295683. Advance only to the remaining inert TypeScript CLI (steps 4–5): factory list, import <path>, export <name> --out <path>, with help, text/JSON output and actionable nonzero failures. Reuse Pi kernel Python discovery and the existing validated Python library, and keep CLI export library-only. Prove formatting graph and byte round trips, no persistence on invalid references, no-clobber export, stored-first selection and library-only selection without a harness write. Finish documentation and a coding-agent changelog fragment, run focused native tests and both repository checks, and publish exact code and task evidence for review. Preserve Pi/public API and lifecycle status. No execution, terminal controls, packaging, product policy, merge, release or activation.
+
+Steps 4–5 are implemented and tested. Stop for independent review; both criteria remain unchecked.
 <!-- SECTION:PLAN:END -->
 
 ## Implementation Notes
@@ -93,10 +100,12 @@ Python MACHINE.md slice: formatting graph saved/reopened and exported from the h
 Python library revision of c1fbb276b7dbbc78ee5738232cc3a4b8791cbe76: both Astra regressions failed on the original implementation and passed after the fix. A same-name formatting import replaces the canonical copy, wins list and Python selection, and exports its new bytes without changing the noncanonical draft. Shared canonical wins inside shared; when invalid, the shared draft still wins over personal canonical. A valid different-name occupant blocks import and retains its original bytes. Validation: 8 library, 58 harness, 5 factory-spec tests, npm run check, npm run check:test-policy, and git diff --check passed. Reproduce: (cd prime-agent-runtime && uv run --locked python -m unittest discover -s test -p test_machine_library.py -v); (cd prime-agent-runtime && uv run --locked python -m unittest discover -s test -p test_harness.py); (cd prime-agent-runtime && uv run --locked python -m unittest discover -s test -p test_factory_spec.py -v).
 
 Filesystem canonical lookup revision of 1ee9b24078f126ebd57343226ecf3a3b60323f69: the portable mixed-case formatting regression failed before repair on the case-insensitive macOS test volume (list selected a-draft) and passed after repair. Match the filesystem identity of the canonical path only among valid same-name definitions within each library. Import wins list/select/export, export preserves source bytes, the draft stays unchanged, and invalid canonical files fall back. Shared precedence and different-name occupant protection still pass. Validation: 9 library, 58 harness, and 5 factory-spec tests, both npm checks, and git diff --check passed. Reproduce: (cd prime-agent-runtime && uv run --locked python -m unittest discover -s test -p test_machine_library.py -v); (cd prime-agent-runtime && uv run --locked python -m unittest discover -s test -p test_harness.py); (cd prime-agent-runtime && uv run --locked python -m unittest discover -s test -p test_factory_spec.py -v).
+
+The inert factory CLI delegates list, import and export to the validated library using Pi kernel Python and a JSON boundary. Eight native CLI tests passed with shuffle seeds 41 and 173, 63 public-command tests passed, and 72 targeted Python tests passed. Verified help without Python, text/JSON and failure behavior, formatting graph and byte round trips, broken vs missing definitions, invalid references preserving absence and prior bytes, no-clobber, and shared precedence. Python also verifies stored-first selection, read-only fallback and library-only export. Three deliberate isolated-runtime mutations failed as expected (skipped import validation, nonexclusive export and reversed library precedence); the unmodified candidate passed. Reproduce from packages/coding-agent with the current kernel venv provisioned by test:ci or selected with PRIME_AGENT_KERNEL_PYTHON: npx tsx ../../node_modules/vitest/dist/cli.js --run test/factory-command.test.ts --sequence.shuffle --sequence.seed 173; run test/public-command.test.ts the same way. Focused Python files: test_machine_library.py, test_harness.py, test_factory_spec.py (uv run --locked python -m unittest discover -s test -p <file> from prime-agent-runtime). Both npm checks and git diff --check passed.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
 
 <!-- SECTION:FINAL_SUMMARY:BEGIN -->
-Python validation, storage, and inert MACHINE.md selection and sharing are implemented, including filesystem-aware canonical precedence within each library and protection against replacing valid definitions with a different declared name. Pending review and CLI work; machine execution is out of scope.
+Implemented inert definition validation, named harness storage, MACHINE.md library and selector, and the factory list/import/export CLI. Formatting graph and byte round trips, validation before persistence, no-clobber export, and stored-first/read-only fallback are verified. Pending independent review; no execution behavior added.
 <!-- SECTION:FINAL_SUMMARY:END -->
