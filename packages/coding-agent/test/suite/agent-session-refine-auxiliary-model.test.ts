@@ -87,6 +87,27 @@ describe("AgentSession refinement auxiliary model", () => {
 		});
 	});
 
+	it.each([
+		["the configured auxiliary model", "faux/aux-model", "aux-model"],
+		["the fallback model", "faux/missing-model", "session-model"],
+	])("PAPI-7: refuses to run refinement on %s when daemon policy rejects it", async (_label, selector, deniedId) => {
+		const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+		try {
+			const harness = await createRefineHarness({ auxiliaryModel: selector });
+			const denied = new Error(`model ${deniedId} denied by daemon policy`);
+			Object.assign(harness.session, {
+				_validateBuiltInModel: (model: { id: string }) => {
+					if (model.id === deniedId) throw denied;
+				},
+			});
+
+			await expect(harness.session.refine({ instructions: "record a note" })).rejects.toBe(denied);
+			expect(completeSimpleMock).not.toHaveBeenCalled();
+		} finally {
+			warnSpy.mockRestore();
+		}
+	});
+
 	it("falls back to the session model when the auxiliary model is unusable", async () => {
 		const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
 		try {

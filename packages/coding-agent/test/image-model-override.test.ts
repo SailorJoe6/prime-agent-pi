@@ -12,6 +12,7 @@ import { AuthStorage } from "../src/core/auth-storage.js";
 import { ModelRegistry } from "../src/core/model-registry.js";
 import { SessionManager } from "../src/core/session-manager.js";
 import { SettingsManager } from "../src/core/settings-manager.js";
+import { assertAllowedDaemonModel } from "../src/modes/daemon/daemon-model-allowlist.js";
 import { getCodingAgentFixtureModel } from "./fixture-models.js";
 import { assistantMsg, createTestResourceLoader } from "./utilities.js";
 
@@ -36,6 +37,22 @@ const transientFailure = (): AssistantMessage => ({
 // [name, settings, vision session model, attaches images, served model ids, rejection]
 it.each([
 	["routes image turns to imageModel", SET, false, true, "claude-haiku-4-5", undefined],
+	[
+		"PAPI-7 refuses a blocked imageModel even when the session model is allowed",
+		{ ...SET, allowedModels: ["anthropic/claude-opus-4-7-text-only"] },
+		false,
+		true,
+		undefined,
+		/anthropic\/claude-haiku-4-5.*allowedModels/,
+	],
+	[
+		"PAPI-7 routes image turns to an allowed imageModel",
+		{ ...SET, allowedModels: ["anthropic/claude-opus-4-7-text-only", "anthropic/claude-haiku-4-5"] },
+		false,
+		true,
+		"claude-haiku-4-5",
+		undefined,
+	],
 	["vision session model serves image turns", SET, true, true, "claude-opus-4-7", undefined],
 	["session model serves image-free turns", SET, false, false, "claude-opus-4-7-text-only", undefined],
 	["session model serves blocked-image turns", SET_BLOCKED, false, true, "claude-opus-4-7-text-only", undefined],
@@ -74,10 +91,12 @@ it.each([
 	const auth = AuthStorage.create(join(dir, "auth.json"));
 	auth.setRuntimeApiKey("anthropic", "test-key");
 	auth.setRuntimeApiKey("deepseek", "test-key");
+	const settingsManager = SettingsManager.create(dir, dir);
 	const session = new AgentSession({
 		agent,
 		sessionManager: SessionManager.inMemory(),
-		settingsManager: SettingsManager.create(dir, dir),
+		settingsManager,
+		validateBuiltInModel: (model) => assertAllowedDaemonModel(settingsManager, model),
 		cwd: dir,
 		modelRegistry: ModelRegistry.create(auth, dir),
 		resourceLoader: createTestResourceLoader(),
@@ -89,7 +108,12 @@ it.each([
 	});
 	try {
 		const prompt = session.prompt("describe", images ? { images: [IMAGE] } : undefined);
-		if (reject) return await expect(prompt).rejects.toThrow(reject);
+		if (reject) {
+			await expect(prompt).rejects.toThrow(reject);
+			expect(servedIds).toEqual([]);
+			expect(session.agent.modelOverride).toBeUndefined();
+			return;
+		}
 		await prompt;
 		expect(servedIds).toEqual(Array.isArray(served) ? served : [served]);
 		expect(backupSwitches).toEqual(Array.isArray(served) && served[1] !== served[0] ? ["backup"] : []);

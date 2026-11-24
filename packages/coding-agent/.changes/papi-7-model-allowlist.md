@@ -1,0 +1,1 @@
+- Added the global `allowedModels` setting to restrict daemon model selection independently of picker cycling.

@@ -1,5 +1,5 @@
 import type { ServiceTier, Transport } from "@earendil-works/pi-ai";
-import { existsSync, mkdirSync, readFileSync } from "fs";
+import { existsSync, lstatSync, mkdirSync, readFileSync } from "fs";
 import { homedir } from "os";
 import { dirname, join } from "path";
 import lockfile from "proper-lockfile";
@@ -254,6 +254,7 @@ export interface Settings {
 	terminal?: TerminalSettings;
 	images?: ImageSettings;
 	enabledModels?: string[]; // Model patterns for cycling (same format as --models CLI flag)
+	allowedModels?: string[] | null; // Global-only daemon model admission policy
 	treeFilterMode?: "default" | "no-tools" | "user-only" | "labeled-only" | "all"; // Default: "user-only"
 	chatDetail?: ChatDetail; // Default: "details"
 	thinkingBudgets?: ThinkingBudgetsSettings; // Custom token budgets for thinking levels
@@ -302,6 +303,22 @@ function deepMergeSettings(base: Settings, overrides: Settings): Settings {
 	}
 
 	return result;
+}
+
+type ModelAdmissionPolicy = { error: string } | { patterns: string[] };
+
+function parseModelAdmissionPolicy(settings: unknown): ModelAdmissionPolicy {
+	if (typeof settings !== "object" || settings === null || Array.isArray(settings)) {
+		return { error: "Global settings.json must contain a JSON object to determine allowedModels." };
+	}
+	if (!Object.hasOwn(settings, "allowedModels")) return { patterns: [] };
+
+	const { allowedModels } = settings as Record<string, unknown>;
+	if (allowedModels === null) return { patterns: [] };
+	if (!Array.isArray(allowedModels) || !allowedModels.every((pattern) => typeof pattern === "string")) {
+		return { error: "Global allowedModels in settings.json must be an array of strings or null." };
+	}
+	return { patterns: allowedModels.map((pattern) => pattern.trim()).filter(Boolean) };
 }
 
 export type SettingsScope = "global" | "project";
@@ -369,7 +386,9 @@ export class FileSettingsStorage implements SettingsStorage {
 
 		let release: (() => void) | undefined;
 		try {
-			const fileExists = existsSync(path);
+			// Unlike existsSync, this distinguishes a missing global file from an unreadable path.
+			const fileExists =
+				scope === "global" ? lstatSync(path, { throwIfNoEntry: false }) !== undefined : existsSync(path);
 			if (fileExists) {
 				release = this.acquireLockSyncWithRetry(path);
 			}
@@ -483,26 +502,18 @@ export class SettingsManager {
 		return SettingsManager.fromStorage(storage);
 	}
 
-	private static loadFromStorage(storage: SettingsStorage, scope: SettingsScope): Settings {
-		let content: string | undefined;
-		storage.withLock(scope, (current) => {
-			content = current;
-			return undefined;
-		});
-
-		if (!content) {
-			return {};
-		}
-		const settings = JSON.parse(content);
-		return SettingsManager.migrateSettings(settings);
-	}
-
 	private static tryLoadFromStorage(
 		storage: SettingsStorage,
 		scope: SettingsScope,
 	): { settings: Settings; error: Error | null } {
 		try {
-			return { settings: SettingsManager.loadFromStorage(storage, scope), error: null };
+			let content: string | undefined;
+			storage.withLock(scope, (current) => {
+				content = current;
+				return undefined;
+			});
+			if (!content) return { settings: {}, error: null };
+			return { settings: SettingsManager.migrateSettings(JSON.parse(content)), error: null };
 		} catch (error) {
 			return { settings: {}, error: error as Error };
 		}
@@ -1392,6 +1403,25 @@ export class SettingsManager {
 		this.globalSettings.images.blockImages = blocked;
 		this.markModified("images", "blockImages");
 		this.save();
+	}
+
+	/** Read the live global admission policy without reloading session or workspace settings. */
+	getModelAdmissionPolicy(): ModelAdmissionPolicy {
+		let content: string | undefined;
+		try {
+			this.storage.withLock("global", (current) => {
+				content = current;
+				return undefined;
+			});
+		} catch {
+			return { error: "Could not read global settings.json for allowedModels." };
+		}
+		if (content === undefined) return { patterns: [] };
+		try {
+			return parseModelAdmissionPolicy(JSON.parse(content));
+		} catch {
+			return { error: "Invalid JSON in global settings.json; could not load allowedModels." };
+		}
 	}
 
 	getEnabledModels(): string[] | undefined {

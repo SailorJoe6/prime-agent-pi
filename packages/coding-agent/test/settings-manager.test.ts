@@ -127,6 +127,90 @@ describe("SettingsManager", () => {
 		});
 	});
 
+	describe("PAPI-7 global model admission policy", () => {
+		it.each([
+			["missing file", undefined],
+			["missing key", { enabledModels: ["provider/cycling-only"] }],
+			["null", { allowedModels: null }],
+			["empty array", { allowedModels: [] }],
+			["blank-only array", { allowedModels: ["", " \t\n"] }],
+		])("treats %s as unset even with a project allowlist", (_label, global) => {
+			if (global !== undefined) writeSettings(globalPath, global);
+			writeSettings(projectPath, { allowedModels: ["project/*"] });
+
+			expect(SettingsManager.create(projectDir, agentDir).getModelAdmissionPolicy()).toEqual({ patterns: [] });
+		});
+
+		it("normalizes only the global allowlist and leaves cycling independent", () => {
+			writeSettings(globalPath, { allowedModels: ["  Provider/Exact ", "\t", "  other/*"] });
+			writeSettings(projectPath, { allowedModels: false, enabledModels: ["provider/cycling-only"] });
+			const manager = SettingsManager.create(projectDir, agentDir);
+			manager.applyOverrides({ allowedModels: ["overrides/*"] });
+
+			const policy = manager.getModelAdmissionPolicy();
+			expect(policy).toEqual({ patterns: ["Provider/Exact", "other/*"] });
+			if ("error" in policy) throw new Error(policy.error);
+			policy.patterns.length = 0;
+			expect(manager.getModelAdmissionPolicy()).toEqual({ patterns: ["Provider/Exact", "other/*"] });
+			expect(manager.getEnabledModels()).toEqual(["provider/cycling-only"]);
+		});
+
+		it.each(["", " \t\n", "{ invalid json"])("reports invalid JSON (%j)", (content) => {
+			writeFileSync(globalPath, content);
+			expect(SettingsManager.create(projectDir, agentDir).getModelAdmissionPolicy()).toEqual({
+				error: expect.stringMatching(/JSON/),
+			});
+		});
+
+		it.each(["null", "false", "42", '"string"', "[]"])("rejects non-object global settings (%s)", (content) => {
+			writeFileSync(globalPath, content);
+			expect(SettingsManager.create(projectDir, agentDir).getModelAdmissionPolicy()).toEqual({
+				error: expect.stringMatching(/object/),
+			});
+		});
+
+		it.each(['""', '"provider/*"', "42", "false", "{}", '["provider/*", null]', '[" ", 42]', "[[]]"])(
+			"rejects malformed allowedModels (%s) without blocking unrelated settings",
+			async (content) => {
+				writeSettings(globalPath, { allowedModels: JSON.parse(content), theme: "dark" });
+				const manager = SettingsManager.create(projectDir, agentDir);
+
+				expect(manager.getModelAdmissionPolicy()).toEqual({ error: expect.stringMatching(/allowedModels/) });
+				expect(manager.getTheme()).toBe("dark");
+				manager.setTheme("light");
+				await manager.flush();
+				expect(readSettings(globalPath)).toEqual({ allowedModels: JSON.parse(content), theme: "light" });
+			},
+		);
+
+		it("reports an injected global read failure even when project settings are readable", () => {
+			const manager = SettingsManager.fromStorage({
+				withLock(scope, fn) {
+					if (scope === "global") throw new Error("injected read failure");
+					fn(JSON.stringify({ allowedModels: ["project/*"], theme: "dark" }));
+				},
+			});
+
+			expect(manager.getModelAdmissionPolicy()).toEqual({ error: expect.stringMatching(/read/) });
+			expect(manager.getTheme()).toBe("dark");
+		});
+
+		it("fails closed on reload without losing unrelated settings and recovers on the next reload", async () => {
+			writeSettings(globalPath, { allowedModels: ["provider/*"], theme: "dark" });
+			const manager = SettingsManager.create(projectDir, agentDir);
+			expect(manager.getModelAdmissionPolicy()).toEqual({ patterns: ["provider/*"] });
+
+			writeFileSync(globalPath, "{ invalid json");
+			await manager.reload();
+			expect(manager.getModelAdmissionPolicy()).toEqual({ error: expect.stringMatching(/JSON/) });
+			expect(manager.getTheme()).toBe("dark");
+
+			rmSync(globalPath);
+			await manager.reload();
+			expect(manager.getModelAdmissionPolicy()).toEqual({ patterns: [] });
+		});
+	});
+
 	describe("project vs global precedence", () => {
 		it.each<[string, unknown, unknown, (manager: SettingsManager) => unknown, unknown]>([
 			[

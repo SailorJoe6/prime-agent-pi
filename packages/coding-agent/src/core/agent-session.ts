@@ -506,6 +506,8 @@ export interface AgentSessionConfig {
 	agent: Agent;
 	sessionManager: SessionManager;
 	settingsManager: SettingsManager;
+	/** @internal Host policy for built-in model selections. */
+	validateBuiltInModel?: (model: Pick<Model<Api>, "provider" | "id">) => void;
 	serviceTierPreference?: ServiceTier;
 	cwd: string;
 	agentDir?: string;
@@ -1781,10 +1783,13 @@ export class AgentSession {
 		global?: boolean;
 	};
 
+	private readonly _validateBuiltInModel?: AgentSessionConfig["validateBuiltInModel"];
+
 	constructor(config: AgentSessionConfig) {
 		this.agent = config.agent;
 		this.sessionManager = config.sessionManager;
 		this.settingsManager = config.settingsManager;
+		this._validateBuiltInModel = config.validateBuiltInModel;
 		this._serviceTierPreference = config.serviceTierPreference ?? config.agent.state.serviceTier;
 		this._scopedModels = config.scopedModels ?? [];
 		this._resourceLoader = config.resourceLoader;
@@ -2716,7 +2721,7 @@ export class AgentSession {
 			extraMessages.some((message) => messageCarriesImages(message)) ||
 			turns.some((action) => action.payload.records.some((record) => messageCarriesImages(record.message)));
 		if (!carriesImages) return undefined;
-		return resolveImageModelOverride({
+		const override = resolveImageModelOverride({
 			sessionModel,
 			thinkingLevel: this.thinkingLevel,
 			serviceTier: this.serviceTier,
@@ -2725,6 +2730,8 @@ export class AgentSession {
 			hasConfiguredAuth: (model) => this._modelRegistry.hasConfiguredAuth(model),
 			blockImages: this.settingsManager.getBlockImages(),
 		});
+		if (override) this._validateBuiltInModel?.(override.model);
+		return override;
 	}
 
 	/**
@@ -8432,6 +8439,7 @@ export class AgentSession {
 		const len = scopedModels.length;
 		const nextIndex = direction === "forward" ? (currentIndex + 1) % len : (currentIndex - 1 + len) % len;
 		const next = scopedModels[nextIndex];
+		this._validateBuiltInModel?.(next.model);
 		const thinkingLevel = this._getThinkingLevelForModelSwitch(next.thinkingLevel);
 		const serviceTier = this._getServiceTierForModelSwitch();
 
@@ -8472,6 +8480,7 @@ export class AgentSession {
 		const len = availableModels.length;
 		const nextIndex = direction === "forward" ? (currentIndex + 1) % len : (currentIndex - 1 + len) % len;
 		const nextModel = availableModels[nextIndex];
+		this._validateBuiltInModel?.(nextModel);
 
 		const thinkingLevel = this._getThinkingLevelForModelSwitch();
 		const serviceTier = this._getServiceTierForModelSwitch();
@@ -9454,9 +9463,13 @@ export class AgentSession {
 		fallback?: { model: Model<Api>; apiKey: string; headers?: Record<string, string> },
 		requiredContextTokens?: number,
 	): Promise<{ model: Model<Api>; apiKey: string; headers?: Record<string, string> } | undefined> {
+		const admit = (resolved: typeof fallback) => {
+			if (resolved) this._validateBuiltInModel?.(resolved.model);
+			return resolved;
+		};
 		const sessionModel = this.model;
 		if (!sessionModel) {
-			return fallback;
+			return admit(fallback);
 		}
 		const resolveSessionAuth = async () => {
 			if (fallback) {
@@ -9467,8 +9480,9 @@ export class AgentSession {
 		};
 		const selector = this.settingsManager.getAuxiliaryModel()?.trim().toLowerCase();
 		if (!selector || `${sessionModel.provider}/${sessionModel.id}`.toLowerCase() === selector) {
-			return await resolveSessionAuth();
+			return admit(await resolveSessionAuth());
 		}
+		let resolved: typeof fallback;
 		try {
 			const model = (await this._authenticatedRlmModels()).find(
 				(candidate) => `${candidate.provider}/${candidate.id}`.toLowerCase() === selector,
@@ -9492,13 +9506,15 @@ export class AgentSession {
 			) {
 				throw new Error("auxiliary model context window is too small for the request");
 			}
-			return { model: requestModel, apiKey, headers };
+			resolved = { model: requestModel, apiKey, headers };
 		} catch {
 			// Error details from the auth stack can embed credential material, so only
 			// the selector is logged (CodeQL js/clear-text-logging).
 			console.warn(`Warning: auxiliaryModel "${selector}" unusable for ${purpose}; using the session model.`);
-			return await resolveSessionAuth();
+			resolved = await resolveSessionAuth();
 		}
+		// A policy refusal must propagate, not become an auth fallback.
+		return admit(resolved);
 	}
 
 	private async _reviewAutoRefine(context: AutoRefineReviewRequest, signal?: AbortSignal): Promise<AutoRefineReview> {
@@ -12646,6 +12662,7 @@ export class AgentSession {
 			modelSelection = await this._resolveRlmSubagentModel(
 				requestedModel ?? this.settingsManager.getSubagentDefaultModel(),
 			);
+			this._validateBuiltInModel?.(modelSelection.model);
 			if (requestedThinkingLevel !== undefined) {
 				const supported = getSupportedThinkingLevels(modelSelection.model) as ThinkingLevel[];
 				if (!supported.includes(requestedThinkingLevel)) {
