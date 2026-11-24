@@ -1,10 +1,10 @@
 ---
 id: PAPI-12
 title: Define and share named factory machines
-status: Ready for Merge
+status: Done
 assignee: []
 created_date: '2026-11-22T22:17:00Z'
-updated_date: '2026-11-24T21:13:00Z'
+updated_date: '2026-11-24T21:18:00Z'
 labels: []
 milestone: m-0
 dependencies: []
