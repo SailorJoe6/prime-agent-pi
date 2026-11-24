@@ -140,3 +140,50 @@ candidate commit or a release. The other six targets require matrix evidence:
 
 Windows Bash and Android Termux source routes are unchanged and were not tested
 in this slice. No publication, feed, update, or rollback behavior was tested.
+
+## Tagged GitHub Release manifest and discovery (PAPI-61)
+
+Pi release tags use `pi-vX.Y.Z[.R][-preview.N]`. Omit a zero repair revision;
+use a positive numeric preview sequence and mark preview releases as GitHub
+prereleases. The manifest and downloads live under the same tag in
+`SailorJoe6/prime-agent-pi`, never under a moving channel tag. Use one clean
+source commit and one catalog commit across all eight native targets.
+
+To prepare metadata offline, collect the eight tested workflow artifacts as
+separate directories under one parent (or flatten the receipts and archives).
+Then supply the installer bytes and an output directory:
+
+```sh
+node_modules/.bin/tsx scripts/build-pi-release-manifest.ts \
+  "$artifacts" "$installer" "$output"
+```
+
+The command only produces `pi-release-manifest.json` and `SHA256SUMS`; it does
+not copy the archives or installer or make network calls. The manifest records
+schema version, canonical tag, public version, channel, optional preview
+sequence, package version, source/catalog SHAs, and exactly one entry per
+native target with archive and executable SHA-256. The installer is named
+`install-pi.sh` on the release and also has a SHA-256 entry. The manifest is
+not a signature or proof that the assets were validated for publication.
+
+The read-only discovery helper lists Pi GitHub Releases and selects the newest
+complete candidate numerically. By default it considers stable releases only;
+preview opt-in considers stable and prerelease candidates together. It skips
+legacy tags, drafts, mismatched channels, incomplete listings, and manifests
+that do not match their tag or asset naming contract. It returns the tagged
+asset URL prefix and validated metadata, not verified download bytes. A caller
+must verify bytes before use and must not treat an older complete candidate as
+permission to downgrade.
+
+Offline smoke: the builder consumed all eight archives and receipts from
+[Actions run 45310741960](https://github.com/SailorJoe6/prime-agent-pi/actions/runs/45310741960)
+at source `8583ed3dd3f613a11b67c971cd0784a3645e9257`, plus an installer fixture
+with the exact bytes `#!/bin/sh\nexit 71\n`. It produced tag
+`pi-v0.10.2.10-preview.3` and manifest SHA-256
+`bfcbca8b8de6b973db48b21644977a38e470eae2be7ca5f93ecbadcbdb5ed27b`.
+The builder checked all eight archive hashes; executable hashes came from
+the already-verified receipts. Discovery used simulated GitHub responses.
+
+The installer and production callers are not wired in this slice. Startup
+notices, the explicit CLI updater, interactive update, repair, and rollback
+still need the same end-to-end verified install path. No publication is enabled.
