@@ -4,7 +4,7 @@ title: Define and share named factory machines
 status: In Progress
 assignee: []
 created_date: '2026-11-22T22:17:00Z'
-updated_date: '2026-11-24T14:50:00Z'
+updated_date: '2026-11-24T14:54:00Z'
 labels: []
 milestone: m-0
 dependencies: []
@@ -55,6 +55,8 @@ Make validated machine graphs available by name through the harness and library 
 Slice checkpoint: Python definition validation implemented and tested. Continue with step 2 after slice review; defer the changelog to the CLI slice in step 4.
 
 Slice checkpoint: harness save/get/list implemented. Stored-first selection remains pending until the validated library reader is available. Continue with the MACHINE.md slice only after review.
+
+Accepted slice 2 review finding at 72bd16368: save_factory publishes the candidate to its in-memory cache before the atomic write; when the write raises, a later unrelated harness save can persist the rejected candidate. The next execute pass must revise only this failure path. Preserve the original exception and the prior definition or absence in memory and on disk. Prove replacement and initial-save failures with benign formatting fixtures and a subsequent unrelated successful write. Publish the revision and stop for review before library or CLI work.
 <!-- SECTION:PLAN:END -->
 
 ## Implementation Notes
