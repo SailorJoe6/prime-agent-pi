@@ -245,6 +245,8 @@ mock GitHub metadata and installer bytes; they do not publish a release or
 exercise production downloads. The Docker evidence below is a separate local
 validation, not publication-gate proof.
 
+The npm native bridge test runs a partial package in a temporary install prefix. Its files are transpiled individually, not bundled. When a bridge dependency gains a runtime import, include that module and its local dependencies in the fixture’s file list. In particular, `version-check` needs Pi release discovery, manifest, and version modules. To validate the fixture from `packages/coding-agent`, run `npx tsx ../../node_modules/vitest/dist/cli.js --run test/npm-native-bridge.test.ts`.
+
 ### Exact-candidate Docker lifecycle (PAPI-61)
 
 Built from clean `a8b6aa3338f1863121aafd9ef895e0e8b737c419` and catalog
