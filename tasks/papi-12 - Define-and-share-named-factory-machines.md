@@ -4,7 +4,7 @@ title: Define and share named factory machines
 status: In Progress
 assignee: []
 created_date: '2026-11-22T22:17:00Z'
-updated_date: '2026-11-24T20:47:00Z'
+updated_date: '2026-11-24T20:50:00Z'
 labels: []
 milestone: m-0
 dependencies: []
@@ -75,6 +75,8 @@ Python library revision checkpoint: both accepted Astra findings are repaired an
 Accepted Astra follow-up on code 1ee9b24078f126ebd57343226ecf3a3b60323f69: on a case-insensitive volume a valid format-Document/MACHINE.md declaring format-document is reachable through the lowercase canonical import path, but comparing literal directory spelling lets a-draft win after a successful import. Prefer the valid matching file actually reachable via <root>/<name>/MACHINE.md within each library, using real filesystem path semantics rather than unconditional case folding. Preserve shared precedence, different-name occupant protection, and invalid-canonical fallback. Add a portable benign formatting regression proving imported bytes win list/select/export and the draft is unchanged; demonstrate failure before repair on the affected volume. Publish exact code and task evidence and stop for review without CLI, execution, status changes, merge, release or activation.
 
 Filesystem canonical lookup is repaired and regression-tested. Stop for review before CLI work. Both criteria remain unchecked.
+
+Independent Astra review accepted the inert Python MACHINE.md slice at ca981f59a65d187744c68e6cf957101bf6295683. Advance only to the remaining inert TypeScript CLI (steps 4–5): factory list, import <path>, export <name> --out <path>, with help, text/JSON output and actionable nonzero failures. Reuse Pi kernel Python discovery and the existing validated Python library, and keep CLI export library-only. Prove formatting graph and byte round trips, no persistence on invalid references, no-clobber export, stored-first selection and library-only selection without a harness write. Finish documentation and a coding-agent changelog fragment, run focused native tests and both repository checks, and publish exact code and task evidence for review. Preserve Pi/public API and lifecycle status. No execution, terminal controls, packaging, product policy, merge, release or activation.
 <!-- SECTION:PLAN:END -->
 
 ## Implementation Notes
