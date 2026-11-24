@@ -4,7 +4,7 @@ title: Define and share named factory machines
 status: In Progress
 assignee: []
 created_date: '2026-11-22T22:17:00Z'
-updated_date: '2026-11-24T21:05:00Z'
+updated_date: '2026-11-24T21:11:00Z'
 labels: []
 milestone: m-0
 dependencies: []
@@ -86,6 +86,8 @@ Independent Astra review accepted the inert Python MACHINE.md slice at ca981f59a
 Steps 4–5 are implemented and tested. Stop for independent review; both criteria remain unchecked.
 
 Accepted Astra revision against a4c5903ba4575452b91b5dfc51888fc52b900272, bounded to two CLI findings. Match released 763094e1: expose repo/user source labels at the CLI boundary without changing Pi library naming, roots or precedence. Import returns created=true for first installation and false for replacement, from the validated write, without altering Python public signatures, destination protection or selection. List emits one warning per broken file path in text and JSON even when files declare the same name; keep name-based resolution unchanged. Add benign formatting CLI regressions for both source levels, first/replacement import, and two broken files declaring one name. Preserve demonstrated AC behavior. Publish exact code and task evidence and stop for independent review; keep In Progress and both criteria unchecked. No workflow execution, offensive work, merge, release, activation or other task changes.
+
+Both accepted CLI findings are implemented and verified against a4c5903ba and the released 763094e1 behavior. Stop for independent review with both criteria unchecked.
 <!-- SECTION:PLAN:END -->
 
 ## Implementation Notes
@@ -104,10 +106,12 @@ Python library revision of c1fbb276b7dbbc78ee5738232cc3a4b8791cbe76: both Astra 
 Filesystem canonical lookup revision of 1ee9b24078f126ebd57343226ecf3a3b60323f69: the portable mixed-case formatting regression failed before repair on the case-insensitive macOS test volume (list selected a-draft) and passed after repair. Match the filesystem identity of the canonical path only among valid same-name definitions within each library. Import wins list/select/export, export preserves source bytes, the draft stays unchanged, and invalid canonical files fall back. Shared precedence and different-name occupant protection still pass. Validation: 9 library, 58 harness, and 5 factory-spec tests, both npm checks, and git diff --check passed. Reproduce: (cd prime-agent-runtime && uv run --locked python -m unittest discover -s test -p test_machine_library.py -v); (cd prime-agent-runtime && uv run --locked python -m unittest discover -s test -p test_harness.py); (cd prime-agent-runtime && uv run --locked python -m unittest discover -s test -p test_factory_spec.py -v).
 
 The inert factory CLI delegates list, import and export to the validated library using Pi kernel Python and a JSON boundary. Eight native CLI tests passed with shuffle seeds 41 and 173, 63 public-command tests passed, and 72 targeted Python tests passed. Verified help without Python, text/JSON and failure behavior, formatting graph and byte round trips, broken vs missing definitions, invalid references preserving absence and prior bytes, no-clobber, and shared precedence. Python also verifies stored-first selection, read-only fallback and library-only export. Three deliberate isolated-runtime mutations failed as expected (skipped import validation, nonexclusive export and reversed library precedence); the unmodified candidate passed. Reproduce from packages/coding-agent with the current kernel venv provisioned by test:ci or selected with PRIME_AGENT_KERNEL_PYTHON: npx tsx ../../node_modules/vitest/dist/cli.js --run test/factory-command.test.ts --sequence.shuffle --sequence.seed 173; run test/public-command.test.ts the same way. Focused Python files: test_machine_library.py, test_harness.py, test_factory_spec.py (uv run --locked python -m unittest discover -s test -p <file> from prime-agent-runtime). Both npm checks and git diff --check passed.
+
+CLI list maps shared/personal to repo/user only at the CLI boundary and emits one warning per broken path in text and JSON. Import reports created from the validated atomic install, true for first install and false for replacement; Python signature, byte preservation, precedence, occupant protection, and name-based broken/missing resolution are unchanged. Four targeted cases failed on a4c5903ba as expected (missing created, shared label, one rather than two warnings in text and JSON). The revised runtime passed all 10 CLI tests at shuffle seeds 41 and 173, 63 public-command tests, 72 focused Python tests, npm run check, npm run check:test-policy, and git diff --check. Reproduce from packages/coding-agent with PRIME_AGENT_KERNEL_PYTHON pointing to a provisioned kernel and PYTHONPATH to the exact checkout prime-agent-runtime/src: npx tsx ../../node_modules/vitest/dist/cli.js --run test/factory-command.test.ts --sequence.shuffle --sequence.seed 173. For red, point PYTHONPATH to the baseline a4c5903ba runtime source and select -t "without overwriting|same name|per broken". Run test/public-command.test.ts with the same Vitest runner. From prime-agent-runtime, run uv run --locked python -m unittest discover -s test -p <file> for test_machine_library.py, test_harness.py and test_factory_spec.py.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
 
 <!-- SECTION:FINAL_SUMMARY:BEGIN -->
-Implemented inert definition validation, named harness storage, MACHINE.md library and selector, and the factory list/import/export CLI. Formatting graph and byte round trips, validation before persistence, no-clobber export, and stored-first/read-only fallback are verified. Pending independent review; no execution behavior added.
+Implemented inert definition validation, named harness storage, MACHINE.md library and selector, and the factory list/import/export CLI. Formatting graph and byte round trips, validation before persistence, no-clobber export, and stored-first/read-only fallback are verified. Pending independent review; no execution behavior added. The CLI revision reports repo/user sources and import creation status, and lists each broken path separately in text and JSON. Revised candidate pending independent review.
 <!-- SECTION:FINAL_SUMMARY:END -->
