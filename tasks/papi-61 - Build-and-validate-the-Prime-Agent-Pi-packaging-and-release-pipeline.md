@@ -4,7 +4,7 @@ title: Build and validate the Prime Agent Pi packaging and release pipeline
 status: In Progress
 assignee: []
 created_date: '2026-11-24T00:57:00Z'
-updated_date: '2026-11-24T14:24:00Z'
+updated_date: '2026-11-24T20:55:00Z'
 labels: []
 dependencies: []
 documentation:
@@ -207,6 +207,10 @@ From the clean reviewed Prime Claw checkout `4ed96f720d799f3da4aebcab8eb84544801
 Container-local plugin apply/check and offline RPC discovery passed: five removed commands absent, five expected native skills loaded from their installed paths, thirteen required tools registered, and no extension shadowing of the checked built-ins. Verified clean teardown and independently confirmed the exact container ID no longer exists. The retained Tier 1 manifest SHA-256 is `8dd3adffd490ea869cc3b8ccc435395c28daefef75e2bc79dfe6adb5eb486443`; all six inventoried evidence files rehashed successfully, including the startup network receipt, installed-artifact receipt and setup/teardown log.
 
 This clears the prior offline-runner preflight blocker only for this discovery run. It is not tool invocation, full daemon/session/Episode coverage, DD-003 qualification, or release approval. Full hosted CI, exact Orca compatibility, parity and publication gates remain open. No code, policy, lifecycle, host installation or release change.
+
+### Bounded follow-up: npm native bridge CI fixture
+
+Joe authorized one test-only packaging repair in the existing Episode. At `ce83fb61f5ec28265c0cbf5af140f12a107577f4`, use [failed hosted CI run 45415621815](https://github.com/SailorJoe6/prime-agent-pi/actions/runs/45415621815) to verify the reported 42 `npm-native-bridge.test.ts` failures traced to `version-check` requiring `pi-release-discovery`, omitted from the partial test package. Reproduce the original failure and correct only fixture packaging and its required local module closure; preserve all assertions and production behavior. Run the repaired focused suite, `npm run check`, `npm run check:test-policy`, and `git diff --check`. Keep the two other shard failures separate unless concrete evidence connects them; do not fix them in this slice. Publish code and native PAPI-61 evidence separately on the existing review refs, then stop for review. Prior discovery evidence applies to its exact tested bytes only. No new Episode, merge, release, tag, version bump, host activation, or PAPI-12 changes.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
