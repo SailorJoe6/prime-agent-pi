@@ -4,7 +4,7 @@ title: Build and validate the Prime Agent Pi packaging and release pipeline
 status: In Progress
 assignee: []
 created_date: '2026-11-24T00:57:00Z'
-updated_date: '2026-11-24T03:58:00Z'
+updated_date: '2026-11-24T04:05:00Z'
 labels: []
 dependencies: []
 documentation:
@@ -57,6 +57,8 @@ modified_files:
   - packages/coding-agent/README.md
   - packages/coding-agent/docs/settings.md
   - packages/coding-agent/src/modes/shared/startup-notices.ts
+  - scripts/pi-publication-decision.ts
+  - packages/coding-agent/test/pi-publication-decision.test.ts
 type: task
 ordinal: 61000
 ---
@@ -141,10 +143,12 @@ Handoff: owner accepted reviewed Docker lifecycle evidence at docs e99865bf49ced
 AC4 packaged compatibility validation (partial): exact Pi 0.10.2.2 Linux ARM64 musl archive 1757e01e1a54f0cdca890a20c3837b7fafa2be45a11bcc66666b14144abe933d and executable c186d178cc1844bbcd07cccc70b5e78a4723be8e1f2a401252e449c83eb75eed, clean source a8b6aa3338f1863121aafd9ef895e0e8b737c419, catalog 01f4d46dd5157ec73f8faf440214088237c81d59, rehashed. Actual upstream v0.9.8 at 7d442aafa985f9342134fac16c2ef41f03fb45c1, asset 599337808 SHA-256 c929ff09d604ca066bae2f7ed1aeab509a5720122efe1e99347e827539645452: same native root, home, and launcher; unchanged public TypeScript extension hook and slash command on both versions; Pi reopened original UUID/title/transcript, four files byte-identical, seven original session records exact prefix. Offline Pi rollback restored v0.9.8 and same daemon session. Custom tool registered only, no full API/TUI claim. Packaged Python: uv 0.10.6/CPython 3.11.14 normal fresh venv, offline staged dependencies, default ipython only, two real successful cells sharing a variable and PID. Eight optional skill installs warned; skill bootstrap unverified. Orca 1.4.247: real headless local setup and exact worktree, PTY, native Pi launch, tui-idle, writable terminal and matching durable header with no assignment; not Desktop/chat, assignment or recovery coverage. Prime Claw not run: at 177be95655a01024bb2db3a1acfb3c9d2342718a the installation policy and DD-003 qualify only cwd-fix-v0.9.8-r1; DD-005 isolation is not requalification authority. Unblock with explicit approval for the exact Pi candidate and an approved Docker-only input. No incompatibility observed or inferred. npm run check:test-policy passed; docs/pi-release-engineering.md records pins, commands and gaps. Raw local recipes/logs under papi61-ac4-ljhlgvm2, subdirs upstream-continuity, python-first and integrations. No acceptance checkbox changes, release, activation, or publication-gate work; stop for owner review.
 
 Handoff: owner accepted independently reviewed partial AC4 at docs 3d8f51d94cff05286861bb4332f4845559ee9b55 / Backlog 9f32b439c3f9256251b510b02960cc6fa6e05152, tested source a8b6aa3338f1863121aafd9ef895e0e8b737c419. Keep exact scoped results and limits; Prime Claw qualification unresolved, do not run or change it. Next bounded slice: implement and validate publication decision logic with nonpublishing fixtures only. Require explicitly marked previews from validated canonical-main code changes; require an explicit merged stable bump and all five product-contract checks for stable, bound to exact source, version and artifact bytes. Reject missing/mismatched evidence (including required Prime Claw/parity evidence) and preserve immutable prior releases. Keep real publication disabled: no live write credentials for release work, real writer calls, merge, tag, public version bump, release or activation. Publish scoped code/task evidence on normal task refs only and stop for review.
+
+Fixture-only publication decision implemented in scripts/pi-publication-decision.ts with test/pi-publication-decision.test.ts and reproduction in docs/pi-release-engineering.md. Canonical Pi main push and matching manifest SHA required. Preview requires explicit marking, code change and passing repository receipt; stable requires explicit forward version bump and all five contract checks, including a separate Prime Claw compatibility receipt and exact parity claim in notes. Evidence subject binds the exact manifest, SHA256SUMS and release notes; supplied digests must match all eight archives and the installer. Missing inventory, matching existing tag or release, and missing/mismatched checks deny; in-memory publisher fixtures preserve prior releases. npm run check and 104 focused Vitest tests passed (63 decision, 12 manifest builder, 29 version). Worker mutation checks failed as expected when parity notes binding, tag collision guard, Prime Claw receipt requirement or independent asset digest comparison was removed in disposable copies. Fixture observations only: no release trigger, writer, live inventory/evidence authentication, Prime Claw run, parity qualification, version bump, tag, merge, release or activation. No acceptance checkbox changed; stop for owner review.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
 
 <!-- SECTION:FINAL_SUMMARY:BEGIN -->
-Partial AC4: verified released v0.9.8 extension/session continuity and rollback, packaged Python kernel, and Orca headless terminal launch. Prime Claw requires separate Docker-only qualification approval; not tested. Ready for slice review.
+Fixture-only preview/stable publication decision logic is ready for review; 104 focused tests and npm run check passed. Live publishing remains disabled and Prime Claw/parity evidence remains unresolved.
 <!-- SECTION:FINAL_SUMMARY:END -->
