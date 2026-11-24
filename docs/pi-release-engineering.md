@@ -332,3 +332,34 @@ in this probe.
 above. They do not establish full API compatibility, Prime Claw qualification,
 other platform behavior, upstream parity or publication readiness. No live
 provider, operator runtime, or release was changed.
+
+## Publication decisions (fixture only)
+
+`scripts/pi-publication-decision.ts` evaluates supplied observations without
+calling GitHub or loading credentials. It accepts only a canonical Pi `main`
+push matched to the manifest source. A preview needs a code change, explicit
+prerelease marking, and passing repository checks. Stable needs a forward,
+explicit stable-version bump matching the commit and manifest version, plus all
+five checks in [product contract §5](product-contract.md#5-publication-and-release-evidence).
+Compatibility requires a separate Prime Claw receipt. The stable parity receipt
+must cover the exact claim included in the release notes.
+
+The decision compares the nine supplied asset digests (eight archives and the
+installer) with both the validated manifest and `SHA256SUMS`. The evidence
+subject hashes the exact manifest, checksum and release-note text together; the
+manifest binds the source, version, tag and asset digests. Each passing check
+must name that subject and identify its evidence. Missing release inventory
+blocks the decision. An existing tag or release with the same tag blocks even
+an identical bundle; other prior releases are left alone.
+
+Run the credential-free fixtures from `packages/coding-agent`:
+
+```sh
+../../node_modules/.bin/tsx ../../node_modules/vitest/dist/cli.js --run test/pi-publication-decision.test.ts
+```
+
+The fixtures compute digests from synthetic bytes and use an in-memory release
+inventory. A `fixture-candidate` is not publication authority. This slice has
+no trigger or writer and does not authenticate CI receipts, prove merge or bump
+provenance beyond the supplied observations, check live release inventory, or
+qualify Prime Claw or upstream parity.
