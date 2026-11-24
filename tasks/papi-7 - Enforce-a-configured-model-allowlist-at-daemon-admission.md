@@ -1,10 +1,10 @@
 ---
 id: PAPI-7
 title: Enforce a configured model allowlist at daemon admission
-status: Ready for Merge
+status: Done
 assignee: []
 created_date: '2026-11-22T22:04:00Z'
-updated_date: '2026-11-23T23:03:00Z'
+updated_date: '2026-11-24T00:48:00Z'
 labels: []
 dependencies: []
 references:
