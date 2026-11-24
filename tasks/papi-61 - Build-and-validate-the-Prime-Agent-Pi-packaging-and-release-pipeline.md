@@ -4,7 +4,7 @@ title: Build and validate the Prime Agent Pi packaging and release pipeline
 status: In Progress
 assignee: []
 created_date: '2026-11-24T00:57:00Z'
-updated_date: '2026-11-24T20:55:00Z'
+updated_date: '2026-11-24T21:02:00Z'
 labels: []
 dependencies: []
 documentation:
@@ -60,6 +60,7 @@ modified_files:
   - scripts/pi-publication-decision.ts
   - packages/coding-agent/test/pi-publication-decision.test.ts
   - scripts/rehearse-pi-release.ts
+  - packages/coding-agent/test/npm-native-bridge.test.ts
 type: task
 ordinal: 61000
 ---
@@ -211,10 +212,20 @@ This clears the prior offline-runner preflight blocker only for this discovery r
 ### Bounded follow-up: npm native bridge CI fixture
 
 Joe authorized one test-only packaging repair in the existing Episode. At `ce83fb61f5ec28265c0cbf5af140f12a107577f4`, use [failed hosted CI run 45415621815](https://github.com/SailorJoe6/prime-agent-pi/actions/runs/45415621815) to verify the reported 42 `npm-native-bridge.test.ts` failures traced to `version-check` requiring `pi-release-discovery`, omitted from the partial test package. Reproduce the original failure and correct only fixture packaging and its required local module closure; preserve all assertions and production behavior. Run the repaired focused suite, `npm run check`, `npm run check:test-policy`, and `git diff --check`. Keep the two other shard failures separate unless concrete evidence connects them; do not fix them in this slice. Publish code and native PAPI-61 evidence separately on the existing review refs, then stop for review. Prior discovery evidence applies to its exact tested bytes only. No new Episode, merge, release, tag, version bump, host activation, or PAPI-12 changes.
+
+### npm native bridge CI fixture repair — candidate for review
+
+[CI run 45415621815, shard 3/3](https://github.com/SailorJoe6/prime-agent-pi/actions/runs/45415621815/job/138520979500) at `ce83fb61f5ec28265c0cbf5af140f12a107577f4` reported 42/42 bridge failures and `ERR_MODULE_NOT_FOUND` for `dist/utils/pi-release-discovery.js`, imported by `dist/utils/version-check.js`. Reproduced 42/42 failures with the same missing import on macOS ARM64, Node 25.6.0, using `npx --no-install tsx ../../node_modules/vitest/dist/cli.js --run test/npm-native-bridge.test.ts` from `packages/coding-agent`.
+
+Candidate `5ba48dfea8c9a47d247b2b419697d247134a8f90` adds `pi-release-discovery`, `pi-release-manifest` and `pi-release-version` to the individually transpiled partial package, and documents the fixture. Production files and test assertions are unchanged. The first post-fix local run on Node 25.6.0 passed 41/42: the first command-handoff case fell back to Node rather than native; no missing-module error remained and that fallback's cause was not established. A separate focused run with checksum-verified Node 22.23.5 (the hosted runtime version), on macOS ARM64, passed 42/42. `npm run check`, `npm run check:test-policy`, and `git diff --check` passed.
+
+[Shard 2/3](https://github.com/SailorJoe6/prime-agent-pi/actions/runs/45415621815/job/138520979554) separately failed `daemon-agent-roster.test.ts` and `suite/agent-session-autonomous.test.ts`; neither was changed or shown to share the packaging cause. No hosted rerun on this repair, no transfer of historical artifact evidence, and no release or acceptance action.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
 
 <!-- SECTION:FINAL_SUMMARY:BEGIN -->
 The exact Pi 0.10.2.3 Linux ARM64 musl candidate passed Prime Claw Tier 1 discovery in disposable Docker offline from startup; artifact identity and clean teardown verified. Discovery only. Full hosted CI, exact Orca, parity and release gates remain open.
+
+The npm native bridge fixture now includes its Pi release module dependencies. All 42 focused tests passed locally on Node 22.23.5; repository checks passed. Hosted confirmation and the two separate shard 2/3 failures remain open. No production or release change.
 <!-- SECTION:FINAL_SUMMARY:END -->
