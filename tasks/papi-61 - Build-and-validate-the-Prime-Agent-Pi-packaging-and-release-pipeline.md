@@ -4,11 +4,16 @@ title: Build and validate the Prime Agent Pi packaging and release pipeline
 status: In Progress
 assignee: []
 created_date: '2026-11-24T00:57:00Z'
-updated_date: '2026-11-24T01:47:00Z'
+updated_date: '2026-11-24T01:50:00Z'
 labels: []
 dependencies: []
 documentation:
   - docs/product-contract.md
+  - docs/pi-release-engineering.md
+modified_files:
+  - packages/coding-agent/src/utils/pi-release-version.ts
+  - packages/coding-agent/test/pi-release-version.test.ts
+  - docs/pi-release-engineering.md
 type: task
 ordinal: 61000
 ---
@@ -43,3 +48,9 @@ Build and validate without publishing as part of this design task's initial engi
 
 5. Prove and document the candidate (AC1–5). Run `npm run check`, `npm run check:test-policy`, changed focused suites and the required CI jobs for the exact candidate; use real release inputs for artifact evidence and distinguish fixture-only checks. Map eight archive/target receipts to checksums. In Docker with disposable HOME and local release fixtures, install an older package, update through the existing user path, verify version and user-state continuity, then roll back to the known bytes and reopen saved state. Smoke-test public extension imports, Orca/Prime Claw integration and Python-first behavior without paid provider calls. Record commands, run IDs, source SHA, checksums, image/architecture and actual coverage limits in release engineering docs and the task evidence. Leave parity closure and the first stable bump to their separate work.
 <!-- SECTION:PLAN:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Slice 1 (AC1–2, partial): defined the shared Pi release identity comparator, stable-default/preview-opt-in selection, and npm-compatible encoding in packages/coding-agent/src/utils/pi-release-version.ts. Local Darwin arm64, Node v25.6.0/npm 11.19.0: npm run check and npm run check:test-policy passed; test/pi-release-version.test.ts passed all 29 cases with Vitest shuffle seeds 61, 62 and 63. A temporary encoding/ordering/selection mutation failed 28 cases and was restored before seed 63. This is fixture evidence only; no package artifacts, registry-independent lockstep staging, CI, Docker lifecycle, or consumer wiring proven. Next: stage the pack-only manifests and prove local pack/install of the lockstep dependencies before building the platform matrix. No acceptance box checked, version bumped, or release published.
+<!-- SECTION:NOTES:END -->
