@@ -4,7 +4,7 @@ title: Build and validate the Prime Agent Pi packaging and release pipeline
 status: In Progress
 assignee: []
 created_date: '2026-11-24T00:57:00Z'
-updated_date: '2026-11-24T02:44:00Z'
+updated_date: '2026-11-24T02:48:00Z'
 labels: []
 dependencies: []
 documentation:
@@ -95,6 +95,8 @@ Slice 4A (AC3 partial), ready for review: implemented the offline tagged release
 Handoff: revise slice 4A at code 318cfc075314ccc6001017867599273fb3a04150 / Backlog c11a8e97d7dd2afd1e4e4b3e68ad2c408b24e1e2 before advancing. Review confirmed discovery checks uploaded names and tagged URLs but ignores available GitHub SHA-256 asset metadata. For the installer and all eight archives, compare available SHA-256 metadata to the tagged manifest and skip a candidate on explicit disagreement; preserve behavior when metadata is omitted. Use inert mocked metadata to prove fallback to an older consistent release; do not download or execute payloads for this check. Publish the bounded repair and evidence, then stop for review before installer or updater integration. No live release, tag, merge, install or activation.
 
 Slice 4A digest revision ready for review (code tree 3535a8d056b405826e31a24d850b52a7c5526260): compare any GitHub SHA-256 digest for install-pi.sh and all eight archives against their tagged manifest entries. Skip disagreement and continue to the next candidate; omitted and null digests retain prior behavior. Mocked listings verify fallback for a separate mismatch on every payload and acceptance of mixed matching/absent metadata. The nine mismatch tests failed on unmodified discovery and passed after the repair. npm run check passed (including check:test-policy); 61 focused version/manifest/discovery tests passed with shuffle seed 61 and 20 discovery tests passed with seed 62. Only release listing and manifest metadata were simulated; no payload download or execution, live release, tag, merge, install, or activation. Installer/updater integration remains held for review; no acceptance checkbox changed.
+
+Handoff: owner accepted revised slice 4A at code bd8bf6337eedf41c629157ddf84dc906ba0b13a4 / Backlog c10c51e07a4dc40f37f2bf9cbebc072131d6b3e8. Independent review found no material defect in the explicit GitHub SHA-256 mismatch fallback across all nine payloads. That evidence covers metadata consistency, not payload verification. Advance one bounded integration slice: wire the Pi-owned tagged feed into the checksum-verifying installer and existing startup notice, explicit CLI and interactive update/repair paths. Verify installer and selected archive bytes before execution or replacement as applicable. Keep stable default and preview opt-in, preserve explicit confirmation, state and intentional rollback/legacy recovery, and avoid upstream/R2/npm distribution fallbacks. Validate with disposable nonpublishing fixtures, report actual coverage and limits, and stop before full Docker lifecycle/compatibility and publication-gate proof. No live release, tag, version bump, merge, operator-runtime install or activation.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
