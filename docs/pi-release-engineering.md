@@ -242,5 +242,64 @@ and the focused suites from `packages/coding-agent`:
 The shell check uses disposable archive and transport fixtures for stable install,
 preview replacement, checksum rejection, and local rollback. TypeScript tests
 mock GitHub metadata and installer bytes; they do not publish a release or
-exercise production downloads. Full Docker lifecycle and saved-state compatibility,
-interactive terminal restart/restore, and publication gates require separate evidence.
+exercise production downloads. The Docker evidence below is a separate local
+validation, not publication-gate proof.
+
+### Exact-candidate Docker lifecycle (PAPI-61)
+
+Built from clean `a8b6aa3338f1863121aafd9ef895e0e8b737c419` and catalog
+`01f4d46dd5157ec73f8faf440214088237c81d59`, with Node 25.6.0 and Bun 1.4.0.
+These are two real `linux-arm64-musl` archives from the same source tree. Their
+version labels are local fixtures, not published versions or parity claims.
+
+| Fixture | Archive SHA-256 | Executable SHA-256 |
+| --- | --- | --- |
+| `0.10.2.1` | `4d7f32bf488b160c021f2a66f70213ccd454908ed4424727b77981f0880d0c7e` | `a44a94406bbc47e95cd74b54ceafb5d3d29841a8e64fcf87a56ffc68993cf7fb` |
+| `0.10.2.2` | `1757e01e1a54f0cdca890a20c3837b7fafa2be45a11bcc66666b14144abe933d` | `c186d178cc1844bbcd07cccc70b5e78a4723be8e1f2a401252e449c83eb75eed` |
+
+```sh
+node scripts/build-pi-native-archive.mjs linux-arm64-musl "$CATALOG" "$OUT/old" 0.10.2.1
+node scripts/build-pi-native-archive.mjs linux-arm64-musl "$CATALOG" "$OUT/new" 0.10.2.2
+(cd "$OUT/old" && shasum -a 256 -c SHA256SUMS)
+(cd "$OUT/new" && shasum -a 256 -c SHA256SUMS)
+```
+
+Both runs used Docker 29.9.3, `--pull never --network none --platform linux/arm64`,
+Alpine 3.21.10 (`alpine@sha256:bc21487101ae47172509130ee1092cc273a831968d64b617776d1f69c81e42ab`),
+and disposable HOME and install roots. The bare image needs `libstdc++.so.6`.
+Both signed Alpine `libgcc` and `libstdc++` APKs (14.2.0-r4, aarch64) were
+checksum-checked and installed inside the containers with `apk --no-network`.
+A loopback HTTPS fixture supplied the release API and tagged payloads. The app
+used its real fetch path; the shell installer used a local-only curl substitute.
+Only the selected target had real archive bytes; the other manifest entries were
+metadata fixtures. No live release or model provider was contacted.
+
+- **CLI:** `PRIME_AGENT_PI_TAG=pi-v0.10.2.1 sh install-pi.sh 0.10.2.1`,
+  then `prime-agent update`, then `PI_OFFLINE=1 PI_SKIP_VERSION_CHECK=1
+  prime-agent update --rollback` after shutting down the fixture and verifying
+  connection refusal. Exit 0. Active versions were `0.10.2.1` → `0.10.2.2` →
+  `0.10.2.1`; executable bytes and archive activation hashes matched the receipts,
+  and the previous target swapped on rollback. Settings, synthetic auth,
+  extension, skill, and session files stayed byte-identical. Each active build
+  loaded a legacy public TypeScript extension and exported the original session
+  UUID and transcript. The extension registered a tool and command without
+  invoking a model.
+- **Terminal:** An Expect driver used a real Docker TTY and a faux model.
+  `/resume` and `/session` showed the original transcript, file and session ID.
+  Declining `/update --self --preview` kept stable `0.10.2.1`; confirming it
+  selected stable `0.10.2.2` from the fixture and saved the preview opt-in as
+  `nightly`. The same TTY relaunched into the new executable with `--resume`;
+  the replacement daemon and worker used the new executable. The UI rendered
+  both original messages and a restore notice. The session kept its original
+  records and appended `prime-agent.update_complete`. The driver timed out on a
+  post-restore status command sent before the editor was ready. Post-restore
+  status rendering and Ctrl-D were not verified; the process, settings and
+  session observations were captured independently before container removal.
+
+`npm run check` and nine focused Vitest suites passed on the tested source
+(188 tests, shuffle seed 61): native update, version check, settings, self-update
+with daemon, interactive relaunch, extension runner, daemon extension binding,
+and IPython bootstrap and provisioner. The Python tests were source-level;
+no packaged kernel or Orca/Prime Claw integration was exercised in Docker.
+This does not cover an actual v0.9.8 installation migration, preview archive
+bytes, other targets, live downloads, parity, or publication gates.
