@@ -36,8 +36,10 @@ reopened_spec = rlm.harness.get_factory("format-document")
 Each call defaults to the session-local store; pass `global_=True` for the
 shared global store. Names match exactly within the selected scope. A missing
 name returns `None`. A valid save replaces the definition with the same name;
-an invalid save raises `ValueError` without creating or replacing it. The store
-keeps the authored machine or DAG, not the compiled graph. Definitions share
+an invalid save raises `ValueError` without creating or replacing it. If the
+atomic write fails, the error propagates and the previous definition (or its
+absence) is preserved. A later harness write won't save the failed definition.
+The store keeps the authored machine or DAG, not the compiled graph. Definitions share
 Pi's existing harness file and are not included in the refinement prompt.
 
 Library lookup, sharing commands, and execution are not part of this API.

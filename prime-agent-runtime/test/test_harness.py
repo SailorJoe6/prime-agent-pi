@@ -78,6 +78,36 @@ class HarnessStateTest(unittest.TestCase):
             self.assertEqual(path.read_bytes(), original)
             self.assertEqual(state.get_factory("format-document"), formatting_definition())
 
+    def test_papi_12_failed_factory_write_cannot_leak_into_a_later_save(self):
+        name = "format-document"
+        for existing in (False, True):
+            with self.subTest(existing=existing), tempfile.TemporaryDirectory() as temp_dir:
+                path = Path(temp_dir) / "harness_state.json"
+                state = HarnessState(path)
+                previous = formatting_definition() if existing else None
+                if previous is not None:
+                    state.save_factory(name, previous)
+                candidate = formatting_definition()
+                candidate["states"][1]["subagent"]["prompt"] = "Format as a memo."
+                original = path.read_bytes() if existing else None
+                failure = OSError("Cannot replace harness state")
+
+                with patch("rlm.harness.os.replace", side_effect=failure):
+                    with self.assertRaises(OSError) as caught:
+                        state.save_factory(name, candidate)
+                self.assertIs(caught.exception, failure)
+                self.assertEqual(path.read_bytes() if path.exists() else None, original)
+                with self.subTest(phase="cached"):
+                    self.assertEqual(state.get_factory(name), previous)
+                    self.assertEqual(state.list_factories(), [name] if existing else [])
+
+                state.create_memory("House style", "Use headings.", id="style")
+                reopened = HarnessState(path)
+                self.assertEqual(reopened.entries["memory"]["style"].content, "Use headings.")
+                with self.subTest(phase="reopened after unrelated save"):
+                    self.assertEqual(reopened.get_factory(name), previous)
+                    self.assertEqual(reopened.list_factories(), [name] if existing else [])
+
     def test_papi_12_global_factory_scope_does_not_change_the_local_definition(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)

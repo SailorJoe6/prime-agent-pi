@@ -528,8 +528,16 @@ class HarnessState:
         except (TypeError, ValueError, RecursionError) as exc:
             raise ValueError(f"factory {name!r} rejected: spec must be JSON data ({exc})") from exc
         self._sync_from_disk()
+        previous = self._factory_definitions.get(name)
         self._factory_definitions[name] = encoded
-        self.save()
+        try:
+            self.save()
+        except BaseException:
+            if previous is None:
+                del self._factory_definitions[name]
+            else:
+                self._factory_definitions[name] = previous
+            raise
 
     def get_factory(
         self, name: str, *, global_: bool = False, **kwargs: Any
