@@ -132,6 +132,7 @@ class MachineLibrary:
         valid: dict[str, LibraryMachine] = {}
         broken: dict[str, str] = {}
         for source, root in (("shared", self.shared_dir), ("personal", self.personal_dir)):
+            level: dict[str, LibraryMachine] = {}
             for path in sorted(root.glob(f"*/{_FILE}")):
                 if not path.is_file():
                     continue
@@ -144,7 +145,10 @@ class MachineLibrary:
                 except (OSError, ValueError, RecursionError) as exc:
                     broken.setdefault(name, f"{path}: {exc}")
                     continue
-                valid.setdefault(name, LibraryMachine(machine, path, source, raw))
+                if name not in level or path.parent.name == name:
+                    level[name] = LibraryMachine(machine, path, source, raw)
+            for name, entry in level.items():
+                valid.setdefault(name, entry)
         return valid, broken
 
     def list_machines(self) -> list[LibraryMachine]:
@@ -170,6 +174,14 @@ class MachineLibrary:
         except (OSError, ValueError, RecursionError) as exc:
             raise ValueError(f"{source}: {exc}") from exc
         destination = self.personal_dir / machine.name / _FILE
+        try:
+            occupant = _parse(destination.read_bytes())
+            _validate_spec(occupant)
+        except (FileNotFoundError, ValueError, RecursionError):
+            pass
+        else:
+            if occupant.name != machine.name:
+                raise ValueError(f"{destination}: refusing to replace machine {occupant.name!r} with {machine.name!r}")
         destination.parent.mkdir(parents=True, exist_ok=True)
         temp = NamedTemporaryFile(dir=destination.parent, delete=False)
         temp_path = Path(temp.name)

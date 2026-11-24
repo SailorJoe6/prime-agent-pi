@@ -138,6 +138,48 @@ class MachineLibraryTest(unittest.TestCase):
         self.assertIn(str(shared_path), str(broken.exception))
         self.assertIn("missing", str(broken.exception))
 
+    def test_papi_12_canonical_update_wins_within_each_library(self):
+        state = HarnessState(self.state_path)
+        draft_spec = formatting("Use the draft style.")
+        draft = document(draft_spec)
+        update = formatting("Format as a memo.")
+        updated_bytes = document(update)
+        source = self.file(self.root / "update.md", updated_bytes)
+        personal_draft = self.file(self.personal / "a-draft" / "MACHINE.md", draft)
+        personal_path = self.file(self.personal / NAME / "MACHINE.md", document(formatting()))
+        self.assertEqual(self.library.import_machine(source), personal_path)
+
+        def assert_winner(path, spec, raw, output):
+            self.assertEqual([entry.path for entry in self.library.list_machines()], [path])
+            self.assertEqual(select_factory(NAME, state, library=self.library), spec)
+            self.assertEqual(self.library.export_machine(NAME, self.root / output).read_bytes(), raw)
+
+        assert_winner(personal_path, update, updated_bytes, "personal.md")
+        self.assertEqual(personal_draft.read_bytes(), draft)
+
+        shared_spec = formatting("Use the shared style.")
+        shared_bytes = document(shared_spec)
+        shared_draft = self.file(self.shared / "a-draft" / "MACHINE.md", draft)
+        shared_path = self.file(self.shared / NAME / "MACHINE.md", shared_bytes)
+        assert_winner(shared_path, shared_spec, shared_bytes, "shared.md")
+
+        invalid = formatting()
+        invalid["transitions"][0]["to"] = "missing"
+        shared_path.write_bytes(document(invalid))
+        assert_winner(shared_draft, draft_spec, draft, "fallback.md")
+        self.assertFalse(self.state_path.exists())
+
+    def test_papi_12_import_preserves_valid_different_name_at_destination(self):
+        other_name = "format-letter"
+        original = document(formatting("Format as a letter."), name=other_name)
+        destination = self.file(self.personal / NAME / "MACHINE.md", original)
+        source = self.file(self.root / "incoming.md", document(formatting("Format as a memo.")))
+
+        with self.assertRaisesRegex(ValueError, other_name):
+            self.library.import_machine(source)
+        self.assertEqual(destination.read_bytes(), original)
+        self.assertEqual(self.library.resolve_machine(other_name).path, destination)
+
     def test_papi_12_stored_selection_wins_but_export_is_library_only(self):
         state = HarnessState(self.state_path)
         self.file(self.shared / NAME / "MACHINE.md", document(formatting()))

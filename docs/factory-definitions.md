@@ -76,10 +76,13 @@ This slice does not ship any bundled definitions. The personal library is
 explicitly to work with other roots.
 
 - `list_machines()` and `resolve_machine(name)` consider only valid definitions,
-  with shared definitions winning name collisions. `MachineResolutionError.broken`
-  distinguishes a broken file from a missing name.
+  with shared definitions winning name collisions. Within each library, a valid
+  `<name>/MACHINE.md` wins over a file in another directory declaring the same
+  name. Selection and library export use the same rules.
+  `MachineResolutionError.broken` distinguishes a broken file from a missing name.
 - `import_machine(path)` validates before atomically installing the original
-  bytes in the personal library. An invalid import cannot replace a good copy.
+  bytes in the personal library. A valid import can replace a same-name copy,
+  but cannot replace a valid definition at that path declaring a different name.
 - `export_machine(name, path)` copies the selected library file byte for byte.
   It does not consult the harness. Both export APIs refuse existing targets.
 - `select_factory(name, state)` checks the selected harness scope first, then
