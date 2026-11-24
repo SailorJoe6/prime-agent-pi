@@ -65,6 +65,8 @@ export interface HarnessState {
 	schema: number;
 	entries: Record<RefinementKind, Record<string, HarnessEntry>>;
 	refinements: HarnessRefinementEvent[];
+	// Python-owned JSON strings. Keep definitions opaque to avoid rewriting authored values.
+	factoryDefinitions?: Record<string, string>;
 }
 
 export interface RefinementEdit {
@@ -370,6 +372,12 @@ export function loadHarnessState(
 				};
 			}
 		}
+	}
+	const definitions = objectRecord(parsed.factoryDefinitions);
+	if (definitions) {
+		state.factoryDefinitions = Object.fromEntries(
+			Object.entries(definitions).filter((entry): entry is [string, string] => typeof entry[1] === "string"),
+		);
 	}
 	if (Array.isArray(parsed.refinements)) {
 		state.refinements = parsed.refinements;

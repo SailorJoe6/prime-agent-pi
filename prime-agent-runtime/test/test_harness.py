@@ -7,6 +7,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from rlm import harness as package_harness
 from rlm import rlm as callable_rlm
@@ -20,7 +21,78 @@ PYTHON_REFERENCE = {
 }
 
 
+def formatting_definition():
+    return {
+        "states": [
+            {"id": "outline", "entry": True, "subagent": {"prompt": "Outline the document."}},
+            {"id": "format", "subagent": {"prompt": "Apply the document style."}},
+        ],
+        "transitions": [{"from": "outline", "to": "format"}],
+    }
+
+
 class HarnessStateTest(unittest.TestCase):
+    def test_papi_12_named_factory_round_trips_reopens_and_preserves_existing_state(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "harness_state.json"
+            state = HarnessState(path)
+            state.create_memory("Keep", "Remember the house style.", id="keep")
+            state.record_refinement("Record style", ["create memory:keep"])
+            existing = json.loads(path.read_bytes())
+            machine = formatting_definition()
+            dag = {"nodes": [{"id": "format", "subagent": "Document formatter"}]}
+            state.save_factory("format-document", machine)
+            state.save_factory("draft", dag)
+            machine["transitions"][0]["to"] = "absent"
+
+            reopened = HarnessState(path)
+            self.assertEqual(reopened.get_factory("format-document"), formatting_definition())
+            self.assertEqual(reopened.get_factory("draft"), dag)
+            self.assertIsNone(reopened.get_factory("missing"))
+            self.assertEqual(reopened.list_factories(), ["draft", "format-document"])
+            saved = json.loads(path.read_bytes())
+            for key, value in existing.items():
+                self.assertEqual(saved[key], value)
+
+            revised = formatting_definition()
+            revised["states"][1]["subagent"]["prompt"] = "Format as a memo."
+            reopened.save_factory("format-document", revised)
+            state.update_memory("keep", "Keep", content="Use the memo style.")
+            self.assertEqual(HarnessState(path).get_factory("format-document"), revised)
+
+    def test_papi_12_invalid_factory_leaves_no_file_and_cannot_replace_valid_definition(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "harness_state.json"
+            state = HarnessState(path)
+            invalid = formatting_definition()
+            invalid["transitions"][0]["to"] = "absent"
+            with self.assertRaisesRegex(ValueError, "unknown to-state"):
+                state.save_factory("format-document", invalid)
+            self.assertFalse(path.exists())
+            self.assertEqual(state.list_factories(), [])
+
+            state.save_factory("format-document", formatting_definition())
+            original = path.read_bytes()
+            with self.assertRaisesRegex(ValueError, "unknown to-state"):
+                state.save_factory("format-document", invalid)
+            self.assertEqual(path.read_bytes(), original)
+            self.assertEqual(state.get_factory("format-document"), formatting_definition())
+
+    def test_papi_12_global_factory_scope_does_not_change_the_local_definition(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            with patch.dict(os.environ, {"RLM_GLOBAL_HARNESS_STATE_DIR": str(root / "global")}):
+                state = HarnessState(root / "local" / "harness_state.json")
+                local = formatting_definition()
+                shared = formatting_definition()
+                shared["states"][1]["subagent"]["prompt"] = "Apply the shared style."
+                state.save_factory("format-document", local)
+                state.save_factory("global:format-document", shared)
+                self.assertEqual(state.get_factory("format-document"), local)
+                self.assertEqual(state.get_factory("format-document", global_=True), shared)
+                self.assertEqual(state.list_factories(global_=True), ["format-document"])
+                self.assertEqual(HarnessState(root / "global" / "harness_state.json").get_factory("format-document"), shared)
+
     def test_crud_for_all_entry_kinds(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             state = HarnessState(Path(temp_dir) / "harness_state.json")

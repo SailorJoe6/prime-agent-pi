@@ -22,5 +22,22 @@ compiled graph. Keep the authored object for round trips, not the compiled
 copy.
 
 The schema follows [Prime Agent v0.10.0's released validator](https://github.com/PrimeIntellect-ai/prime-agent/blob/763094e1b6a7c17450ee8399b06cda1853847ca5/prime-agent-runtime/src/rlm/factory.py).
-This validation layer does not provide harness storage, a library CLI, or a
-run API.
+
+## Save a named definition
+
+Use the existing `rlm.harness` store from the Python kernel:
+
+```python
+rlm.harness.save_factory("format-document", spec)
+names = rlm.harness.list_factories()
+reopened_spec = rlm.harness.get_factory("format-document")
+```
+
+Each call defaults to the session-local store; pass `global_=True` for the
+shared global store. Names match exactly within the selected scope. A missing
+name returns `None`. A valid save replaces the definition with the same name;
+an invalid save raises `ValueError` without creating or replacing it. The store
+keeps the authored machine or DAG, not the compiled graph. Definitions share
+Pi's existing harness file and are not included in the refinement prompt.
+
+Library lookup, sharing commands, and execution are not part of this API.
