@@ -4,7 +4,9 @@ title: Choose a retention-aware automatic compaction percentage
 status: In Design
 assignee: []
 created_date: '2026-11-22T22:18:00Z'
+updated_date: '2026-11-24T00:57:00Z'
 labels: []
+milestone: m-1
 dependencies: []
 references:
   - >-

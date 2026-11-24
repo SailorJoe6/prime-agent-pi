@@ -4,8 +4,9 @@ title: Show the selected running child’s progress note in the roster
 status: In Design
 assignee: []
 created_date: '2026-11-22T23:25:00Z'
-updated_date: '2026-11-22T23:46:00Z'
+updated_date: '2026-11-24T00:57:00Z'
 labels: []
+milestone: m-1
 dependencies: []
 references:
   - >-

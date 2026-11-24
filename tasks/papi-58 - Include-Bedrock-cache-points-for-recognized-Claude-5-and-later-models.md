@@ -4,8 +4,9 @@ title: Include Bedrock cache points for recognized Claude 5 and later models
 status: In Design
 assignee: []
 created_date: '2026-11-22T23:25:00Z'
-updated_date: '2026-11-22T23:46:00Z'
+updated_date: '2026-11-24T00:57:00Z'
 labels: []
+milestone: m-2
 dependencies: []
 references:
   - >-

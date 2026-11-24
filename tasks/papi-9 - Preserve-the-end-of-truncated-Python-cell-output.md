@@ -4,8 +4,9 @@ title: Preserve the end of truncated Python cell output
 status: Done
 assignee: []
 created_date: '2026-11-22T22:04:00Z'
-updated_date: '2026-11-23T14:36:00Z'
+updated_date: '2026-11-24T00:57:00Z'
 labels: []
+milestone: m-1
 dependencies: []
 references:
   - >-

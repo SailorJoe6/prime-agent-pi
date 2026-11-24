@@ -4,8 +4,9 @@ title: Enforce a configured model allowlist at daemon admission
 status: Done
 assignee: []
 created_date: '2026-11-22T22:04:00Z'
-updated_date: '2026-11-24T00:48:00Z'
+updated_date: '2026-11-24T00:57:00Z'
 labels: []
+milestone: m-0
 dependencies: []
 references:
   - >-
