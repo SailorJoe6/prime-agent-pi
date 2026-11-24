@@ -24,11 +24,13 @@ import { releasePlatforms } from "./release-platforms.mjs";
 
 const platforms = releasePlatforms;
 
-export function assembleBinaryArchives({ binaryDir, artifactsDir, version, requireAll = true }) {
-	if (!/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(version)) throw new Error(`Invalid binary version: ${version}`);
+export function assembleBinaryArchives({ binaryDir, artifactsDir, version, requireAll = true, platform: selected, piRelease }) {
+	const versionPattern = piRelease ? /^\d+\.\d+\.\d+(?:\.\d+)?(?:-preview\.\d+)?$/ : /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/;
+	if (!versionPattern.test(version)) throw new Error(`Invalid binary version: ${version}`);
 	const available = readdirSync(binaryDir);
-	const targets = platforms.filter((platform) => available.includes(platform));
-	if (targets.length === 0 || (requireAll && targets.length !== platforms.length)) {
+	const requested = selected ? platforms.filter((platform) => platform === selected) : platforms;
+	const targets = requested.filter((platform) => available.includes(platform));
+	if (targets.length === 0 || (requireAll && targets.length !== requested.length)) {
 		throw new Error(`Missing compiled binaries; build all ${platforms.length} platforms before packing a release`);
 	}
 	mkdirSync(artifactsDir, { recursive: true });
@@ -41,16 +43,27 @@ export function assembleBinaryArchives({ binaryDir, artifactsDir, version, requi
 			throw new Error(`Missing executable: ${binary}`);
 		const staging = mkdtempSync(join(tmpdir(), "prime-agent-archive-"));
 		try {
-			for (const name of ["prime-agent", ...binaryAssets])
-				cpSync(join(source, name), join(staging, name), { recursive: true });
+			const assets = ["prime-agent", ...binaryAssets.filter((asset) => !piRelease || asset !== "install.sh")];
+			for (const name of assets) cpSync(join(source, name), join(staging, name), { recursive: true });
 			setBinaryVersion(staging, version);
+			const identity = piRelease && { ...piRelease, platform };
+			if (identity) {
+				const metadataPath = join(staging, "package.json");
+				const metadata = JSON.parse(readFileSync(metadataPath, "utf8"));
+				metadata.description = "Prime Agent Pi";
+				metadata.piRelease = identity;
+				writeFileSync(metadataPath, `${JSON.stringify(metadata, null, 2)}\n`);
+				writeFileSync(join(staging, "pi-release.json"), `${JSON.stringify(identity, null, 2)}\n`);
+				assets.push("pi-release.json");
+			}
 			chmodSync(join(staging, "prime-agent"), 0o755);
-			const file = `prime-agent-${version}-${platform}.tar.gz`;
+			const file = `${piRelease ? "prime-agent-pi" : "prime-agent"}-${version}-${platform}.tar.gz`;
 			const output = join(artifactsDir, file);
-			execFileSync("tar", ["-czf", output, "-C", staging, "prime-agent", ...binaryAssets], {
+			execFileSync("tar", ["-czf", output, "-C", staging, ...assets], {
 				env: { ...process.env, COPYFILE_DISABLE: "1" },
 			});
 			archives.push({
+				...identity,
 				platform,
 				file,
 				sha256: createHash("sha256").update(readFileSync(output)).digest("hex"),

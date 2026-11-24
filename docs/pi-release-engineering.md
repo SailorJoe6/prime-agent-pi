@@ -91,3 +91,52 @@ checksum check. The receipt recorded HEAD `e835c05a8b5b523db3a088494e15ad2604d00
 This does not verify native archives or additional platforms, runtime public
 version display, production catalog assets, release CI, or install → update →
 rollback with preserved state. No release artifacts were published.
+
+## Nonpublishing native archive build (PAPI-61)
+
+The standalone workflow has a manual build-only mode for the eight targets in
+`release-platforms.mjs`. Supply a Pi public version, an optional preview
+sequence, and the exact catalog commit. The workflow uses read-only repository
+permissions and uploads only Actions artifacts after extraction smoke tests.
+The existing reusable workflow path is unchanged; the Pi mode does not invoke
+an installer, release writer, or upload to npm or R2.
+
+To build a single target locally with Node, Bun 1.4.0, locked npm dependencies,
+and a clean checkout of the real catalog next to the source:
+
+```sh
+npm ci
+catalog=../prime-agent-catalog
+out="$(mktemp -d)/native"
+node_modules/.bin/tsx scripts/build-pi-native-archive.mjs \
+  darwin-arm64 "$catalog" "$out" 0.10.2.10 3
+bash scripts/smoke-pi-native-archive.sh "$out" darwin-arm64
+```
+
+Use the target's runner architecture and native dependencies from the workflow.
+The musl smoke runs in Alpine. The version above is a test identity, not a
+parity claim. The archive retains `prime-agent`, the runtime assets, and the
+license. It omits the inherited `install.sh`; the Pi installer and feed are
+separate work. `pi-release.json` and staged `package.json` carry the target,
+public version, channel, package encoding, source commit, source dirty flag,
+and catalog commit. The runtime reports `0.10.2.10-preview.3` in this example.
+Keep `SHA256SUMS` and `pi-native-<target>.json` alongside the archive; the receipt
+includes the archive and executable hashes. Neither file is an update manifest.
+
+Local validation used real catalog `01f4d46dd5157ec73f8faf440214088237c81d59`
+(1,209 models, 42 transport tuples, 69 MCP services), Bun 1.4.0, Node 25.6.0,
+and source base `8110435d5bbda284bae3f34b813220bb3c425725` with `sourceDirty: true`.
+Both archives passed checksum and extracted `--version` and `--help` probes
+without a JavaScript runtime on PATH: macOS ARM64 natively, Linux ARM64 musl in
+Docker Desktop ARM64 Alpine 3.21. This proves these local builds, not the exact
+candidate commit or a release. The other six targets require matrix evidence:
+`darwin-x64`, `linux-arm64`, `linux-x64`, `linux-x64-baseline`,
+`linux-x64-musl`, and `linux-x64-musl-baseline`.
+
+| Target | Archive SHA-256 | Executable SHA-256 |
+| --- | --- | --- |
+| `darwin-arm64` | `97f84827ada498ad80601d22280a64faa71c969c1f4a6e9fff83df651fea731d` | `2f7e2564d09db3507b5a2cf0c00ce0682922f30582142fe8e280502023923c34` |
+| `linux-arm64-musl` | `8e9145fa028b98db05ab57cb35343acce1cb963078f2f6534b0151d9fea29ae7` | `1f4d8fd90c2a73c2fe9bada56a57d9c5b6693ec4fa32a4dcb2558d5c3c9467b0` |
+
+Windows Bash and Android Termux source routes are unchanged and were not tested
+in this slice. No publication, feed, update, or rollback behavior was tested.
