@@ -130,12 +130,18 @@ const CANONICAL_BUILTIN_SLASH_COMMANDS: ReadonlyArray<BuiltinSlashCommand> = [
 	{
 		name: "update",
 		description: `Update ${APP_NAME} and installed packages`,
-		argumentHint: "[source|--self|--extensions|--nightly|--stable]",
+		argumentHint: "[source|--self|--extensions|--preview|--stable]",
+		takesArgument: true,
+	},
+	{
+		name: "preview",
+		description: `Opt in to ${APP_NAME} preview updates (may be unstable)`,
+		argumentHint: "[on|off|status]",
 		takesArgument: true,
 	},
 	{
 		name: "nightly",
-		description: `Switch ${APP_NAME} updates to the nightly channel (unreleased builds, may be broken)`,
+		description: "Alias for /preview",
 		argumentHint: "[on|off|status]",
 		takesArgument: true,
 	},

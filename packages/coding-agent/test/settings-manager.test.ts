@@ -25,6 +25,20 @@ describe("SettingsManager", () => {
 	const readSettings = (path: string): Record<string, unknown> =>
 		JSON.parse(readFileSync(path, "utf-8")) as Record<string, unknown>;
 
+	it("PAPI-61 preserves the global nightly opt-in and writes canonical channel values", async () => {
+		writeSettings(projectPath, { updateChannel: "preview" });
+		expect(SettingsManager.create(projectDir, agentDir).getUpdateChannel()).toBeUndefined();
+
+		writeSettings(globalPath, { updateChannel: "nightly" });
+		const manager = SettingsManager.create(projectDir, agentDir);
+		expect(manager.getUpdateChannel()).toBe("preview");
+		expect(readSettings(globalPath).updateChannel).toBe("nightly");
+
+		manager.setUpdateChannel("stable");
+		await manager.flush();
+		expect(SettingsManager.create(projectDir, agentDir).getUpdateChannel()).toBe("stable");
+	});
+
 	describe("on-disk settings file", () => {
 		it("preserves keys it does not own, including ones written after load", async () => {
 			writeSettings(globalPath, { theme: "dark", defaultModel: "claude-sonnet" });

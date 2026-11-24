@@ -43,6 +43,10 @@ npm ci
 ./prime-agent.sh
 ```
 
+For managed native installations, `prime-agent update` (or `/update` in the TUI) checks the stable channel by default. Use `prime-agent update --preview` or `/update --preview` to opt in to preview releases, which may be unstable. Use `--stable` to return to stable. `--nightly` is an alias for `--preview`. Use `prime-agent update --rollback` to restore a retained previous native release.
+
+For source and other unmanaged installations, update using the original installer or the [Prime Agent Pi checkout](https://github.com/SailorJoe6/prime-agent-pi) that provides your executable. The update command does not switch installation methods. For native downloads and repairs, see [Prime Agent Pi Releases](https://github.com/SailorJoe6/prime-agent-pi/releases).
+
 ## Why Prime Agent
 
 Prime Agent combines a persistent Python control environment with durable harness state, so useful working context and reusable operating patterns can outlive a single chat window.
@@ -77,7 +81,7 @@ prime-agent attach <agent>           # Reattach to a running session
 prime-agent --resume [path|id]       # Browse sessions or resume one directly
 prime-agent status                   # Inspect background service state
 prime-agent doctor [--fix]           # Inspect or repair background services
-prime-agent update [--force]         # Update Prime Agent
+prime-agent update [--force]         # Update a managed native Prime Agent Pi install
 prime-agent shutdown [--force]       # Stop every agent, worker, and background service
 ```
 

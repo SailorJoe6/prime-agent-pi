@@ -187,6 +187,60 @@ with the exact bytes `#!/bin/sh\nexit 71\n`. It produced tag
 The builder checked all eight archive hashes; executable hashes came from
 the already-verified receipts. Discovery used simulated GitHub responses.
 
-The installer and production callers are not wired in this slice. Startup
-notices, the explicit CLI updater, interactive update, repair, and rollback
-still need the same end-to-end verified install path. No publication is enabled.
+## Native install, update, and repair (PAPI-61)
+
+When a Pi release is published, ship the bytes from `install.sh` as
+`install-pi.sh` alongside the tagged manifest, `SHA256SUMS`, and archives.
+This repository does not yet publish that installer. For a manual install or
+repair, choose an exact stable tag from [Pi Releases](https://github.com/SailorJoe6/prime-agent-pi/releases),
+or deliberately choose a preview tag. From a new empty directory:
+
+```sh
+(
+  set -eu
+  tag=pi-vX.Y.Z                 # Substitute the exact published tag.
+  base="https://github.com/SailorJoe6/prime-agent-pi/releases/download/$tag"
+  curl -q --proto '=https' --proto-redir '=https' -fsSL "$base/install-pi.sh" -o install-pi.sh
+  curl -q --proto '=https' --proto-redir '=https' -fsSL "$base/SHA256SUMS" -o SHA256SUMS
+  awk '$2 == "install-pi.sh" { print; n++ } END { if (n != 1) exit 1 }' SHA256SUMS > installer.sha256
+  if command -v sha256sum >/dev/null; then
+    sha256sum -c installer.sha256
+  else
+    shasum -a 256 -c installer.sha256
+  fi
+  PRIME_AGENT_PI_TAG="$tag" sh ./install-pi.sh "${tag#pi-v}"
+)
+```
+
+Startup checks only release metadata. `prime-agent update` and `/update`
+use the same tagged feed for managed native installs. Stable is the default;
+`--preview` opts in (`--nightly` is a compatibility alias). After the existing
+confirmation path, the updater checks the tagged installer's actual SHA-256
+before writing it to a private staging directory for execution. The installer
+checks the selected archive against the tagged inventory and, for updater
+invocations, requires the inventory to agree with the pinned manifest digest.
+It verifies the downloaded bytes before extraction and probes the executable
+before changing the launcher. Missing or mismatched assets leave the active
+release in place. The checksums verify transfer integrity, not publisher identity
+independently of GitHub.
+
+The managed root and user state paths do not change. The installer retains its
+verified bytes alongside the active release for offline `update --rollback`.
+Existing local managed legacy targets remain supported for intentional rollback;
+source or unmanaged installs use their original explicit setup route. Pi checks
+and managed forward updates do not fall back to a legacy mirror or npm registry.
+
+For local integration validation, run `npm run check` from the repository root
+and the focused suites from `packages/coding-agent`:
+
+```sh
+../../node_modules/.bin/tsx ../../node_modules/vitest/dist/cli.js --run \
+  test/version-check.test.ts test/native-update.test.ts test/package-command-paths.test.ts \
+  test/native-installer.test.ts test/pi-release-discovery.test.ts test/pi-release-version.test.ts
+```
+
+The shell check uses disposable archive and transport fixtures for stable install,
+preview replacement, checksum rejection, and local rollback. TypeScript tests
+mock GitHub metadata and installer bytes; they do not publish a release or
+exercise production downloads. Full Docker lifecycle and saved-state compatibility,
+interactive terminal restart/restore, and publication gates require separate evidence.

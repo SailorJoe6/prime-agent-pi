@@ -17,11 +17,11 @@ import { createServer as createHttpServer, type RequestListener } from "node:htt
 import { createServer as createHttpsServer } from "node:https";
 import { tmpdir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
-import { Agent, getGlobalDispatcher, setGlobalDispatcher } from "undici";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { getNativeUpdatePlan } from "../src/cli/native-update.js";
 import { DaemonClient } from "../src/modes/daemon/daemon-client.js";
 import { NATIVE_PLATFORMS } from "../src/utils/native-installation.js";
+import { fakeFeed, taggedRelease } from "./fixtures/pi-release-feed.js";
 import { archiveNativePlatform, hostNativePlatform } from "./installer-platform.js";
 
 const installer = resolve(__dirname, "../../../install.sh");
@@ -55,8 +55,6 @@ let root: string;
 let home: string;
 let base: string;
 let certificate: string;
-const originalDispatcher = getGlobalDispatcher();
-let fixtureDispatcher: Agent;
 
 function publish(
 	version: string,
@@ -103,15 +101,7 @@ exit 1
 	const digest = createHash("sha256").update(bytes).digest("hex");
 	feed.set(`/releases/v${version}/${filename}`, bytes);
 	feed.set(`/releases/v${version}/SHA256SUMS`, Buffer.from(`${digest}  ${filename}\n`));
-	feed.set(
-		version.includes("-beta") ? "/beta.json" : "/latest.json",
-		Buffer.from(
-			JSON.stringify({
-				version,
-				binaries: [{ platform, file: filename, sha256: digest }],
-			}),
-		),
-	);
+
 	return filename;
 }
 
@@ -254,8 +244,6 @@ describe.skipIf(process.platform === "win32")("managed compiled installer", () =
 			insecureRequestCount += 1;
 			serveFeed(request, response);
 		});
-		fixtureDispatcher = new Agent({ connect: { ca: readFileSync(certificate) } });
-		setGlobalDispatcher(fixtureDispatcher);
 		await new Promise<void>((done) => insecureServer.listen(0, "127.0.0.1", done));
 		const insecureAddress = insecureServer.address();
 		if (!insecureAddress || typeof insecureAddress === "string") throw new Error("missing insecure server address");
@@ -279,11 +267,13 @@ describe.skipIf(process.platform === "win32")("managed compiled installer", () =
 		beforeArchiveResponse = undefined;
 		redirectToHttp = false;
 		insecureRequestCount = 0;
+		vi.stubGlobal("fetch", fakeFeed().fetcher);
 		vi.stubEnv("PI_OFFLINE", "");
 		vi.stubEnv("PI_SKIP_VERSION_CHECK", "");
 		vi.stubEnv("PRIME_AGENT_DOWNLOAD_BASE_URL", "");
 	});
 	afterEach(async () => {
+		vi.unstubAllGlobals();
 		vi.unstubAllEnvs();
 		if (!existsSync(daemonSocket())) return;
 		const client = new DaemonClient(daemonSocket());
@@ -310,8 +300,6 @@ describe.skipIf(process.platform === "win32")("managed compiled installer", () =
 		}
 	});
 	afterAll(async () => {
-		setGlobalDispatcher(originalDispatcher);
-		await fixtureDispatcher.close();
 		await new Promise<void>((done) => server.close(() => done()));
 		await new Promise<void>((done) => insecureServer.close(() => done()));
 		rmSync(root, { recursive: true, force: true });
@@ -430,14 +418,22 @@ download_prime_agent_package "$1" "$prime_agent_base_url/releases/v$1/$prime_age
 		expect((await install("1.0.0")).code).toBe(0);
 		const executable = realpathSync(command());
 		const plan = (force = false, rollback = false) => getNativeUpdatePlan({ force, rollback, executable });
+		vi.stubGlobal("fetch", fakeFeed(taggedRelease("1.0.0")).fetcher);
 		expect((await plan()).command).toBeUndefined();
-		expect((await plan(true)).command).toBeDefined();
+		expect((await plan(true)).command?.prepare).toBeDefined();
 		await expect(plan(false, true)).rejects.toThrow("No valid previous");
 		publish("1.0.1");
+		const next = taggedRelease("1.0.1");
+		vi.stubGlobal("fetch", fakeFeed(next).fetcher);
 		const update = await plan();
 		expect(update.targetVersion).toBe("1.0.1");
-		expect(update.command?.args).toContain(`PRIME_AGENT_EXPECTED_CURRENT=${readlinkSync(command())}`);
-		expect(update.command?.args).toContainEqual(expect.stringMatching(/^PRIME_AGENT_EXPECTED_SHA256=[a-f0-9]{64}$/));
+		const prepared = await update.command?.prepare?.();
+		try {
+			expect(prepared?.args).toContain(`PRIME_AGENT_EXPECTED_CURRENT=${readlinkSync(command())}`);
+			expect(prepared?.args).toContain(`PRIME_AGENT_EXPECTED_SHA256=${next.manifest.binaries[0].sha256}`);
+		} finally {
+			prepared?.cleanup?.();
+		}
 		const result = await install("1.0.1");
 		expect(result.code, result.output).toBe(0);
 		const current = readlinkSync(command());
@@ -469,14 +465,15 @@ download_prime_agent_package "$1" "$prime_agent_base_url/releases/v$1/$prime_age
 			const previous = readlinkSync(join(dirname(command()), "previous"));
 			if (damage === "broken executable") writeFileSync(current, "#!/bin/sh\nexit 1\n");
 			else rmSync(join(dirname(current), file));
-			const plan = await getNativeUpdatePlan({
-				force: damage === "broken executable",
-				rollback,
-				executable: retained,
-			});
-			expect(plan.command?.args).toContain(`PRIME_AGENT_EXPECTED_CURRENT=${readlinkSync(command())}`);
-			if (rollback) feed.clear();
-			const result = await run(plan.command!.command, plan.command!.args);
+			let result: Awaited<ReturnType<typeof run>>;
+			if (rollback) {
+				feed.clear();
+				const plan = await getNativeUpdatePlan({ force: false, rollback: true, executable: retained });
+				expect(plan.command?.args).toContain(`PRIME_AGENT_EXPECTED_CURRENT=${readlinkSync(command())}`);
+				result = await run(plan.command!.command, plan.command!.args);
+			} else {
+				result = await install("1.0.1", { PRIME_AGENT_EXPECTED_CURRENT: readlinkSync(command()) });
+			}
 			expect(result.code, result.output).toBe(0);
 			expect(execFileSync(command(), ["--version"], { encoding: "utf8" })).toBe(rollback ? "1.0.0\n" : "1.0.1\n");
 			expect(readlinkSync(join(dirname(command()), "previous"))).toBe(previous);
@@ -499,10 +496,12 @@ download_prime_agent_package "$1" "$prime_agent_base_url/releases/v$1/$prime_age
 			const current = readlinkSync(command());
 			const previous = readlinkSync(join(dirname(command()), "previous"));
 			rmSync(join(dirname(realpathSync(command())), "install.sh"));
-			for (const rollback of [true, false])
-				await expect(getNativeUpdatePlan({ force: true, rollback, executable: retained })).rejects.toThrow(
-					"https://app.primeintellect.ai/prime-agent/install.sh",
-				);
+			await expect(getNativeUpdatePlan({ force: true, rollback: true, executable: retained })).rejects.toThrow(
+				"https://github.com/SailorJoe6/prime-agent-pi/releases",
+			);
+			vi.stubGlobal("fetch", fakeFeed(taggedRelease("1.0.1")).fetcher);
+			const plan = await getNativeUpdatePlan({ force: true, rollback: false, executable: retained });
+			expect(plan.command?.prepare).toBeDefined();
 			expect(readlinkSync(command())).toBe(current);
 			expect(readlinkSync(join(dirname(command()), "previous"))).toBe(previous);
 			const repaired = await install("1.0.1");
@@ -519,7 +518,7 @@ download_prime_agent_package "$1" "$prime_agent_base_url/releases/v$1/$prime_age
 		rmSync(join(dirname(executable), "theme/prime.json"));
 		for (const rollback of [true, false]) {
 			await expect(getNativeUpdatePlan({ force: true, rollback, executable })).rejects.toThrow(
-				"published installer",
+				"https://github.com/SailorJoe6/prime-agent-pi/releases",
 			);
 		}
 	});
@@ -579,18 +578,13 @@ download_prime_agent_package "$1" "$prime_agent_base_url/releases/v$1/$prime_age
 			publish("1.0.0");
 			expect((await install("1.0.0")).code).toBe(0);
 			const current = readlinkSync(command());
-			const artifact = { platform, file: `prime-agent-1.0.1-${platform}.tar.gz`, sha256: "a".repeat(64) };
+			const next = taggedRelease("1.0.1");
+			const artifact = next.manifest.binaries.find((item) => item.platform === platform)!;
 			if (failure === "checksum") artifact.sha256 = "bad";
 			if (failure === "path") artifact.file = "../outside.tar.gz";
-			feed.set(
-				"/latest.json",
-				Buffer.from(
-					JSON.stringify({
-						version: "1.0.1",
-						binaries: failure === "missing" ? [] : failure === "duplicate" ? [artifact, artifact] : [artifact],
-					}),
-				),
-			);
+			if (failure === "duplicate") next.manifest.binaries.push({ ...artifact });
+			if (failure === "missing") next.manifest.binaries = [];
+			vi.stubGlobal("fetch", fakeFeed(next).fetcher);
 			await expect(
 				getNativeUpdatePlan({ force: false, rollback: false, executable: realpathSync(command()) }),
 			).rejects.toThrow();
@@ -598,13 +592,13 @@ download_prime_agent_package "$1" "$prime_agent_base_url/releases/v$1/$prime_age
 		},
 	);
 
-	it("keeps beta updates on the beta channel", async () => {
+	it("PAPI-61 selects a Pi preview only when preview is explicitly selected for legacy beta", async () => {
 		publish("1.0.0-beta.1");
 		expect((await install("1.0.0-beta.1")).code).toBe(0);
-		publish("1.0.0-beta.2");
-		publish("9.0.0");
-		const plan = await getNativeUpdatePlan({ force: false, rollback: false, executable: realpathSync(command()) });
-		expect(plan.targetVersion).toBe("1.0.0-beta.2");
+		vi.stubGlobal("fetch", fakeFeed(taggedRelease("1.0.1-preview.2"), taggedRelease("1.0.0")).fetcher);
+		const options = { force: false, rollback: false, executable: realpathSync(command()) };
+		expect((await getNativeUpdatePlan(options)).targetVersion).toBe("1.0.0");
+		expect((await getNativeUpdatePlan({ ...options, channel: "preview" })).targetVersion).toBe("1.0.1-preview.2");
 	});
 
 	it.each(["stale", "checksum", "rollback"])(
@@ -1159,13 +1153,13 @@ exec /bin/${operation} "$@"
 
 	// The installer downloads the archive for the platform it selects, so an archive
 	// built for another platform (a baseline or musl cross-build) cannot be installed here.
+	// test-policy: allow conditional-or-disabled-test -- CI supplies a matching compiled archive on the native standalone runner
 	it.skipIf(!testArchive || archiveNativePlatform(testArchive) !== platform)(
-		"installs, updates, and rolls back actual compiled releases without Node",
+		"PAPI-61 installs actual legacy compiled releases and rolls back offline without Node",
 		async () => {
 			const archive = testArchive!;
 			const name = basename(archive);
 			const version = name.slice("prime-agent-".length, -`-${platform}.tar.gz`.length);
-			const manifestPath = /-beta(?:\.|$)/.test(version) ? "/beta.json" : "/latest.json";
 			feed.set(`/releases/v${version}/${name}`, readFileSync(archive));
 			feed.set(`/releases/v${version}/SHA256SUMS`, readFileSync(join(dirname(archive), "SHA256SUMS")));
 			const result = await install(version);
@@ -1173,43 +1167,15 @@ exec /bin/${operation} "$@"
 			expect(
 				execFileSync(command(), ["--version"], { encoding: "utf8", env: { HOME: home, PATH: "/usr/bin:/bin" } }),
 			).toBe(`${version}\n`);
-			const originalTarget = readlinkSync(command());
-			feed.set(
-				manifestPath,
-				Buffer.from(
-					JSON.stringify({
-						version,
-						binaries: [
-							{ platform, file: name, sha256: createHash("sha256").update(readFileSync(archive)).digest("hex") },
-						],
-					}),
-				),
-			);
-			const reinstalled = await run(command(), ["update", "--force"]);
-			expect(reinstalled.code, reinstalled.output).toBe(0);
-			expect(reinstalled.output).not.toContain("Warning:");
-			expect(readlinkSync(command())).not.toBe(originalTarget);
-			expect(readlinkSync(command())).toMatch(/\.[A-Za-z0-9]{6}\/prime-agent$/);
-			const repaired = await run(command(), ["update"]);
-			expect(repaired.code, repaired.output).toBe(0);
-			expect(repaired.output).toContain("already up to date");
 			const previous = readlinkSync(command());
-			const source = mkdtempSync(join(root, "real-release-"));
-			execFileSync("tar", ["-xzf", archive, "-C", source]);
-			const metadata = JSON.parse(readFileSync(join(source, "package.json"), "utf8")) as { version: string };
-			metadata.version = "99.0.0";
-			writeFileSync(join(source, "package.json"), JSON.stringify(metadata));
-			const nextFile = `prime-agent-99.0.0-${platform}.tar.gz`;
-			const nextArchive = join(root, nextFile);
-			execFileSync("tar", ["-czf", nextArchive, "-C", source, "."]);
-			const bytes = readFileSync(nextArchive);
-			const sha256 = createHash("sha256").update(bytes).digest("hex");
-			feed.set(`/releases/v99.0.0/${nextFile}`, bytes);
-			feed.set("/releases/v99.0.0/SHA256SUMS", Buffer.from(`${sha256}  ${nextFile}\n`));
-			const nextManifest = Buffer.from(
-				JSON.stringify({ version: "v99.0.0", binaries: [{ platform, file: nextFile, sha256 }] }),
-			);
-			feed.set(manifestPath, nextManifest);
+			// Explicit legacy reinstall gives us two independently retained real executables.
+			const reinstalled = await install(version);
+			expect(reinstalled.code, reinstalled.output).toBe(0);
+			const active = readlinkSync(command());
+			const previousPath = join(dirname(command()), "previous");
+			expect(active).not.toBe(previous);
+			expect(active).toMatch(/\.[A-Za-z0-9]{6}\/prime-agent$/);
+			expect(readlinkSync(previousPath)).toBe(previous);
 			mkdirSync(join(home, "agent"), { recursive: true });
 			writeFileSync(join(home, "agent/auth.json"), "{}\n");
 			writeFileSync(
@@ -1228,29 +1194,21 @@ exec /bin/${operation} "$@"
 				"artifact",
 				"--no-tools",
 				"-p",
-				"test update",
+				"test rollback",
 			]);
 			expect(session.code, session.output).toBe(0);
 			expect(session.output).toContain("artifact-ok:");
 			expect(await daemonExecutable()).toBe(realpathSync(command()));
-			const updated = await run(command(), ["update"]);
-			expect(updated.code, updated.output).toBe(0);
-			expect(updated.output).toContain("to v99.0.0");
-			expect(updated.output).not.toContain("Warning:");
-			expect((await run(command(), ["--version"])).output).toBe("99.0.0\n");
-			expect(await daemonExecutable()).toBe(realpathSync(command()));
-			expect(readlinkSync(join(dirname(command()), "previous"))).toBe(previous);
-			// Update discovery follows the now-active stable version, not the original archive's channel.
-			feed.delete(manifestPath);
-			feed.set("/latest.json", nextManifest);
-			const unchanged = await run(command(), ["update"]);
-			expect(unchanged.code, unchanged.output).toBe(0);
-			expect(unchanged.output).toContain("already up to date");
 			feed.clear();
+			const refused = await run(command(), ["update", "--force"], { PI_OFFLINE: "1" });
+			expect(refused.code, refused.output).not.toBe(0);
+			expect(readlinkSync(command())).toBe(active);
+			expect(readlinkSync(previousPath)).toBe(previous);
 			const restored = await run(command(), ["update", "--rollback"], { PI_OFFLINE: "1" });
 			expect(restored.code, restored.output).toBe(0);
 			expect(restored.output).not.toContain("Warning:");
 			expect(readlinkSync(command())).toBe(previous);
+			expect(readlinkSync(previousPath)).toBe(active);
 			expect(await daemonExecutable()).toBe(realpathSync(command()));
 			expect((await run(command(), ["--version"])).output).toBe(`${version}\n`);
 			expect(readFileSync(join(home, "agent/auth.json"), "utf8")).toBe("{}\n");

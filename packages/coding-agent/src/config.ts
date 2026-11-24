@@ -52,6 +52,7 @@ interface SelfUpdateCommandStep {
 
 export interface SelfUpdateCommand extends SelfUpdateCommandStep {
 	steps?: SelfUpdateCommandStep[];
+	prepare?: () => Promise<{ command: string; args: string[]; cleanup: () => void }>;
 }
 
 function makeSelfUpdateCommand(

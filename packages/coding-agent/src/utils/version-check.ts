@@ -1,26 +1,9 @@
-import { isNativePlatform } from "./native-installation.js";
-import { getPiUserAgent } from "./pi-user-agent.js";
+import { type DiscoveredPiRelease, discoverPiRelease } from "./pi-release-discovery.js";
+import { parsePiReleaseTag } from "./pi-release-manifest.js";
+import { comparePiReleases, type PiReleaseChannel } from "./pi-release-version.js";
 
-const DEFAULT_PRIME_AGENT_DOWNLOAD_BASE_URL = "https://pub-728493de92a943e2a9b2d17b4719f318.r2.dev";
-const STABLE_VERSION_MANIFEST_PATH = "latest.json";
-const BETA_VERSION_MANIFEST_PATH = "beta.json";
-const DEFAULT_VERSION_CHECK_TIMEOUT_MS = 10000;
-
-export type UpdateChannel = "stable" | "nightly";
-
-export interface LatestPiRelease {
-	version: string;
-	packageName?: string;
-	installSpec?: string;
-	binaries?: NativeReleaseArtifact[];
-}
-
-interface NativeReleaseArtifact {
-	platform: string;
-	file: string;
-	sha256: string;
-}
-
+// `nightly` is a compatibility alias for explicit preview opt-in.
+export type UpdateChannel = PiReleaseChannel | "nightly";
 interface ParsedVersion {
 	major: number;
 	minor: number;
@@ -95,145 +78,67 @@ export function isNewerPackageVersion(candidateVersion: string, currentVersion: 
 	return candidateVersion.trim() !== currentVersion.trim();
 }
 
-function getPrimeAgentDownloadBaseUrl(): string {
-	return (process.env.PRIME_AGENT_DOWNLOAD_BASE_URL?.trim() || DEFAULT_PRIME_AGENT_DOWNLOAD_BASE_URL).replace(
-		/\/+$/,
-		"",
+export function resolveUpdateChannel(_currentVersion: string, preferred?: UpdateChannel): PiReleaseChannel {
+	return preferred === "preview" || preferred === "nightly" ? "preview" : "stable";
+}
+
+function releaseIdentity(version: string) {
+	return parsePiReleaseTag(`pi-v${version.trim().replace(/^v/, "")}`);
+}
+
+/** Do not implicitly cross to an older public version, even when forced. */
+export function isBaseVersionDowngrade(candidateVersion: string, currentVersion: string): boolean {
+	const candidate = releaseIdentity(candidateVersion);
+	const current = releaseIdentity(currentVersion);
+	if (candidate && current) {
+		return (
+			comparePiReleases({ publicVersion: candidate.publicVersion }, { publicVersion: current.publicVersion }) < 0
+		);
+	}
+	const legacy = parsePackageVersion(currentVersion);
+	return Boolean(
+		candidate &&
+			legacy &&
+			comparePiReleases(
+				{ publicVersion: candidate.publicVersion },
+				{ publicVersion: `${legacy.major}.${legacy.minor}.${legacy.patch}` },
+			) < 0,
 	);
 }
 
-function normalizeReleaseVersion(version: string): string {
-	return version.trim().replace(/^v/, "");
-}
-
-/**
- * A preferred channel wins; otherwise a build tagged `-beta` stays on nightly and anything else
- * follows stable. Nightly builds are what the release bucket publishes as beta.
- */
-export function resolveUpdateChannel(currentVersion: string, preferred?: UpdateChannel): UpdateChannel {
-	if (preferred) return preferred;
-	const prerelease = parsePackageVersion(currentVersion)?.prerelease;
-	return prerelease?.match(/^beta(?:\.|$)/) ? "nightly" : "stable";
-}
-
-/**
- * Whether `candidateVersion` should replace `currentVersion` on the effective channel.
- * Same-channel updates must be strictly newer. An explicit switch to another channel
- * accepts any different version whose base version is not older, so a stable 1.2.3
- * can move onto 1.2.3-beta.5 even though prerelease ordering ranks that lower.
- */
 export function isReleaseUpdateCandidate(
 	candidateVersion: string,
 	currentVersion: string,
 	channel?: UpdateChannel,
 ): boolean {
-	if (isNewerPackageVersion(candidateVersion, currentVersion)) return true;
-	if (!channel || channel === resolveUpdateChannel(currentVersion)) return false;
-	if (normalizeReleaseVersion(candidateVersion) === normalizeReleaseVersion(currentVersion)) return false;
-	const candidate = parsePackageVersion(candidateVersion);
-	const current = parsePackageVersion(currentVersion);
-	if (!candidate || !current) return true;
-	if (candidate.major !== current.major) return candidate.major > current.major;
-	if (candidate.minor !== current.minor) return candidate.minor > current.minor;
-	return candidate.patch >= current.patch;
-}
-
-/** True when installing `candidateVersion` would lower the major.minor.patch base, prerelease tags aside. */
-export function isBaseVersionDowngrade(candidateVersion: string, currentVersion: string): boolean {
-	const candidate = parsePackageVersion(candidateVersion);
-	const current = parsePackageVersion(currentVersion);
-	if (!candidate || !current) return false;
-	if (candidate.major !== current.major) return candidate.major < current.major;
-	if (candidate.minor !== current.minor) return candidate.minor < current.minor;
-	return candidate.patch < current.patch;
-}
-
-function getReleaseManifestPath(currentVersion: string, channel?: UpdateChannel): string {
-	return resolveUpdateChannel(currentVersion, channel) === "nightly"
-		? BETA_VERSION_MANIFEST_PATH
-		: STABLE_VERSION_MANIFEST_PATH;
-}
-
-function resolveReleaseUrl(baseUrl: string, pathOrUrl: string): string | undefined {
-	const trimmed = pathOrUrl.trim();
-	if (!trimmed) return undefined;
-	try {
-		return new URL(trimmed).toString();
-	} catch {
-		return `${baseUrl}/${trimmed.replace(/^\/+/, "")}`;
+	const candidate = releaseIdentity(candidateVersion);
+	if (!candidate) return false;
+	const preview = candidate.previewSequence !== undefined;
+	const optedIn = resolveUpdateChannel(currentVersion, channel) === "preview";
+	if (preview && !optedIn) return false;
+	const current = releaseIdentity(currentVersion);
+	if (!current) {
+		const legacy = parsePackageVersion(currentVersion);
+		return Boolean(legacy && !isBaseVersionDowngrade(candidateVersion, currentVersion));
 	}
+	return (
+		comparePiReleases(candidate, current) > 0 ||
+		(preview &&
+			current.previewSequence === undefined &&
+			comparePiReleases({ publicVersion: candidate.publicVersion }, current) === 0)
+	);
 }
 
 export async function getLatestPiRelease(
 	currentVersion: string,
-	options: { timeoutMs?: number; baseUrl?: string; channel?: UpdateChannel } = {},
-): Promise<LatestPiRelease | undefined> {
+	options: { timeoutMs?: number; channel?: UpdateChannel } = {},
+): Promise<(DiscoveredPiRelease & { version: string }) | undefined> {
 	if (process.env.PI_SKIP_VERSION_CHECK || process.env.PI_OFFLINE) return undefined;
-
-	const baseUrl = options.baseUrl?.replace(/\/+$/, "") ?? getPrimeAgentDownloadBaseUrl();
-	const response = await fetch(`${baseUrl}/${getReleaseManifestPath(currentVersion, options.channel)}`, {
-		headers: {
-			"User-Agent": getPiUserAgent(currentVersion),
-			accept: "application/json",
-		},
-		signal: AbortSignal.timeout(options.timeoutMs ?? DEFAULT_VERSION_CHECK_TIMEOUT_MS),
+	const release = await discoverPiRelease({
+		channel: resolveUpdateChannel(currentVersion, options.channel),
+		signal: AbortSignal.timeout(options.timeoutMs ?? 10000),
 	});
-	if (!response.ok) return undefined;
-
-	const data = (await response.json()) as {
-		package?: unknown;
-		packageName?: unknown;
-		tarball?: unknown;
-		version?: unknown;
-		binaries?: unknown;
-		binariesV2?: unknown;
-	};
-	if (typeof data.version !== "string" || !data.version.trim()) {
-		return undefined;
-	}
-	const packageName =
-		typeof data.package === "string" && data.package.trim()
-			? data.package.trim()
-			: typeof data.packageName === "string" && data.packageName.trim()
-				? data.packageName.trim()
-				: undefined;
-	const installSpec = typeof data.tarball === "string" ? resolveReleaseUrl(baseUrl, data.tarball) : undefined;
-	const release: LatestPiRelease = { version: normalizeReleaseVersion(data.version) };
-	if (packageName) {
-		release.packageName = packageName;
-	}
-	if (installSpec) {
-		release.installSpec = installSpec;
-	}
-	// Prefer the complete v2 schema, with the v1 schema as a compatibility
-	// fallback. Structurally valid entries for future platforms are ignored,
-	// while malformed or duplicate supported-platform entries reject the list.
-	const binarySource = Array.isArray(data.binariesV2)
-		? data.binariesV2
-		: Array.isArray(data.binaries)
-			? data.binaries
-			: undefined;
-	if (binarySource) {
-		const binaries: NativeReleaseArtifact[] = [];
-		const platforms = new Set<string>();
-		for (const candidate of binarySource) {
-			if (!candidate || typeof candidate !== "object") return release;
-			const artifact = candidate as Partial<NativeReleaseArtifact>;
-			if (typeof artifact.platform !== "string") return release;
-			if (!isNativePlatform(artifact.platform)) continue;
-			if (
-				platforms.has(artifact.platform) ||
-				artifact.file !== `prime-agent-${release.version}-${artifact.platform}.tar.gz` ||
-				typeof artifact.sha256 !== "string" ||
-				!/^[a-f0-9]{64}$/.test(artifact.sha256)
-			)
-				return release;
-			platforms.add(artifact.platform);
-			binaries.push({ platform: artifact.platform, file: artifact.file, sha256: artifact.sha256 });
-		}
-		if (binaries.length > 0) release.binaries = binaries;
-	}
-	return release;
+	return release && { ...release, version: release.tag.slice(4) };
 }
 
 export async function getLatestPiVersion(

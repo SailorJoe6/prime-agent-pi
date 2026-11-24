@@ -1,0 +1,1 @@
+- Repointed managed native install, repair, and update to checksum-verified Prime Agent Pi releases, with stable by default and optional previews.

@@ -358,11 +358,15 @@ describe("public command routing", () => {
 
 	it("separates Prime Agent updates from package updates", async () => {
 		await handlePublicCommand(["update", "--force"]);
+		await handlePublicCommand(["update", "--preview"]);
+		await handlePublicCommand(["update", "--nightly"]);
 		await handlePublicCommand(["package", "update"]);
 		await handlePublicCommand(["package", "update", "npm:@example/tools"]);
 
 		expect(mocks.packageCommands).toEqual([
 			["update", "--self", "--force"],
+			["update", "--self", "--preview"],
+			["update", "--self", "--nightly"],
 			["update", "--extensions"],
 			["update", "npm:@example/tools"],
 		]);

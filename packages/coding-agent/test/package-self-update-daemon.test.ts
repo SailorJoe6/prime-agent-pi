@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -9,11 +9,13 @@ import {
 	DaemonUpdateRestartStatusWriter,
 	waitForActiveDaemonUpdateRestartCoordinator,
 } from "../src/cli/daemon-update-restart.js";
+import type * as NativeUpdateModule from "../src/cli/native-update.js";
+import { getNativeUpdatePlan, NativeReleaseUnavailableError } from "../src/cli/native-update.js";
+import type * as ConfigModule from "../src/config.js";
 import {
 	ENV_AGENT_DIR,
 	getDaemonUpdateRestartManifestPath,
 	getLegacyDaemonUpdateRestartManifestPath,
-	PACKAGE_NAME,
 	SELF_UPDATE_INTERACTIVE_CHILD_ENV,
 	SELF_UPDATE_NOT_ATTEMPTED_EXIT_CODE,
 	VERSION,
@@ -125,7 +127,6 @@ const mockState = vi.hoisted(() => ({
 	createThrowSessionPaths: [] as string[],
 	daemonProbe: { reachable: true, activeSessions: [] } as MockRunningDaemonProbe,
 	daemonProbeAfterShutdown: undefined as MockRunningDaemonProbe | undefined,
-	globalPackageRoot: "",
 	hello: { protocol: { version: 0 } } as {
 		protocol: { version: number };
 		schemaId?: string;
@@ -175,6 +176,16 @@ function useFixedOwnerHello(): void {
 	};
 }
 
+vi.mock("../src/config.js", async (importOriginal) => ({
+	...(await importOriginal<typeof ConfigModule>()),
+	isBunBinary: true,
+}));
+
+vi.mock("../src/cli/native-update.js", async (importOriginal) => {
+	const original = await importOriginal<typeof NativeUpdateModule>();
+	return { ...original, getNativeUpdatePlan: vi.fn() };
+});
+
 vi.mock("child_process", () => ({
 	spawn: vi.fn((command: string, args: string[]) => {
 		mockState.calls.push(`spawn:${command} ${args.join(" ")}`);
@@ -191,11 +202,6 @@ vi.mock("child_process", () => ({
 		};
 		return child;
 	}),
-	spawnSync: vi.fn(() => ({
-		status: 0,
-		stdout: `${mockState.globalPackageRoot}\n`,
-		stderr: "",
-	})),
 }));
 
 vi.mock("../src/cli/daemon-update-restart.js", async (importOriginal) => {
@@ -394,12 +400,10 @@ describe("self-update daemon restart", () => {
 	let tempDir: string;
 	let agentDir: string;
 	let projectDir: string;
-	let packageDir: string;
 	let originalAgentDir: string | undefined;
-	let originalPiPackageDir: string | undefined;
 	let originalCwd: string;
-	let originalExecPath: string;
 	let originalExitCode: typeof process.exitCode;
+	let originalUpdateChild: string | undefined;
 
 	async function performUpdateAndRunCoordinator(originActiveSessionId?: string): Promise<void> {
 		await handlePackageCommand(["update", "--self", "--daemon-socket", mockState.socketPath]);
@@ -471,8 +475,6 @@ describe("self-update daemon restart", () => {
 		tempDir = join(tmpdir(), `pi-self-update-daemon-${Date.now()}-${Math.random().toString(36).slice(2)}`);
 		agentDir = join(tempDir, "agent");
 		projectDir = join(tempDir, "project");
-		packageDir = join(tempDir, "global-prefix", "lib", "node_modules", PACKAGE_NAME);
-		mockState.globalPackageRoot = join(tempDir, "global-prefix", "lib", "node_modules");
 		mockState.hello = { protocol: { version: DAEMON_PROTOCOL_VERSION }, schemaId: DAEMON_SCHEMA_ID };
 		mockState.helloCount = 0;
 		mockState.lastCoordinatorStatus = undefined;
@@ -504,30 +506,37 @@ describe("self-update daemon restart", () => {
 		mkdirSync(agentDir, { recursive: true });
 		mkdirSync(join(agentDir, "daemon-update-restarts"), { recursive: true });
 		mkdirSync(projectDir, { recursive: true });
-		mkdirSync(packageDir, { recursive: true });
 
 		originalAgentDir = process.env[ENV_AGENT_DIR];
-		originalPiPackageDir = process.env.PI_PACKAGE_DIR;
 		originalCwd = process.cwd();
-		originalExecPath = process.execPath;
 		originalExitCode = process.exitCode;
+		originalUpdateChild = process.env[SELF_UPDATE_INTERACTIVE_CHILD_ENV];
 		process.exitCode = undefined;
 		process.env[ENV_AGENT_DIR] = agentDir;
-		process.env.PI_PACKAGE_DIR = packageDir;
 		process.chdir(projectDir);
-		Object.defineProperty(process, "execPath", {
-			value: join(packageDir, "dist", "cli.js"),
-			configurable: true,
-		});
-		writeFileSync(join(agentDir, "settings.json"), JSON.stringify({ npmCommand: ["npm"] }, null, 2));
-		vi.stubGlobal(
-			"fetch",
-			vi.fn(async () => Response.json({ version: "999.0.0" })),
-		);
+		vi.mocked(getNativeUpdatePlan)
+			.mockReset()
+			.mockResolvedValue({
+				targetVersion: "999.0.0",
+				command: {
+					command: "unprepared",
+					args: [],
+					display: "prime-agent update",
+					prepare: async () => {
+						mockState.calls.push("prepare-installer");
+						return {
+							command: "/usr/bin/env",
+							args: ["sh", "installer", "999.0.0"],
+							cleanup: () => {
+								mockState.calls.push("cleanup-installer");
+							},
+						};
+					},
+				},
+			});
 	});
 
 	afterEach(() => {
-		vi.unstubAllGlobals();
 		process.chdir(originalCwd);
 		process.exitCode = originalExitCode;
 		if (originalAgentDir === undefined) {
@@ -535,13 +544,11 @@ describe("self-update daemon restart", () => {
 		} else {
 			process.env[ENV_AGENT_DIR] = originalAgentDir;
 		}
-		if (originalPiPackageDir === undefined) {
-			delete process.env.PI_PACKAGE_DIR;
+		if (originalUpdateChild === undefined) {
+			delete process.env[SELF_UPDATE_INTERACTIVE_CHILD_ENV];
 		} else {
-			process.env.PI_PACKAGE_DIR = originalPiPackageDir;
+			process.env[SELF_UPDATE_INTERACTIVE_CHILD_ENV] = originalUpdateChild;
 		}
-		delete process.env[SELF_UPDATE_INTERACTIVE_CHILD_ENV];
-		Object.defineProperty(process, "execPath", { value: originalExecPath, configurable: true });
 		rmSync(tempDir, { recursive: true, force: true });
 	});
 
@@ -567,76 +574,33 @@ describe("self-update daemon restart", () => {
 
 	it("uses the interactive no-change sentinel only when self-update is unchanged", async () => {
 		process.env[SELF_UPDATE_INTERACTIVE_CHILD_ENV] = "1";
-		vi.stubGlobal(
-			"fetch",
-			vi.fn(async () => Response.json({ version: "0.2.6" })),
-		);
+		vi.mocked(getNativeUpdatePlan).mockResolvedValueOnce({ targetVersion: VERSION });
 
 		await expect(handlePackageCommand(["update", "--self"])).resolves.toBe(true);
 
 		expect(process.exitCode).toBe(SELF_UPDATE_NOT_ATTEMPTED_EXIT_CODE);
-		expect(mockState.calls.some((call) => call.startsWith("spawn:npm "))).toBe(false);
+		expect(mockState.calls).toEqual([]);
 	});
 
-	it.each(["bad checksum", "duplicate platform"])(
-		"keeps an up-to-date npm install and daemon untouched with %s metadata",
-		async (invalidKind) => {
+	it.each(["--stable", "--preview", "--nightly"])(
+		"PAPI-61 leaves a missing %s release and daemon untouched",
+		async (channel) => {
 			process.env[SELF_UPDATE_INTERACTIVE_CHILD_ENV] = "1";
-			const artifact = {
-				platform: "linux-x64",
-				file: `prime-agent-${VERSION}-linux-x64.tar.gz`,
-				sha256: "a".repeat(64),
-			};
-			vi.stubGlobal(
-				"fetch",
-				vi.fn(async () =>
-					Response.json({
-						version: VERSION,
-						package: PACKAGE_NAME,
-						tarball: `https://releases.example/releases/v${VERSION}/prime-agent-${VERSION}.tgz`,
-						binaries:
-							invalidKind === "bad checksum" ? [{ ...artifact, sha256: "invalid" }] : [artifact, artifact],
-					}),
-				),
-			);
+			vi.mocked(getNativeUpdatePlan).mockRejectedValueOnce(new NativeReleaseUnavailableError());
 
-			await expect(handlePackageCommand(["update", "--self"])).resolves.toBe(true);
+			await expect(handlePackageCommand(["update", "--self", channel, "--force"])).resolves.toBe(true);
 
 			expect(process.exitCode).toBe(SELF_UPDATE_NOT_ATTEMPTED_EXIT_CODE);
 			expect(mockState.calls).toEqual([]);
+			expect(existsSync(join(agentDir, "settings.json"))).toBe(false);
 		},
 	);
 
-	it.each(["bad checksum", "duplicate platform"])(
-		"keeps the selected npm release URL when a newer release has %s metadata",
-		async (invalidKind) => {
-			mockState.daemonProbe = { reachable: false };
-			const tarball = "https://releases.example/releases/v999.0.0/prime-agent-999.0.0.tgz";
-			const artifact = {
-				platform: "linux-x64",
-				file: "prime-agent-999.0.0-linux-x64.tar.gz",
-				sha256: "a".repeat(64),
-			};
-			vi.stubGlobal(
-				"fetch",
-				vi.fn(async () =>
-					Response.json({
-						version: "999.0.0",
-						package: PACKAGE_NAME,
-						tarball,
-						binaries:
-							invalidKind === "bad checksum" ? [{ ...artifact, sha256: "invalid" }] : [artifact, artifact],
-					}),
-				),
-			);
+	it.each(["--preview", "--nightly"])("PAPI-61 persists %s as preview after a successful update", async (channel) => {
+		await expect(handlePackageCommand(["update", "--self", channel, "--force"])).resolves.toBe(true);
 
-			await expect(handlePackageCommand(["update", "--self"])).resolves.toBe(true);
-
-			expect(mockState.calls.filter((call) => call.startsWith("spawn:"))).toEqual([
-				`spawn:npm install -g ${tarball}`,
-			]);
-		},
-	);
+		expect(readFileSync(join(agentDir, "settings.json"), "utf8")).toContain('"updateChannel": "preview"');
+	});
 
 	it("does not use the no-change sentinel when interactive self-update is cancelled", async () => {
 		process.env[SELF_UPDATE_INTERACTIVE_CHILD_ENV] = "1";
@@ -658,7 +622,7 @@ describe("self-update daemon restart", () => {
 			await expect(handlePackageCommand(["update", "--self"])).resolves.toBe(true);
 
 			expect(process.exitCode).toBe(1);
-			expect(mockState.calls.some((call) => call.startsWith("spawn:npm "))).toBe(false);
+			expect(mockState.calls).toEqual(["probe-daemon"]);
 		} finally {
 			errorSpy.mockRestore();
 		}
@@ -673,7 +637,12 @@ describe("self-update daemon restart", () => {
 			await expect(handlePackageCommand(["update", "--self"])).resolves.toBe(true);
 
 			expect(process.exitCode).toBe(1);
-			expect(mockState.calls).toContain("probe-daemon");
+			expect(mockState.calls).toEqual([
+				"probe-daemon",
+				"prepare-installer",
+				"spawn:/usr/bin/env sh installer 999.0.0",
+				"cleanup-installer",
+			]);
 			expect(mockState.calls.some((call) => call === "daemon-request:prepare_update_restart")).toBe(false);
 			expect(mockState.calls.some((call) => call === "shutdown-daemon")).toBe(false);
 		} finally {
@@ -689,7 +658,12 @@ describe("self-update daemon restart", () => {
 		await expect(handlePackageCommand(["update", "--self", "--daemon-socket", customSocketPath])).resolves.toBe(true);
 
 		expect(mockState.probeSocketPaths).toEqual([customSocketPath]);
-		expect(mockState.calls.some((call) => call.startsWith("spawn:npm "))).toBe(true);
+		expect(mockState.calls).toEqual([
+			"probe-daemon",
+			"prepare-installer",
+			"spawn:/usr/bin/env sh installer 999.0.0",
+			"cleanup-installer",
+		]);
 		expect(mockState.calls.some((call) => call.startsWith("launch-coordinator:"))).toBe(false);
 	});
 
@@ -945,7 +919,7 @@ describe("self-update daemon restart", () => {
 			await expect(performUpdateAndRunCoordinator()).resolves.toBeUndefined();
 
 			expect(process.exitCode).toBeUndefined();
-			const spawnIndex = mockState.calls.findIndex((call) => call.startsWith("spawn:npm "));
+			const spawnIndex = mockState.calls.findIndex((call) => call.startsWith("spawn:/usr/bin/env "));
 			const launchIndex = mockState.calls.indexOf(`launch-coordinator:${mockState.socketPath}`);
 			const fenceIndex = mockState.calls.indexOf("persist-daemon-startup-fence");
 			const prepareIndex = mockState.calls.indexOf("daemon-request:prepare_update_restart");

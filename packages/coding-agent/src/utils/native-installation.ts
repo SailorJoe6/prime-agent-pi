@@ -21,7 +21,7 @@ export const NATIVE_PLATFORMS = [
 const NATIVE_PLATFORM_PATTERN = [...NATIVE_PLATFORMS].sort((left, right) => right.length - left.length).join("|");
 
 const NATIVE_RELEASE_DIRECTORY = new RegExp(
-	`^\\.\\./releases/(\\d+\\.\\d+\\.\\d+(?:-[0-9A-Za-z.-]+)?)-(${NATIVE_PLATFORM_PATTERN})-([a-f0-9]{64})(?:\\.[A-Za-z0-9]{6})?/prime-agent$`,
+	`^\\.\\./releases/(\\d+\\.\\d+\\.\\d+(?:\\.\\d+)?(?:-[0-9A-Za-z.-]+)?)-(${NATIVE_PLATFORM_PATTERN})-([a-f0-9]{64})(?:\\.[A-Za-z0-9]{6})?/prime-agent$`,
 );
 
 export function isNativePlatform(platform: string): boolean {
