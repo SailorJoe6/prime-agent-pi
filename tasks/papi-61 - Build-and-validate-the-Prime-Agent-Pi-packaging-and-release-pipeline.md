@@ -4,12 +4,14 @@ title: Build and validate the Prime Agent Pi packaging and release pipeline
 status: In Progress
 assignee: []
 created_date: '2026-11-24T00:57:00Z'
-updated_date: '2026-11-24T03:11:00Z'
+updated_date: '2026-11-24T03:21:00Z'
 labels: []
 dependencies: []
 documentation:
   - docs/product-contract.md
   - docs/pi-release-engineering.md
+  - packages/coding-agent/README.md
+  - packages/coding-agent/docs/settings.md
 modified_files:
   - packages/coding-agent/src/utils/pi-release-version.ts
   - packages/coding-agent/test/pi-release-version.test.ts
@@ -52,6 +54,9 @@ modified_files:
   - packages/coding-agent/test/settings-manager.test.ts
   - packages/coding-agent/test/version-check.test.ts
   - scripts/check-installer.mjs
+  - packages/coding-agent/README.md
+  - packages/coding-agent/docs/settings.md
+  - packages/coding-agent/src/modes/shared/startup-notices.ts
 type: task
 ordinal: 61000
 ---
@@ -124,10 +129,12 @@ Handoff: owner accepted revised slice 4A at code bd8bf6337eedf41c629157ddf84dc90
 Slice 4B candidate (code tree 23466dae961bf2b095d7d11780beac9ca65469e4): startup notices, CLI and interactive update use Pi-owned tagged GitHub Releases. Stable is default; --preview opts in and explicit legacy nightly maps to preview. Installer bytes are checked after confirmation and before execution. The selected archive inventory must match the manifest and the downloaded archive must pass SHA-256 before extraction/replacement. Managed installs retain offline rollback and explicit legacy recovery, without automatic upstream/R2/npm distribution fallback. npm run check (including installer fixtures and test policy), git diff --check, and 14 focused suites with shuffle seed 61 passed (382 tests; one real compiled-archive case skipped because no matching archive was supplied). Seven caller suites passed with seeds 17 and 101. Disposable shell fixtures cover fresh stable install, preview update, wrong inventory/archive checksum, stale current guard, and offline rollback. Mocked TS tests cover check-only notices, wrong installer bytes, no fallback, and tagged repair planning. Mutations disabling verification or caller safeguards were detected. Exact-artifact Docker lifecycle, saved-state compatibility, actual interactive terminal restart/restore, and publication gates remain. No release, tag, bump, merge, operator install or restart. No acceptance checkbox changed.
 
 Handoff: revise slice 4B at code b538ded0b4e49d782dfb678ec4ddc5a6ba4c2a01 / Backlog a8e0c34286750e14ad0fc7232d880d95e8fd5959 for three verified in-scope findings only. (1) Preserve v0.9.8 public SettingsManager channel accessor signatures and saved nightly behavior; use separate internal Pi preview normalization and prove legacy TypeScript caller and persisted preference compatibility. (2) Match shell and TypeScript Pi managed-install health checks for required regular pi-release.json, exempt legacy targets, and prove normal same-tag repair selection in a disposable missing-file fixture. (3) Correct the packaged README and settings docs for Pi setup, verified tagged assets, stable default and preview opt-in, without advertising upstream/R2 distribution or unsupported feed overrides. Run focused project checks, publish scoped code and native evidence separately, and stop for review before full Docker lifecycle or publication-gate work. No live installation, release, merge, public bump, tag or activation.
+
+Slice 4B scoped revision (code tree d1d41242034e4458d8daddab1554345d23343297, parent b538ded0b4e49d782dfb678ec4ddc5a6ba4c2a01): restored the v0.9.8 public SettingsManager signatures and global nightly persistence. An internal helper maps saved nightly (and prior Pi preview values) to Pi preview; explicit successful preview selection writes nightly for rollback compatibility. TypeScript now matches the shell health rule: Pi targets identified by the canonical install source require regular pi-release.json; legacy targets are exempt. A healthy same-tag fixture is a no-op; missing, directory or symlink metadata selects same-tag repair without --force. The shell fixture restores missing metadata and keeps the healthy previous target. Packaged README and settings docs now describe Pi source setup, checksum-verified tagged assets, stable default and explicit preview, with the upstream installer, R2 feeds and unsupported override removed. npm run check and git diff --check passed; six focused suites passed 128 tests (shuffle seed 63). Channel/caller suites passed 120 tests at seed 62. Native update plus native installer suites passed 106 tests, one compiled-archive test skipped (no matching archive). Disposable mutations caught incompatible public types and preference handling, lost TypeScript same-tag repair and the shell accepting a damaged rollback target. No acceptance checkbox or status changed. Docker lifecycle on shipped binaries, saved-state compatibility, interactive terminal restart/restore and publication-gate proof remain out of scope; no release, merge, tag, version bump or operator activation.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
 
 <!-- SECTION:FINAL_SUMMARY:BEGIN -->
-Bounded Pi installer and updater integration is ready for review on disposable fixture evidence. Exact-artifact Docker lifecycle, compatibility and publication gates remain open.
+Slice 4B revised for the three review findings and ready for review on disposable fixture evidence. Exact-artifact lifecycle, compatibility and publication gates remain open.
 <!-- SECTION:FINAL_SUMMARY:END -->
