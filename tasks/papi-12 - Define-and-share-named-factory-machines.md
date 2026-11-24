@@ -4,7 +4,7 @@ title: Define and share named factory machines
 status: In Progress
 assignee: []
 created_date: '2026-11-22T22:17:00Z'
-updated_date: '2026-11-24T14:59:00Z'
+updated_date: '2026-11-24T15:04:00Z'
 labels: []
 milestone: m-0
 dependencies: []
@@ -15,6 +15,8 @@ references:
     https://github.com/PrimeIntellect-ai/prime-agent/blob/763094e1b6a7c17450ee8399b06cda1853847ca5/prime-agent-runtime/test/test_factory.py
   - >-
     https://github.com/PrimeIntellect-ai/prime-agent/blob/763094e1b6a7c17450ee8399b06cda1853847ca5/prime-agent-runtime/src/rlm/factory.py
+  - >-
+    https://github.com/PrimeIntellect-ai/prime-agent/blob/763094e1b6a7c17450ee8399b06cda1853847ca5/.changes/feat-machine-library.md
 documentation:
   - >-
     https://github.com/SailorJoe6/prime-agent-pi/blob/dfba53a40c277c8341930024b014ffbdaf7e1e68/docs/upstream-feature-inventory.md#factory-workflows-sessions-and-terminal-controls
@@ -27,6 +29,8 @@ modified_files:
   - prime-agent-runtime/test/test_harness.py
   - packages/coding-agent/src/core/refinement/refinement.ts
   - packages/coding-agent/test/refinement.test.ts
+  - prime-agent-runtime/src/rlm/machine_library.py
+  - prime-agent-runtime/test/test_machine_library.py
 type: feature
 ordinal: 12000
 ---
@@ -61,6 +65,8 @@ Accepted slice 2 review finding at 72bd16368: save_factory publishes the candida
 Storage revision checkpoint: the accepted atomic write failure finding is addressed and regression-tested. Stop for review; stored-first selection, library and CLI remain pending. Both task criteria remain unchecked.
 
 Independent Astra review accepted the failed-save repair at d6a6bbfb without material defects. Next slice: implement only the inert Python MACHINE.md library and selector from steps 2–3, using the released file format and shared-before-personal resolution. Validate before import, preserve file bytes, use no-clobber export, and keep library export separate from stored-first Python selection. Prove round trips and rejected references with benign document-formatting fixtures; show that library-only selection creates no harness entry. Publish and stop for review before CLI work; no execution or product changes.
+
+Python library checkpoint: inert MACHINE.md import, export, listing, and stored-first selection implemented and tested. Stop for review; command registry, CLI dispatch and CLI acceptance coverage remain. Both acceptance criteria remain unchecked.
 <!-- SECTION:PLAN:END -->
 
 ## Implementation Notes
@@ -71,4 +77,12 @@ Slice 1: implemented only the inert v0.10.0 Python schema validation and DAG com
 Slice 2: added validated HarnessState save_factory/get_factory/list_factories for session-local and explicitly global named definitions in the existing harness_state.json. Stores authored explicit machines and DAGs as opaque JSON strings in an optional field so TypeScript /refine preserves them without introducing prompt or refinement entries. No migration, execution, stored/library selector, library IO, or CLI. Document-formatting graph and DAG round-trip after reopen; invalid references neither create a file nor change prior bytes; existing entries and refinement events survive. Passed 57 harness, 5 factory validation, and 87 host refinement tests; temporarily broke validation, persistence, scope routing, and host preservation and observed the four focused regressions fail, then restored and reran all three suites. Commands: (cd prime-agent-runtime && uv run --locked python -m unittest discover -s test -p test_harness.py); (cd prime-agent-runtime && uv run --locked python -m unittest discover -s test -p test_factory_spec.py -v); (cd packages/coding-agent && npx tsx ../../node_modules/vitest/dist/cli.js --run test/refinement.test.ts); npm run check; npm run check:test-policy.
 
 Accepted Astra storage finding at 72bd16368d79b80d0634795f7b0c8b4d993276f9 fixed: save_factory restores the previous cached value or removes a newly inserted name if save raises, then re-raises the original exception. Atomic writer and storage format unchanged. The benign formatting regression injects failure at os.replace and checks the same exception object, unchanged file bytes or absence, cached value or absence, and reopened value or absence after a successful unrelated create_memory. Before the fix all four cache/reopen subcases failed; after the fix they passed. Passed 58 harness (also shuffled at seeds 12, 42, 73), 5 factory spec and 87 host refinement tests, npm run check, and npm run check:test-policy. Commands: (cd prime-agent-runtime && uv run --locked python -m unittest discover -s test -p test_harness.py); (cd prime-agent-runtime && uv run --locked python -m unittest discover -s test -p test_factory_spec.py -v); (cd packages/coding-agent && npx tsx ../../node_modules/vitest/dist/cli.js --run test/refinement.test.ts). Focused reproduction: (cd prime-agent-runtime && uv run --locked python -m unittest discover -s test -p test_harness.py -v -k test_papi_12_failed_factory_write_cannot_leak_into_a_later_save).
+
+Python MACHINE.md slice: formatting graph saved/reopened and exported from the harness, re-imported unchanged, then replaced with a hand-authored UTF-8 BOM/CRLF file that survived import and library export byte for byte. Invalid state and DAG references create no library or export and preserve existing personal bytes. Shared wins by declared name; broken specs are skipped in list and are distinguished from missing names in resolution. Stored definitions win selection but never intercept library export, and library-only selection leaves harness state absent. Existing export targets are refused by both writers. Validation: 6 library, 58 harness, 5 factory spec tests, npm run check, and npm run check:test-policy passed. Seven deliberate mutations (agent directory, byte preservation, reference validation, single-fence check, shared precedence, stored precedence, exclusive open) failed the library tests before restoration. Commands: (cd prime-agent-runtime && uv run --locked python -m unittest discover -s test -p test_machine_library.py -v); (cd prime-agent-runtime && uv run --locked python -m unittest discover -s test -p test_harness.py); (cd prime-agent-runtime && uv run --locked python -m unittest discover -s test -p test_factory_spec.py -v).
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Python validation, harness storage, and the inert MACHINE.md library and selector are implemented. Pending review and the CLI slice; no machine execution is supported.
+<!-- SECTION:FINAL_SUMMARY:END -->
