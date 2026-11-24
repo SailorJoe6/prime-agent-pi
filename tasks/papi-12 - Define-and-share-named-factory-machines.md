@@ -4,7 +4,7 @@ title: Define and share named factory machines
 status: In Progress
 assignee: []
 created_date: '2026-11-22T22:17:00Z'
-updated_date: '2026-11-24T14:56:00Z'
+updated_date: '2026-11-24T14:59:00Z'
 labels: []
 milestone: m-0
 dependencies: []
@@ -59,6 +59,8 @@ Slice checkpoint: harness save/get/list implemented. Stored-first selection rema
 Accepted slice 2 review finding at 72bd16368: save_factory publishes the candidate to its in-memory cache before the atomic write; when the write raises, a later unrelated harness save can persist the rejected candidate. The next execute pass must revise only this failure path. Preserve the original exception and the prior definition or absence in memory and on disk. Prove replacement and initial-save failures with benign formatting fixtures and a subsequent unrelated successful write. Publish the revision and stop for review before library or CLI work.
 
 Storage revision checkpoint: the accepted atomic write failure finding is addressed and regression-tested. Stop for review; stored-first selection, library and CLI remain pending. Both task criteria remain unchecked.
+
+Independent Astra review accepted the failed-save repair at d6a6bbfb without material defects. Next slice: implement only the inert Python MACHINE.md library and selector from steps 2–3, using the released file format and shared-before-personal resolution. Validate before import, preserve file bytes, use no-clobber export, and keep library export separate from stored-first Python selection. Prove round trips and rejected references with benign document-formatting fixtures; show that library-only selection creates no harness entry. Publish and stop for review before CLI work; no execution or product changes.
 <!-- SECTION:PLAN:END -->
 
 ## Implementation Notes
