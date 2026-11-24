@@ -44,12 +44,12 @@ export async function discoverPiRelease(
 			if (release.prerelease !== preview || (preview && options.channel !== "preview")) continue;
 			if (!Array.isArray(release.assets)) continue;
 			const assetBaseUrl = `${downloadRoot}/${tag}`;
-			const assets = new Map<string, number>();
+			const assets = new Map<string, Record<string, unknown> | null>();
 			for (const value of release.assets) {
 				const asset = record(value);
 				if (typeof asset?.name !== "string" || asset.state !== "uploaded") continue;
 				if (asset.browser_download_url !== `${assetBaseUrl}/${asset.name}`) continue;
-				assets.set(asset.name, (assets.get(asset.name) ?? 0) + 1);
+				assets.set(asset.name, assets.has(asset.name) ? null : asset);
 			}
 			const expectedAssets = [
 				PI_RELEASE_MANIFEST,
@@ -57,13 +57,13 @@ export async function discoverPiRelease(
 				PI_RELEASE_INSTALLER,
 				...NATIVE_PLATFORMS.map((platform) => `prime-agent-pi-${tag.slice(4)}-${platform}.tar.gz`),
 			];
-			if (expectedAssets.some((file) => assets.get(file) !== 1)) continue;
-			candidates.push({ identity, tag, assetBaseUrl });
+			if (expectedAssets.some((file) => !assets.get(file))) continue;
+			candidates.push({ identity, tag, assetBaseUrl, assets });
 		}
 		if (releases.length < pageSize) break;
 	}
 	candidates.sort((left, right) => comparePiReleases(right.identity, left.identity));
-	for (const { tag, assetBaseUrl } of candidates) {
+	for (const { tag, assetBaseUrl, assets } of candidates) {
 		const response = await request(`${assetBaseUrl}/${PI_RELEASE_MANIFEST}`, { signal });
 		if (!response.ok) continue;
 		const json: unknown = await response.json().catch((error: unknown) => {
@@ -72,6 +72,16 @@ export async function discoverPiRelease(
 		});
 		const manifest = parsePiReleaseManifest(json);
 		if (manifest?.tag !== tag) continue;
+		const payloads = [manifest.installer, ...manifest.binaries];
+		if (
+			payloads.some(({ file, sha256 }) => {
+				const digest = assets.get(file)?.digest;
+				if (typeof digest !== "string") return false;
+				const normalized = digest.toLowerCase();
+				return normalized.startsWith("sha256:") && normalized !== `sha256:${sha256}`;
+			})
+		)
+			continue;
 		return { ...manifest, assetBaseUrl };
 	}
 	return undefined;

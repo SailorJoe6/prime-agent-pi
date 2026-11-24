@@ -170,8 +170,11 @@ The read-only discovery helper lists Pi GitHub Releases and selects the newest
 complete candidate numerically. By default it considers stable releases only;
 preview opt-in considers stable and prerelease candidates together. It skips
 legacy tags, drafts, mismatched channels, incomplete listings, and manifests
-that do not match their tag or asset naming contract. It returns the tagged
-asset URL prefix and validated metadata, not verified download bytes. A caller
+that do not match their tag or asset naming contract. If GitHub reports a
+SHA-256 digest for the installer or any of the eight archives, discovery skips
+the candidate on disagreement with the tagged manifest. Missing or null
+digests do not disqualify a release. Discovery returns the tagged asset URL
+prefix and validated metadata, not verified download bytes. A caller
 must verify bytes before use and must not treat an older complete candidate as
 permission to downgrade.
 

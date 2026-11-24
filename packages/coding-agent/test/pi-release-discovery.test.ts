@@ -34,10 +34,25 @@ function release(publicVersion: string, previewSequence?: number) {
 		draft: false,
 		prerelease: previewSequence !== undefined,
 		assets: [manifestFile, "SHA256SUMS", manifest.installer.file, ...manifest.binaries.map(({ file }) => file)].map(
-			(name) => ({ name, state: "uploaded", browser_download_url: `${base}/${name}` }),
+			(name) => ({
+				name,
+				state: "uploaded",
+				browser_download_url: `${base}/${name}`,
+				digest: undefined as string | null | undefined,
+			}),
 		),
 	};
 	return { base, listing, manifest };
+}
+
+function withPayloadDigests(candidate: ReturnType<typeof release>) {
+	const { listing, manifest } = candidate;
+	for (const { file, sha256 } of [manifest.installer, ...manifest.binaries]) {
+		const asset = listing.assets.find(({ name }) => name === file);
+		if (!asset) throw new Error(`Missing fixture asset: ${file}`);
+		asset.digest = `sha256:${sha256}`;
+	}
+	return candidate;
 }
 
 function fixture(...releases: ReturnType<typeof release>[]) {
@@ -121,6 +136,29 @@ describe("Pi GitHub Release discovery", () => {
 		}
 		const { fetcher } = fixture(latest, old);
 		return expect(discoverPiRelease({ fetcher })).resolves.toMatchObject({ tag: old.manifest.tag });
+	});
+
+	it.each(["install-pi.sh", ...NATIVE_PLATFORMS])(
+		"PAPI-61 skips a newer release with a conflicting %s digest",
+		async (target) => {
+			const latest = withPayloadDigests(release("0.10.3"));
+			const older = withPayloadDigests(release("0.10.2"));
+			const file = target === "install-pi.sh" ? target : `prime-agent-pi-0.10.3-${target}.tar.gz`;
+			const asset = latest.listing.assets.find(({ name }) => name === file);
+			if (!asset) throw new Error(`Missing fixture asset: ${file}`);
+			asset.digest = `sha256:${"b".repeat(64)}`;
+			const { fetcher, requests } = fixture(latest, older);
+			expect(await discoverPiRelease({ fetcher })).toMatchObject({ tag: older.manifest.tag });
+			expect(requests).toEqual([`${api}1`, `${latest.base}/${manifestFile}`, `${older.base}/${manifestFile}`]);
+		},
+	);
+
+	it("PAPI-61 accepts matching and omitted or null payload digests in the same listing", async () => {
+		const latest = withPayloadDigests(release("0.10.3"));
+		latest.listing.assets[2].digest = null;
+		latest.listing.assets[3].digest = undefined;
+		const { fetcher } = fixture(latest);
+		await expect(discoverPiRelease({ fetcher })).resolves.toMatchObject({ tag: latest.manifest.tag });
 	});
 
 	it("returns no candidate when only legacy or unavailable releases exist", async () => {
