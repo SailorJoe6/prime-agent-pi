@@ -42,4 +42,47 @@ absence) is preserved. A later harness write won't save the failed definition.
 The store keeps the authored machine or DAG, not the compiled graph. Definitions share
 Pi's existing harness file and are not included in the refinement prompt.
 
-Library lookup, sharing commands, and execution are not part of this API.
+## Share and select a definition with `MACHINE.md`
+
+Use `rlm.machine_library` to share definitions without running them:
+
+```python
+from rlm.machine_library import MachineLibrary, export_factory_spec, select_factory
+
+library = MachineLibrary()
+export_factory_spec(
+    rlm.harness.get_factory("format-document"),
+    "share/MACHINE.md",
+    name="format-document",
+    description="Outline and format a document",
+)
+library.import_machine("share/MACHINE.md")
+spec = select_factory("format-document", rlm.harness, library=library)
+```
+
+The [released format](https://github.com/PrimeIntellect-ai/prime-agent/blob/763094e1b6a7c17450ee8399b06cda1853847ca5/.changes/feat-machine-library.md)
+uses UTF-8, a `---` frontmatter block with `name` and `description`, optional
+`version` and `author`, and exactly one fenced `machine-spec` JSON object.
+Names are 1–64 lowercase ASCII letters, digits, or hyphens, starting and
+ending with a letter or digit. A description is one non-empty line. Any prose
+outside the spec is documentation, not instructions to the runtime.
+
+Libraries contain `<directory>/MACHINE.md` files. The declared name determines
+lookup, not the directory name. `PRIME_AGENT_MACHINES_DIR` points to the shared
+library; without it, Python checks the runtime package's `machines/` directory.
+This slice does not ship any bundled definitions. The personal library is
+`machines/` under Pi's agent directory (`PRIME_AGENT_CODING_AGENT_DIR`, then
+`PI_CODING_AGENT_DIR`, then `~/.prime/agent`). Set `shared_dir` and `personal_dir`
+explicitly to work with other roots.
+
+- `list_machines()` and `resolve_machine(name)` consider only valid definitions,
+  with shared definitions winning name collisions. `MachineResolutionError.broken`
+  distinguishes a broken file from a missing name.
+- `import_machine(path)` validates before atomically installing the original
+  bytes in the personal library. An invalid import cannot replace a good copy.
+- `export_machine(name, path)` copies the selected library file byte for byte.
+  It does not consult the harness. Both export APIs refuse existing targets.
+- `select_factory(name, state)` checks the selected harness scope first, then
+  falls back to the library without writing a harness entry.
+
+These APIs do not evaluate prompts or guards, start agents, or run machines.
