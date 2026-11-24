@@ -4,7 +4,7 @@ title: Build and validate the Prime Agent Pi packaging and release pipeline
 status: In Progress
 assignee: []
 created_date: '2026-11-24T00:57:00Z'
-updated_date: '2026-11-24T04:05:00Z'
+updated_date: '2026-11-24T04:08:00Z'
 labels: []
 dependencies: []
 documentation:
@@ -145,6 +145,8 @@ AC4 packaged compatibility validation (partial): exact Pi 0.10.2.2 Linux ARM64 m
 Handoff: owner accepted independently reviewed partial AC4 at docs 3d8f51d94cff05286861bb4332f4845559ee9b55 / Backlog 9f32b439c3f9256251b510b02960cc6fa6e05152, tested source a8b6aa3338f1863121aafd9ef895e0e8b737c419. Keep exact scoped results and limits; Prime Claw qualification unresolved, do not run or change it. Next bounded slice: implement and validate publication decision logic with nonpublishing fixtures only. Require explicitly marked previews from validated canonical-main code changes; require an explicit merged stable bump and all five product-contract checks for stable, bound to exact source, version and artifact bytes. Reject missing/mismatched evidence (including required Prime Claw/parity evidence) and preserve immutable prior releases. Keep real publication disabled: no live write credentials for release work, real writer calls, merge, tag, public version bump, release or activation. Publish scoped code/task evidence on normal task refs only and stop for review.
 
 Fixture-only publication decision implemented in scripts/pi-publication-decision.ts with test/pi-publication-decision.test.ts and reproduction in docs/pi-release-engineering.md. Canonical Pi main push and matching manifest SHA required. Preview requires explicit marking, code change and passing repository receipt; stable requires explicit forward version bump and all five contract checks, including a separate Prime Claw compatibility receipt and exact parity claim in notes. Evidence subject binds the exact manifest, SHA256SUMS and release notes; supplied digests must match all eight archives and the installer. Missing inventory, matching existing tag or release, and missing/mismatched checks deny; in-memory publisher fixtures preserve prior releases. npm run check and 104 focused Vitest tests passed (63 decision, 12 manifest builder, 29 version). Worker mutation checks failed as expected when parity notes binding, tag collision guard, Prime Claw receipt requirement or independent asset digest comparison was removed in disposable copies. Fixture observations only: no release trigger, writer, live inventory/evidence authentication, Prime Claw run, parity qualification, version bump, tag, merge, release or activation. No acceptance checkbox changed; stop for owner review.
+
+Handoff: revise fixture-only publication decision 04bf351e5b1e3f32560c20e46cb24fe196ec640c / Backlog 1ce44ea2473cad478d0f42c8914675d0c7329bc3 for the one independently verified finding: substring matching does not prove the exact upstream release identity claimed by stable notes. Require one explicit parity identity in stable notes and match it exactly against the receipt and the manifest three-component upstream version. Preserve binding to the exact notes bytes. Add benign fixtures for exact agreement and distinct versions with a shared prefix, with receipts bound to each fixture’s actual notes. Run focused project checks, publish the bounded correction and evidence separately, and stop for review. No real writer, Prime Claw qualification, public version change, merge, tag, release or activation.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
