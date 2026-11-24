@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import { createReadStream } from "node:fs";
 import { lstat, mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
+import { pathToFileURL } from "node:url";
 import { NATIVE_PLATFORMS } from "../packages/coding-agent/src/utils/native-installation.js";
 import {
 	parsePiReleaseManifest,
@@ -43,7 +44,7 @@ async function hashFile(path: string): Promise<string> {
 	return hash.digest("hex");
 }
 
-async function buildManifest(artifactsDir: string, installerPath: string, outputDir: string) {
+export async function assemblePiReleaseManifest(artifactsDir: string, installerPath: string) {
 	const locations = await receiptPaths(artifactsDir);
 	const archiveDirectories = new Map<string, string>();
 	const binaries = [];
@@ -79,19 +80,27 @@ async function buildManifest(artifactsDir: string, installerPath: string, output
 		installer,
 	});
 	if (!manifest) throw new Error("Native receipts do not form a valid Pi release manifest");
+	const assetDigests: Record<string, string> = { [installer.file]: installer.sha256 };
 	for (const { platform, file, sha256 } of manifest.binaries) {
 		const dir = archiveDirectories.get(platform);
-		if (!dir || (await hashFile(join(dir, file))) !== sha256) throw new Error(`Archive checksum mismatch: ${file}`);
+		if (!dir) throw new Error(`Missing archive directory: ${file}`);
+		const observed = await hashFile(join(dir, file));
+		if (observed !== sha256) throw new Error(`Archive checksum mismatch: ${file}`);
+		assetDigests[file] = observed;
 	}
 
-	const inventory = [...manifest.binaries, manifest.installer].map(({ sha256, file }) => `${sha256}  ${file}\n`).join("");
-	await mkdir(outputDir, { recursive: true });
-	await writeFile(join(outputDir, PI_RELEASE_CHECKSUMS), inventory);
-	await writeFile(join(outputDir, PI_RELEASE_MANIFEST), `${JSON.stringify(manifest, null, 2)}\n`);
+	const checksums = [...manifest.binaries, manifest.installer].map(({ sha256, file }) => `${sha256}  ${file}\n`).join("");
+	const manifestJson = `${JSON.stringify(manifest, null, 2)}\n`;
+	return { manifest, manifestJson, checksums, assetDigests };
 }
 
-const [artifactsDir, installerPath, outputDir, ...extra] = process.argv.slice(2);
-if (!artifactsDir || !installerPath || !outputDir || extra.length) {
-	throw new Error("Usage: tsx scripts/build-pi-release-manifest.ts ARTIFACTS_DIR INSTALLER_PATH OUTPUT_DIR");
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+	const [artifactsDir, installerPath, outputDir, ...extra] = process.argv.slice(2);
+	if (!artifactsDir || !installerPath || !outputDir || extra.length) {
+		throw new Error("Usage: tsx scripts/build-pi-release-manifest.ts ARTIFACTS_DIR INSTALLER_PATH OUTPUT_DIR");
+	}
+	const { manifestJson, checksums } = await assemblePiReleaseManifest(artifactsDir, installerPath);
+	await mkdir(outputDir, { recursive: true });
+	await writeFile(join(outputDir, PI_RELEASE_CHECKSUMS), checksums);
+	await writeFile(join(outputDir, PI_RELEASE_MANIFEST), manifestJson);
 }
-await buildManifest(artifactsDir, installerPath, outputDir);

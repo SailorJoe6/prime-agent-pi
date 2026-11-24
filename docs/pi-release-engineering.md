@@ -366,3 +366,56 @@ inventory. A `fixture-candidate` is not publication authority. This slice has
 no trigger or writer and does not authenticate CI receipts, prove merge or bump
 provenance beyond the supplied observations, check live release inventory, or
 qualify Prime Claw or upstream parity.
+
+### End-to-end local rehearsal (PAPI-61)
+
+Use eight trusted build receipts and their archives from a single build. The
+command reads them and a selected installer, then prints a JSON report to
+stdout. It does not change the inputs, execute the installer or binaries,
+call GitHub, or publish. The report contains the exact manifest and checksum
+text passed to the decision, the measured SHA-256 of each archive and the
+installer, and a separate `fixtureOnly` section. Keep the report out of any
+real publication path.
+
+For the historical [eight-target Actions run 45310741960](https://github.com/SailorJoe6/prime-agent-pi/actions/runs/45310741960),
+point `artifacts` at the retained download root (one directory per target).
+The receipts identify the source and catalog commits, not the Actions run ID.
+Use the source commit's installer bytes, not the current worktree's installer:
+
+```sh
+source_sha=8583ed3dd3f613a11b67c971cd0784a3645e9257
+artifacts=/absolute/path/to/retained-matrix-artifacts
+scratch=$(mktemp -d)
+git show "$source_sha:install.sh" > "$scratch/install.sh"
+node node_modules/tsx/dist/cli.mjs scripts/rehearse-pi-release.ts \
+  "$artifacts" "$scratch/install.sh" "$source_sha" > "$scratch/report.json"
+```
+
+The source SHA is an independent input: a consistently wrong set of receipts
+still fails. Missing/mixed receipts and archive digest mismatches fail before a
+report is emitted. On a disposable copy of the eight receipts, change one
+`sourceSha` to a different SHA and run the command again; it exits nonzero
+with `Inconsistent sourceSha`. Do not edit the retained inputs.
+
+The historical run rehashed all eight `0.10.2.10-preview.3` archives against
+receipts for catalog `01f4d46dd5157ec73f8faf440214088237c81d59`. Two runs with an
+empty HOME and PATH and no credentials produced byte-identical output:
+
+| Report field | Observed |
+| --- | --- |
+| Manifest SHA-256 | `e266fe58000a47d2d3efe4ad2edf826b3d57c37d1751686b35f6eabcb0f96f05` |
+| Checksum inventory SHA-256 | `716732a9f43ee45400c879b33d3bfbb32dda3bad1594bebe71d11a44d91afd19` |
+| Fixture subject | `072f64be57b6fa0415da525491dd569b6a07afaccc1e34701a52c1267d7e3374` |
+| Fixture decision | `fixture-candidate`, `pi-v0.10.2.10-preview.3`, `prerelease: true` |
+
+The simulated main push, repository check, notes and empty tag/release
+inventory are **fixtures**, not observations of CI or current GitHub state.
+The rehearsal supplies no stable bump, parity claim or compatibility receipt;
+a stable input is denied. Archive SHA-256 binds the container bytes as a whole;
+the rehearsal carries the executable digests from the receipts and does not
+extract or separately hash the executables. It hashes the installer without
+checking its behavior. The earlier Docker lifecycle and offline Prime Claw
+discovery checks used different bytes and do not qualify this bundle. Live
+publication remains disabled: authentic main-event and check evidence, an
+actual inventory check, and for stable an explicit bump, parity closure and
+all exact-bundle checks are still outstanding.

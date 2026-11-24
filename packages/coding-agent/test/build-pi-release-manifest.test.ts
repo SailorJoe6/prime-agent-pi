@@ -6,6 +6,7 @@ import {
 	existsSync,
 	mkdirSync,
 	mkdtempSync,
+	readdirSync,
 	readFileSync,
 	rmSync,
 	writeFileSync,
@@ -18,6 +19,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 const root = fileURLToPath(new URL("../../../", import.meta.url));
 const script = join(root, "scripts/build-pi-release-manifest.ts");
+const rehearsal = join(root, "scripts/rehearse-pi-release.ts");
 const tsx = join(root, "node_modules/tsx/dist/cli.mjs");
 const platforms = [
 	"darwin-arm64",
@@ -71,6 +73,7 @@ function fixture(layout: "flat" | "nested" = "flat", previewSequence?: number) {
 	return {
 		output,
 		artifacts,
+		installerPath,
 		entries,
 		expected: {
 			schemaVersion: 1,
@@ -147,4 +150,82 @@ describe("build-pi-release-manifest CLI", () => {
 		appendFileSync(candidate.entries[candidate.entries.length - 1].archivePath, "changed");
 		assertRejected(candidate, /Archive checksum mismatch/);
 	});
+});
+
+function rehearse(candidate: ReturnType<typeof fixture>, source = candidate.expected.sourceSha) {
+	return spawnSync(process.execPath, [tsx, rehearsal, candidate.artifacts, candidate.installerPath, source], {
+		cwd: directory,
+		env: { HOME: directory, USERPROFILE: directory, PATH: "" },
+		encoding: "utf8",
+	});
+}
+
+function snapshot() {
+	return readdirSync(directory, { recursive: true, withFileTypes: true })
+		.filter((entry) => entry.isFile())
+		.map((entry) => {
+			const path = join(entry.parentPath, entry.name);
+			return `${path} ${checksum(readFileSync(path))}`;
+		})
+		.sort();
+}
+
+describe("rehearse-pi-release CLI", () => {
+	it.each([3, undefined])(
+		"connects all eight inputs to a fixture decision without changing files (preview sequence %s)",
+		(sequence) => {
+			const candidate = fixture("nested", sequence);
+			const before = snapshot();
+			const result = rehearse(candidate);
+			expect(result.status, result.stderr).toBe(0);
+			const report = JSON.parse(result.stdout);
+			expect(report.mode).toBe("nonpublishing-dry-run");
+			expect(JSON.parse(report.manifestJson)).toEqual(candidate.expected);
+			const assets = [...candidate.expected.binaries, candidate.expected.installer];
+			expect(report.checksums).toBe(assets.map(({ sha256, file }) => `${sha256}  ${file}\n`).join(""));
+			expect(report.assetDigests).toEqual(Object.fromEntries(assets.map(({ file, sha256 }) => [file, sha256])));
+			expect(report.fixtureOnly.source.after).toBe(candidate.expected.sourceSha);
+			expect(report.fixtureOnly.checks.repository.reference).toMatch(/^fixture-only:/);
+			expect(report.fixtureOnly.decision).toEqual(
+				sequence === undefined
+					? { kind: "denied", reason: "missing-or-mismatched-stable-bump" }
+					: {
+							kind: "fixture-candidate",
+							tag: candidate.expected.tag,
+							prerelease: true,
+							subject: checksum(
+								JSON.stringify([
+									"pi-publication-v1",
+									report.manifestJson,
+									report.checksums,
+									report.fixtureOnly.releaseNotes,
+								]),
+							),
+						},
+			);
+			expect(snapshot()).toEqual(before);
+		},
+	);
+
+	it.each(["mixed receipt source", "wrong expected source", "changed archive"] as const)(
+		"emits no decision for %s",
+		(mismatch) => {
+			const candidate = fixture("flat", 3);
+			const { receipt, receiptPath, archivePath } = candidate.entries[7];
+			const otherSource = "c".repeat(40);
+			if (mismatch === "mixed receipt source")
+				writeFileSync(receiptPath, JSON.stringify({ ...receipt, sourceSha: otherSource }));
+			if (mismatch === "changed archive") appendFileSync(archivePath, "changed");
+			const result = rehearse(candidate, mismatch === "wrong expected source" ? otherSource : undefined);
+			expect(result.status).toBe(1);
+			expect(result.stdout).toBe("");
+			expect(result.stderr).toMatch(
+				{
+					"mixed receipt source": /Inconsistent sourceSha/,
+					"wrong expected source": /does not match expected source SHA/,
+					"changed archive": /Archive checksum mismatch/,
+				}[mismatch],
+			);
+		},
+	);
 });
