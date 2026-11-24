@@ -4,7 +4,7 @@ title: Define and share named factory machines
 status: In Progress
 assignee: []
 created_date: '2026-11-22T22:17:00Z'
-updated_date: '2026-11-24T15:04:00Z'
+updated_date: '2026-11-24T20:38:00Z'
 labels: []
 milestone: m-0
 dependencies: []
@@ -67,6 +67,8 @@ Storage revision checkpoint: the accepted atomic write failure finding is addres
 Independent Astra review accepted the failed-save repair at d6a6bbfb without material defects. Next slice: implement only the inert Python MACHINE.md library and selector from steps 2–3, using the released file format and shared-before-personal resolution. Validate before import, preserve file bytes, use no-clobber export, and keep library export separate from stored-first Python selection. Prove round trips and rejected references with benign document-formatting fixtures; show that library-only selection creates no harness entry. Publish and stop for review before CLI work; no execution or product changes.
 
 Python library checkpoint: inert MACHINE.md import, export, listing, and stored-first selection implemented and tested. Stop for review; command registry, CLI dispatch and CLI acceptance coverage remain. Both acceptance criteria remain unchecked.
+
+Accepted Astra review findings on code c1fbb276: (1) Within each library level prefer a valid matching canonical path over another folder declaring the same name, consistently for list, selection and library export, while shared still wins over personal. Prove that an imported document-formatting update wins and exports its new bytes without changing the noncanonical draft. (2) Refuse imports when the canonical destination holds a valid definition declaring a different name; preserve its bytes and retain valid same-name replacement. Make only this bounded library revision, with benign formatting regressions. Publish task evidence and code independently, keep In Progress and both criteria unchecked, and stop for review before CLI work. No execution, merge, release or activation.
 <!-- SECTION:PLAN:END -->
 
 ## Implementation Notes
