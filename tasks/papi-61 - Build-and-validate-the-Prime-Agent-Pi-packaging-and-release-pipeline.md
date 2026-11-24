@@ -4,7 +4,7 @@ title: Build and validate the Prime Agent Pi packaging and release pipeline
 status: In Progress
 assignee: []
 created_date: '2026-11-24T00:57:00Z'
-updated_date: '2026-11-24T13:59:00Z'
+updated_date: '2026-11-24T14:03:00Z'
 labels: []
 dependencies: []
 documentation:
@@ -187,10 +187,18 @@ Source `ce83fb61f5ec28265c0cbf5af140f12a107577f4`, catalog `01f4d46dd5157ec73f8f
 - AC5: `45350439387` is a manual artifact run, not a product-main event; marked preview and fail-closed stable policy are covered in focused fixtures only. No stable bump, parity proof, real release notes/inventory binding, or complete exact-bundle qualification; no release writer, tag, rollout, host install or activation. Keep stable fail-closed.
 
 Owner accepted the reviewed frozen validation at code ce83fb61f5ec28265c0cbf5af140f12a107577f4 and Backlog 56cd2ae66998d57c27489e6b285f1fdd2f6c01ce. Joe authorized one routine offline disposable Prime Claw Tier 1 discovery test for the new exact Pi 0.10.2.3 Linux ARM64 musl fixture, not the old archive: `/private/tmp/papi61-candidate-53s68gn9/matrix/pi-native-linux-arm64-musl/prime-agent-pi-0.10.2.3-linux-arm64-musl.tar.gz`. Verify archive `19e07756831f09e65f01ebc68aa040dcc63b0d1002917031a8d3c557f396699f`, executable `38456840752e24347461d4022ecb7e090b1ba005b7ca304ebe12cad0215227c1`, catalog `01f4d46dd5157ec73f8faf440214088237c81d59` and the exact clean reviewed Prime Claw tooling `7437f719353f694bdea8308d6d0ce78ef1e7bcaf` at `/private/var/folders/4_/twy0wz3s1mq650wnqzn1b8rr0000gq/T/prime-claw-papi61-tcz07orq/prime-claw`. Use the documented local selector and official probe wrapper, offline synthetic Docker only, without live credentials, sockets, host state or provider calls. Save receipts and publish scoped task-only evidence. Discovery is not tool invocation, full qualification or release approval. Full hosted CI, exact Orca evidence, parity and release gates remain unresolved. No code change, merge, support-policy or public version change, release, host install or activation. Stop at result or concrete blocker.
+
+### Exact 0.10.2.3 Prime Claw Tier 1 discovery — blocked before launch
+
+Preflight verified the Linux ARM64 musl archive SHA-256 `19e07756831f09e65f01ebc68aa040dcc63b0d1002917031a8d3c557f396699f` and extracted executable `38456840752e24347461d4022ecb7e090b1ba005b7ca304ebe12cad0215227c1` against the clean-source build receipt (source `ce83fb61f5ec28265c0cbf5af140f12a107577f4`, catalog `01f4d46dd5157ec73f8faf440214088237c81d59`, Actions run 45350439387). The designated Prime Claw checkout was clean at reviewed tooling `7437f719353f694bdea8308d6d0ce78ef1e7bcaf`. The documented selector is `PRIME_AGENT_PI_ARCHIVE` plus `PRIME_AGENT_PI_SHA256` via `TIER1_ENV_FILE`, with `scripts/test-tier1.sh --probe` calling the official probe wrapper.
+
+The exact driver cannot enforce the admitted offline-only boundary for the whole Docker run. `scripts/test-tier1.sh:797–802` invokes `docker build` with no offline constraint; `docs/testing-strategy.md` explicitly allows network for the public dependency build. `scripts/test-tier1.sh:819–864` starts the container with default network attachment and only later disconnects and verifies it before installing or running the candidate. A warm cache would not enforce offline behavior. No Docker build, container, candidate execution, or probe was started; this is an isolation/preflight blocker, not an observed incompatibility. Unblock with a reviewed official offline route that enforces no network from build/start, or explicit approval of the exact runner's public dependency and pre-probe network behavior (candidate apply/check/discovery would still remain offline). No substitute or tooling modification used.
+
+No evidence of tool invocation, full Prime Claw qualification, release approval, or closure of full hosted CI, exact Orca, parity, or publication gates. No code/release/host activation change.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
 
 <!-- SECTION:FINAL_SUMMARY:BEGIN -->
-Frozen candidate validation ready for review: 8/8 artifact jobs and exact archive/executable hashes verified; 257 focused tests passed (one skipped); ARM64 musl migration, explicit CLI update, offline rollback and core Python smoke passed. Full hosted CI, exact Orca/Prime Claw and stable publication evidence remain open. No release or code change.
+Exact Pi 0.10.2.3 Tier 1 discovery did not run: archive/executable and reviewed tooling verified, but the official driver cannot enforce offline-only Docker build and startup. Prior frozen validation stands; full hosted CI, exact Orca, parity, and release gates remain open.
 <!-- SECTION:FINAL_SUMMARY:END -->
