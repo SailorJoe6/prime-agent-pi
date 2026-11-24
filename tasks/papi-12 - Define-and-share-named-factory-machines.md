@@ -4,7 +4,7 @@ title: Define and share named factory machines
 status: In Progress
 assignee: []
 created_date: '2026-11-22T22:17:00Z'
-updated_date: '2026-11-24T14:39:00Z'
+updated_date: '2026-11-24T14:43:00Z'
 labels: []
 milestone: m-0
 dependencies: []
@@ -13,9 +13,16 @@ references:
     https://github.com/PrimeIntellect-ai/prime-agent/blob/763094e1b6a7c17450ee8399b06cda1853847ca5/crates/pa-cli/src/factory_command.rs
   - >-
     https://github.com/PrimeIntellect-ai/prime-agent/blob/763094e1b6a7c17450ee8399b06cda1853847ca5/prime-agent-runtime/test/test_factory.py
+  - >-
+    https://github.com/PrimeIntellect-ai/prime-agent/blob/763094e1b6a7c17450ee8399b06cda1853847ca5/prime-agent-runtime/src/rlm/factory.py
 documentation:
   - >-
     https://github.com/SailorJoe6/prime-agent-pi/blob/dfba53a40c277c8341930024b014ffbdaf7e1e68/docs/upstream-feature-inventory.md#factory-workflows-sessions-and-terminal-controls
+  - docs/factory-definitions.md
+modified_files:
+  - prime-agent-runtime/src/rlm/factory_spec.py
+  - prime-agent-runtime/test/test_factory_spec.py
+  - docs/factory-definitions.md
 type: feature
 ordinal: 12000
 ---
@@ -40,4 +47,12 @@ Make validated machine graphs available by name through the harness and library 
 3. Implement shareable `MACHINE.md` with the released frontmatter, strict single `machine-spec` JSON block and declared names. Read shared and personal levels (shared first, honoring Pi agent-dir conventions and upstream `PRIME_AGENT_MACHINES_DIR`); select and list from the same validated definition set, distinguishing broken files from missing names. Preserve valid imported file bytes, validate before writing to the personal library and replace a valid same-name personal import without truncating the prior definition on validation failure. Separate CLI library export from stored-first harness selection; a Python definition export can serialize a stored graph for sharing. Use exclusive/no-clobber export. Released library note says “an invalid machine never persists” and “an existing export target is refused instead of silently overwritten”; released `test_export_dispatch_resolves_the_library_only` says “a stored factory entry never intercepts the CLI's export.” Use benign document-formatting fixtures; upstream bundled seeds and packaging are not part of this scoped task.
 4. Add TypeScript command registry/help and dispatch for `prime-agent factory list | import <path> | export <name> --out <path>` with `--json` and actionable failures/nonzero exits. Follow released `crates/pa-cli/src/factory_command.rs`’s JSON dispatch boundary; reuse Pi’s kernel Python discovery and keep validation/filesystem logic in Python. Do not change daemon wire behavior, extension APIs, or current settings. Document the inert API/CLI and add the coding-agent changelog fragment; leave product policy and all other tasks unchanged.
 5. Prove both ACs with a formatting graph: definition/store/reopen, stored export/import and library byte round trip, invalid state/DAG reference leaving no new state or changed prior bytes, shared/personal and stored/library collisions, library-only selection without mutation, broken vs missing diagnostics, and no-clobber CLI export. Cover CLI help/text/JSON/exit behavior through tests using temporary homes and native Python; no models, children or terminal run controls. Run each touched test file under its package environment, verify regressions fail when hooks are temporarily broken, and run `npm run check` and `npm run check:test-policy`. Record evidence and exact candidate for independent review; stop before merge, release or activation.
+
+Slice checkpoint: Python definition validation implemented and tested. Continue with step 2 after slice review; defer the changelog to the CLI slice in step 4.
 <!-- SECTION:PLAN:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Slice 1: implemented only the inert v0.10.0 Python schema validation and DAG compiler in rlm.factory_spec. Formatting fixtures prove input preservation, one effective-predecessor join, bounded guard/loop/fan-out handling, and rejection of invalid explicit and DAG references. No prompt or guard execution, storage, library, CLI, or wire changes. Retained the released rules; use isdecimal for spawned-label suffix checks to avoid int() on nondecimal digit glyphs. Validation: cd prime-agent-runtime && uv run --locked python -m unittest discover -s test -p test_factory_spec.py -v (5 tests pass; temporary validation, join and mutation breaks gave 18 failures; restored and reran successfully). npm run check and npm run check:test-policy passed. Both ACs remain unchecked pending persistence, sharing and selection evidence. Next: add validated harness save/get/list through existing storage.
+<!-- SECTION:NOTES:END -->
