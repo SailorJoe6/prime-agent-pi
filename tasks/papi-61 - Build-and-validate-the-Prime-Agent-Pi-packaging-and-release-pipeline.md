@@ -4,7 +4,7 @@ title: Build and validate the Prime Agent Pi packaging and release pipeline
 status: In Progress
 assignee: []
 created_date: '2026-11-24T00:57:00Z'
-updated_date: '2026-11-24T04:12:00Z'
+updated_date: '2026-11-24T06:46:00Z'
 labels: []
 dependencies: []
 documentation:
@@ -149,6 +149,8 @@ Fixture-only publication decision implemented in scripts/pi-publication-decision
 Handoff: revise fixture-only publication decision 04bf351e5b1e3f32560c20e46cb24fe196ec640c / Backlog 1ce44ea2473cad478d0f42c8914675d0c7329bc3 for the one independently verified finding: substring matching does not prove the exact upstream release identity claimed by stable notes. Require one explicit parity identity in stable notes and match it exactly against the receipt and the manifest three-component upstream version. Preserve binding to the exact notes bytes. Add benign fixtures for exact agreement and distinct versions with a shared prefix, with receipts bound to each fixture’s actual notes. Run focused project checks, publish the bounded correction and evidence separately, and stop for review. No real writer, Prime Claw qualification, public version change, merge, tag, release or activation.
 
 Corrected the fixture-only stable parity check: exactly one standalone `Upstream parity: PrimeIntellect-ai/prime-agent vX.Y.Z` declaration must match the supplied claim and receipt and the manifest three-component upstream version. The evidence subject still binds exact notes bytes. Exact agreement for Pi 0.10.2.10 / upstream v0.10.2 passes. Four regression cases with receipts computed from their actual notes failed on the old predicate and pass with the correction: shared-prefix mismatch (v0.10.2 vs v0.10.21), notes and receipt agreeing on the wrong patch, a Pi repair suffix, and duplicate declarations. `npm run check`, 108 focused Vitest tests (67 publication decision, 12 manifest builder, 29 version), and `git diff --check` passed. Preview decision unchanged. No real writer, Prime Claw qualification, version change, merge, tag, release or activation. Stop for owner review.
+
+Handoff: Joe approved and, after restart, explicitly released the hold on one new Docker-only Prime Claw compatibility test. The earlier no-test restriction is superseded only for this slice. Use Prime Agent Pi source a8b6aa3338f1863121aafd9ef895e0e8b737c419, existing 0.10.2.2 Linux ARM64 musl archive `/var/folders/4_/twy0wz3s1mq650wnqzn1b8rr0000gq/T/papi61-docker-bpc7nxc0/new/prime-agent-pi-0.10.2.2-linux-arm64-musl.tar.gz` (owner-rehashed SHA-256 1757e01e1a54f0cdca890a20c3837b7fafa2be45a11bcc66666b14144abe933d), executable SHA-256 c186d178cc1844bbcd07cccc70b5e78a4723be8e1f2a401252e449c83eb75eed, catalog 01f4d46dd5157ec73f8faf440214088237c81d59. Read Prime Claw DD-003/DD-005 and use only supported Tier 1 disposable Docker inputs and `scripts/run-prime-agent-probe.sh`; prior evidence pins Prime Claw 177be95655a01024bb2db3a1acfb3c9d2342718a. Compare with qualified legacy runtime as needed, especially on failure, using the same benign probe and synthetic state. No host plugin apply or secondary host daemon, live credentials/provider calls, live state or daemon socket mounts. If no supported exact input path, report that constraint without bypassing it. Preserve logs, exact evidence and limits; on failure distinguish fixture failure from candidate regression before proposing a repair. Stop at result or blocker. No code repairs, qualification policy changes, public bump, merge, tag, release or activation.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
