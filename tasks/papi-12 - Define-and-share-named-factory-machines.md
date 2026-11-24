@@ -4,7 +4,7 @@ title: Define and share named factory machines
 status: In Progress
 assignee: []
 created_date: '2026-11-22T22:17:00Z'
-updated_date: '2026-11-24T20:38:00Z'
+updated_date: '2026-11-24T20:41:00Z'
 labels: []
 milestone: m-0
 dependencies: []
@@ -69,6 +69,8 @@ Independent Astra review accepted the failed-save repair at d6a6bbfb without mat
 Python library checkpoint: inert MACHINE.md import, export, listing, and stored-first selection implemented and tested. Stop for review; command registry, CLI dispatch and CLI acceptance coverage remain. Both acceptance criteria remain unchecked.
 
 Accepted Astra review findings on code c1fbb276: (1) Within each library level prefer a valid matching canonical path over another folder declaring the same name, consistently for list, selection and library export, while shared still wins over personal. Prove that an imported document-formatting update wins and exports its new bytes without changing the noncanonical draft. (2) Refuse imports when the canonical destination holds a valid definition declaring a different name; preserve its bytes and retain valid same-name replacement. Make only this bounded library revision, with benign formatting regressions. Publish task evidence and code independently, keep In Progress and both criteria unchecked, and stop for review before CLI work. No execution, merge, release or activation.
+
+Python library revision checkpoint: both accepted Astra findings are repaired and regression-tested. Stop for review; CLI and execution were not changed. Both acceptance criteria remain unchecked.
 <!-- SECTION:PLAN:END -->
 
 ## Implementation Notes
@@ -81,10 +83,12 @@ Slice 2: added validated HarnessState save_factory/get_factory/list_factories fo
 Accepted Astra storage finding at 72bd16368d79b80d0634795f7b0c8b4d993276f9 fixed: save_factory restores the previous cached value or removes a newly inserted name if save raises, then re-raises the original exception. Atomic writer and storage format unchanged. The benign formatting regression injects failure at os.replace and checks the same exception object, unchanged file bytes or absence, cached value or absence, and reopened value or absence after a successful unrelated create_memory. Before the fix all four cache/reopen subcases failed; after the fix they passed. Passed 58 harness (also shuffled at seeds 12, 42, 73), 5 factory spec and 87 host refinement tests, npm run check, and npm run check:test-policy. Commands: (cd prime-agent-runtime && uv run --locked python -m unittest discover -s test -p test_harness.py); (cd prime-agent-runtime && uv run --locked python -m unittest discover -s test -p test_factory_spec.py -v); (cd packages/coding-agent && npx tsx ../../node_modules/vitest/dist/cli.js --run test/refinement.test.ts). Focused reproduction: (cd prime-agent-runtime && uv run --locked python -m unittest discover -s test -p test_harness.py -v -k test_papi_12_failed_factory_write_cannot_leak_into_a_later_save).
 
 Python MACHINE.md slice: formatting graph saved/reopened and exported from the harness, re-imported unchanged, then replaced with a hand-authored UTF-8 BOM/CRLF file that survived import and library export byte for byte. Invalid state and DAG references create no library or export and preserve existing personal bytes. Shared wins by declared name; broken specs are skipped in list and are distinguished from missing names in resolution. Stored definitions win selection but never intercept library export, and library-only selection leaves harness state absent. Existing export targets are refused by both writers. Validation: 6 library, 58 harness, 5 factory spec tests, npm run check, and npm run check:test-policy passed. Seven deliberate mutations (agent directory, byte preservation, reference validation, single-fence check, shared precedence, stored precedence, exclusive open) failed the library tests before restoration. Commands: (cd prime-agent-runtime && uv run --locked python -m unittest discover -s test -p test_machine_library.py -v); (cd prime-agent-runtime && uv run --locked python -m unittest discover -s test -p test_harness.py); (cd prime-agent-runtime && uv run --locked python -m unittest discover -s test -p test_factory_spec.py -v).
+
+Python library revision of c1fbb276b7dbbc78ee5738232cc3a4b8791cbe76: both Astra regressions failed on the original implementation and passed after the fix. A same-name formatting import replaces the canonical copy, wins list and Python selection, and exports its new bytes without changing the noncanonical draft. Shared canonical wins inside shared; when invalid, the shared draft still wins over personal canonical. A valid different-name occupant blocks import and retains its original bytes. Validation: 8 library, 58 harness, 5 factory-spec tests, npm run check, npm run check:test-policy, and git diff --check passed. Reproduce: (cd prime-agent-runtime && uv run --locked python -m unittest discover -s test -p test_machine_library.py -v); (cd prime-agent-runtime && uv run --locked python -m unittest discover -s test -p test_harness.py); (cd prime-agent-runtime && uv run --locked python -m unittest discover -s test -p test_factory_spec.py -v).
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
 
 <!-- SECTION:FINAL_SUMMARY:BEGIN -->
-Python validation, harness storage, and the inert MACHINE.md library and selector are implemented. Pending review and the CLI slice; no machine execution is supported.
+Python validation, storage, and inert MACHINE.md selection and sharing are implemented, including canonical precedence within each library and protection against replacing valid definitions with a different declared name. Pending review and CLI work; machine execution is out of scope.
 <!-- SECTION:FINAL_SUMMARY:END -->
