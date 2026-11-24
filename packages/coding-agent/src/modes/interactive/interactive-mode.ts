@@ -188,7 +188,7 @@ import { resizeImage } from "../../utils/image-resize.js";
 import { getCwdRelativePath } from "../../utils/paths.js";
 import { killTrackedDetachedChildren } from "../../utils/shell.js";
 import { ensureTool, ensureToolWithStatus, formatMissingRipgrepMessage } from "../../utils/tools-manager.js";
-import { checkForNewPiVersion, resolveUpdateChannel } from "../../utils/version-check.js";
+import { checkForNewPiVersion, getPiUpdateChannelPreference, resolveUpdateChannel } from "../../utils/version-check.js";
 import type {
 	AgentConnection,
 	AgentConnectionExtensionUiRequest,
@@ -1951,7 +1951,7 @@ export class InteractiveMode {
 		// rendered the agents view and still want the in-session fallback.)
 		const ownsGlobalStartupNotices = !this.options.agentsViewOwnsStartupNotices;
 		const newVersionPromise = ownsGlobalStartupNotices
-			? checkForNewPiVersion(this.version, this.settingsManager.getUpdateChannel())
+			? checkForNewPiVersion(this.version, getPiUpdateChannelPreference(this.settingsManager))
 			: undefined;
 		const packageUpdatesPromise = ownsGlobalStartupNotices
 			? checkForPackageUpdates({
@@ -5491,8 +5491,9 @@ export class InteractiveMode {
 					this.editor.setText("");
 					const previewArg = commandArgs?.trim().toLowerCase();
 					if (previewArg === "status") {
-						const channel = resolveUpdateChannel(this.version, this.settingsManager.getUpdateChannel());
-						const source = this.settingsManager.getUpdateChannel() ? "set in settings" : "default";
+						const preference = getPiUpdateChannelPreference(this.settingsManager);
+						const channel = resolveUpdateChannel(this.version, preference);
+						const source = preference ? "set in settings" : "default";
 						this.showStatus(`Updates follow the ${channel} channel (${source}). v${this.version} installed.`);
 						return;
 					}

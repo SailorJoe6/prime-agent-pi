@@ -28,6 +28,8 @@ export function isNativePlatform(platform: string): boolean {
 	return (NATIVE_PLATFORMS as readonly string[]).includes(platform);
 }
 
+const PI_INSTALL_SOURCE = "https://github.com/SailorJoe6/prime-agent-pi";
+
 export const NATIVE_RELEASE_ASSETS = [
 	"prime-agent",
 	"package.json",
@@ -99,7 +101,11 @@ function validateNativeInstallation(target: NativeInstallationTarget | undefined
 		if (readFileSync(join(releaseDir, ".archive-sha256"), "utf8").trim() !== target.sha256) return undefined;
 		const metadata = JSON.parse(readFileSync(join(releaseDir, "package.json"), "utf8")) as { version?: unknown };
 		if (metadata.version !== target.version) return undefined;
-		const baseUrl = readFileSync(join(releaseDir, ".install-source"), "utf8").trim();
+		// Match the shell installer: .install-source identifies Pi targets; legacy targets lack this asset.
+		const source = readFileSync(join(releaseDir, ".install-source"), "utf8");
+		if (source.replace(/\n+$/, "") === PI_INSTALL_SOURCE && !lstatSync(join(releaseDir, "pi-release.json")).isFile())
+			return undefined;
+		const baseUrl = source.trim();
 		if (!["https:", "http:"].includes(new URL(baseUrl).protocol)) return undefined;
 		return { ...target, baseUrl };
 	} catch {

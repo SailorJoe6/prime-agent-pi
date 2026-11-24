@@ -596,11 +596,39 @@ describe("self-update daemon restart", () => {
 		},
 	);
 
-	it.each(["--preview", "--nightly"])("PAPI-61 persists %s as preview after a successful update", async (channel) => {
-		await expect(handlePackageCommand(["update", "--self", channel, "--force"])).resolves.toBe(true);
+	it.each(["--preview", "--nightly"])(
+		"PAPI-61 persists %s in the v0.9.8 settings format after a successful update",
+		async (channel) => {
+			await expect(handlePackageCommand(["update", "--self", channel, "--force"])).resolves.toBe(true);
 
-		expect(readFileSync(join(agentDir, "settings.json"), "utf8")).toContain('"updateChannel": "preview"');
-	});
+			expect(JSON.parse(readFileSync(join(agentDir, "settings.json"), "utf8"))).toEqual({
+				updateChannel: "nightly",
+			});
+		},
+	);
+
+	it.each([false, true])(
+		"PAPI-61 honors a saved nightly opt-in without reconfirming (explicit --preview: %s)",
+		async (explicitPreview) => {
+			const settingsPath = join(agentDir, "settings.json");
+			const saved = JSON.stringify({ updateChannel: "nightly" });
+			writeFileSync(settingsPath, saved);
+			process.env[SELF_UPDATE_INTERACTIVE_CHILD_ENV] = "1";
+			vi.mocked(getNativeUpdatePlan).mockResolvedValueOnce({ targetVersion: VERSION });
+			const ttyDescriptor = Object.getOwnPropertyDescriptor(process.stdin, "isTTY");
+			Object.defineProperty(process.stdin, "isTTY", { value: false, configurable: true });
+			try {
+				const flags = explicitPreview ? ["--preview"] : [];
+				await expect(handlePackageCommand(["update", "--self", ...flags])).resolves.toBe(true);
+				expect(getNativeUpdatePlan).toHaveBeenCalledWith({ force: false, rollback: false, channel: "preview" });
+				expect(process.exitCode).toBe(SELF_UPDATE_NOT_ATTEMPTED_EXIT_CODE);
+				expect(readFileSync(settingsPath, "utf8")).toBe(saved);
+			} finally {
+				if (ttyDescriptor) Object.defineProperty(process.stdin, "isTTY", ttyDescriptor);
+				else Reflect.deleteProperty(process.stdin, "isTTY");
+			}
+		},
+	);
 
 	it("does not use the no-change sentinel when interactive self-update is cancelled", async () => {
 		process.env[SELF_UPDATE_INTERACTIVE_CHILD_ENV] = "1";

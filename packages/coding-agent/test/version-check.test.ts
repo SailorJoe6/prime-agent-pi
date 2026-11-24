@@ -1,4 +1,9 @@
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { SettingsManager } from "../src/core/settings-manager.js";
+import { gatherStartupNotices } from "../src/modes/shared/startup-notices.js";
 import {
 	checkForNewPiVersion,
 	comparePackageVersions,
@@ -43,6 +48,34 @@ describe("version checks", () => {
 		await expect(checkForNewPiVersion("1.2.3.2", "preview")).resolves.toBe("1.2.4-preview.11");
 		await expect(checkForNewPiVersion("1.2.3.10")).resolves.toBeUndefined();
 	});
+
+	it.each(["nightly", "preview"])(
+		"PAPI-61 startup honors saved %s as a Pi preview opt-in without rewriting it",
+		async (channel) => {
+			const agentDir = mkdtempSync(join(tmpdir(), "pi-startup-channel-"));
+			try {
+				const settingsPath = join(agentDir, "settings.json");
+				const saved = JSON.stringify({ updateChannel: channel });
+				writeFileSync(settingsPath, saved);
+				const release = taggedRelease("1.2.4-preview.11");
+				const feed = fakeFeed(release);
+				vi.stubGlobal("fetch", feed.fetcher);
+				vi.stubEnv("TMUX", "");
+				const settingsManager = SettingsManager.create(agentDir, agentDir);
+				const notices = await gatherStartupNotices({
+					version: "1.2.3.2",
+					cwd: agentDir,
+					agentDir,
+					settingsManager,
+				});
+				expect(notices.newVersion).toBe("1.2.4-preview.11");
+				expect(feed.requests).toEqual([listingUrl, `${release.base}/pi-release-manifest.json`]);
+				expect(readFileSync(settingsPath, "utf8")).toBe(saved);
+			} finally {
+				rmSync(agentDir, { recursive: true, force: true });
+			}
+		},
+	);
 
 	it.each(["PI_SKIP_VERSION_CHECK", "PI_OFFLINE"])("does not call GitHub when %s is set", async (name) => {
 		vi.stubEnv(name, "1");

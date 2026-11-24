@@ -1,3 +1,4 @@
+import type { SettingsManager } from "../core/settings-manager.js";
 import { type DiscoveredPiRelease, discoverPiRelease } from "./pi-release-discovery.js";
 import { parsePiReleaseTag } from "./pi-release-manifest.js";
 import { comparePiReleases, type PiReleaseChannel } from "./pi-release-version.js";
@@ -76,6 +77,14 @@ export function isNewerPackageVersion(candidateVersion: string, currentVersion: 
 		return comparison > 0;
 	}
 	return candidateVersion.trim() !== currentVersion.trim();
+}
+
+/** Normalize the global preference for Pi without changing the legacy SettingsManager API. */
+export function getPiUpdateChannelPreference(settingsManager: SettingsManager): PiReleaseChannel | undefined {
+	// Accept the Pi spelling on disk too, without exposing it through the legacy accessor.
+	const channel: unknown = settingsManager.getGlobalSettings().updateChannel;
+	if (channel === "nightly" || channel === "preview") return "preview";
+	return channel === "stable" ? "stable" : undefined;
 }
 
 export function resolveUpdateChannel(_currentVersion: string, preferred?: UpdateChannel): PiReleaseChannel {

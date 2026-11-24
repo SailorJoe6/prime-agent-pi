@@ -72,7 +72,7 @@ import {
 	DAEMON_WORKER_SUPERVISOR_SOCKET_ENV,
 } from "./modes/daemon/daemon-worker-protocol.js";
 import { shouldUseWindowsShell } from "./utils/child-process.js";
-import { resolveUpdateChannel, type UpdateChannel } from "./utils/version-check.js";
+import { getPiUpdateChannelPreference, resolveUpdateChannel, type UpdateChannel } from "./utils/version-check.js";
 
 export type PackageCommand = "install" | "remove" | "update" | "list";
 
@@ -1610,7 +1610,7 @@ export async function handlePackageCommand(args: string[]): Promise<boolean> {
 			case "update": {
 				const target = options.updateTarget ?? { type: "all" };
 				const includesSelf = updateTargetIncludesSelf(target);
-				const persistedChannel = settingsManager.getUpdateChannel();
+				const persistedChannel = getPiUpdateChannelPreference(settingsManager);
 				// Warn and confirm before any update work so declining changes nothing, not even extensions.
 				if (includesSelf && options.channel === "preview" && persistedChannel !== "preview") {
 					console.log(
@@ -1648,7 +1648,8 @@ export async function handlePackageCommand(args: string[]): Promise<boolean> {
 					const updateChannel = options.channel ?? persistedChannel;
 					const commitChannel = () => {
 						if (options.channel && options.channel !== persistedChannel) {
-							settingsManager.setUpdateChannel(options.channel);
+							// Preserve the spelling understood by v0.9.8 if the user rolls back.
+							settingsManager.setUpdateChannel(options.channel === "preview" ? "nightly" : "stable");
 							console.log(chalk.dim(`Updates now follow the ${options.channel} channel.`));
 						}
 					};

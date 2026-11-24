@@ -107,7 +107,12 @@ describe("native Pi update", () => {
 		});
 	});
 
-	it("PAPI-61 plans a tagged repair when the active release metadata is damaged", async () => {
+	it.each([
+		{ file: "package.json", damage: "missing" },
+		{ file: "pi-release.json", damage: "missing" },
+		{ file: "pi-release.json", damage: "a directory" },
+		{ file: "pi-release.json", damage: "a symlink" },
+	])("PAPI-61 selects same-tag repair without force when $file is $damage", async ({ file, damage }) => {
 		const previous = `1.2.3-linux-x64-${"b".repeat(64)}`;
 		const previousDir = join(root, "releases", previous);
 		mkdirSync(previousDir, { recursive: true });
@@ -119,10 +124,29 @@ describe("native Pi update", () => {
 		writeFileSync(join(previousDir, ".archive-sha256"), "b".repeat(64));
 		writeFileSync(join(previousDir, "package.json"), JSON.stringify({ version: "1.2.3" }));
 		symlinkSync(`../releases/${previous}/prime-agent`, join(root, "bin", "previous"));
-		unlinkSync(join(dirname(executable), "package.json"));
-		vi.stubGlobal("fetch", fakeFeed(taggedRelease("1.2.3.2")).fetcher);
-		const plan = await getNativeUpdatePlan({ force: false, rollback: false, executable });
+		const release = taggedRelease("1.2.3.2");
+		const options = { force: false, rollback: false, executable };
+		vi.stubGlobal("fetch", fakeFeed(release).fetcher);
+		const asset = join(dirname(executable), file);
+		if (file === "pi-release.json") {
+			writeFileSync(join(dirname(executable), ".install-source"), "https://github.com/SailorJoe6/prime-agent-pi\n");
+			writeFileSync(asset, "{}\n");
+		}
+		await expect(getNativeUpdatePlan(options)).resolves.toEqual({ targetVersion: "1.2.3.2" });
+		unlinkSync(asset);
+		if (damage === "a directory") mkdirSync(asset);
+		if (damage === "a symlink") symlinkSync("package.json", asset);
+		const plan = await getNativeUpdatePlan(options);
 		expect(plan.targetVersion).toBe("1.2.3.2");
-		expect(typeof plan.command?.prepare).toBe("function");
+		if (!plan.command?.prepare) throw new Error("Missing same-tag repair command");
+		const prepared = await plan.command.prepare();
+		try {
+			expect(prepared.args).toContain(`PRIME_AGENT_PI_TAG=${release.manifest.tag}`);
+			expect(prepared.args).toContain(`PRIME_AGENT_EXPECTED_CURRENT=${target}`);
+			expect(prepared.args.at(-1)).toBe("1.2.3.2");
+			expect(readlinkSync(join(root, "bin", "prime-agent"))).toBe(target);
+		} finally {
+			prepared.cleanup();
+		}
 	});
 });

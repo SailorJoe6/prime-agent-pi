@@ -199,7 +199,7 @@ export interface Settings {
 	defaultProvider?: string;
 	defaultModel?: string;
 	subagentDefaultModel?: string; // "provider/id" for rlm.spawn without a pinned model; unset inherits the parent model
-	updateChannel?: "stable" | "preview" | "nightly"; // unset defaults to stable; nightly is a legacy preview opt-in
+	updateChannel?: "stable" | "nightly"; // saved in the legacy format; Pi defaults to stable
 	recentModels?: string[]; // "provider/id" keys, most-recently-used first
 	// "provider/id" for background LLM passes (refinement review and planning,
 	// compaction summaries, branch summaries); unset falls back to the session
@@ -894,14 +894,13 @@ export class SettingsManager {
 		this.save();
 	}
 
-	/** Read the per-user preference from global settings only. */
-	getUpdateChannel(): "stable" | "preview" | undefined {
+	/** A per-user preference: read from global settings only, and ignore anything but the two known values. */
+	getUpdateChannel(): "stable" | "nightly" | undefined {
 		const channel = this.globalSettings.updateChannel;
-		if (channel === "nightly") return "preview";
-		return channel === "stable" || channel === "preview" ? channel : undefined;
+		return channel === "stable" || channel === "nightly" ? channel : undefined;
 	}
 
-	setUpdateChannel(channel: "stable" | "preview"): void {
+	setUpdateChannel(channel: "stable" | "nightly"): void {
 		this.globalSettings.updateChannel = channel;
 		this.markModified("updateChannel");
 		this.save();

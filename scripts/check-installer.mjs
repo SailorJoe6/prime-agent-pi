@@ -338,6 +338,17 @@ esac`);
 	run("PAPI-61 retained offline rollback", retainedInstaller(), "--rollback", { PRIME_AGENT_EXPECTED_CURRENT: previewLink, PRIME_AGENT_EXPECTED_PREVIOUS: stableLink }, true, []);
 	check(readlinkSync(previousPath) === previewLink && activeVersion() === stable.version, "rollback did not restore stable and retain preview");
 
+	const releaseMetadata = () => join(dirname(retainedInstaller()), "pi-release.json");
+	rmSync(releaseMetadata());
+	run("PAPI-61 same-tag repair of missing Pi metadata", privateInstaller, stable.version, {
+		...stable.env,
+		PRIME_AGENT_EXPECTED_CURRENT: stableLink,
+		PRIME_AGENT_EXPECTED_SHA256: stable.sha256,
+	}, true, stable.routes);
+	check(readlinkSync(activePath) !== stableLink && activeVersion() === stable.version, "same-tag repair did not activate a fresh stable release");
+	check(readFileSync(releaseMetadata(), "utf8") === "{}\n", "same-tag repair did not restore Pi release metadata");
+	check(readlinkSync(previousPath) === previewLink, "same-tag repair retained the damaged Pi target instead of the healthy rollback target");
+
 	writeFileSync(preview.inventory, `${preview.sha256}  prime-agent-${preview.version}.tgz\n`);
 	run("PAPI-61 no npm fallback", privateInstaller, preview.version, preview.env, false, preview.routes.slice(0, 1));
 }

@@ -10,7 +10,7 @@
 import { DefaultPackageManager } from "../../core/package-manager.js";
 import type { SettingsManager } from "../../core/settings-manager.js";
 import { spawnHidden } from "../../utils/child-process.js";
-import { checkForNewPiVersion } from "../../utils/version-check.js";
+import { checkForNewPiVersion, getPiUpdateChannelPreference } from "../../utils/version-check.js";
 import { theme } from "../interactive/theme/theme.js";
 
 export interface StartupNotices {
@@ -32,7 +32,7 @@ export interface StartupNoticeCheckOptions {
 /** Run every startup check in parallel and collect the results. */
 export async function gatherStartupNotices(options: StartupNoticeCheckOptions): Promise<StartupNotices> {
 	const [newVersion, packageUpdates, tmuxWarning] = await Promise.all([
-		checkForNewPiVersion(options.version, options.settingsManager.getUpdateChannel()),
+		checkForNewPiVersion(options.version, getPiUpdateChannelPreference(options.settingsManager)),
 		checkForPackageUpdates(options),
 		checkTmuxKeyboardSetup(),
 	]);
