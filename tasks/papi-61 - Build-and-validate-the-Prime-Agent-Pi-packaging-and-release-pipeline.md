@@ -4,7 +4,7 @@ title: Build and validate the Prime Agent Pi packaging and release pipeline
 status: In Progress
 assignee: []
 created_date: '2026-11-24T00:57:00Z'
-updated_date: '2026-11-24T01:54:00Z'
+updated_date: '2026-11-24T02:01:00Z'
 labels: []
 dependencies: []
 documentation:
@@ -14,6 +14,9 @@ modified_files:
   - packages/coding-agent/src/utils/pi-release-version.ts
   - packages/coding-agent/test/pi-release-version.test.ts
   - docs/pi-release-engineering.md
+  - scripts/pack-prime-agent-release.mjs
+  - scripts/pack-prime-agent-pi-local.mjs
+  - scripts/smoke-pi-local-pack.mjs
 type: task
 ordinal: 61000
 ---
@@ -55,4 +58,6 @@ Build and validate without publishing as part of this design task's initial engi
 Slice 1 (AC1–2, partial): defined the shared Pi release identity comparator, stable-default/preview-opt-in selection, and npm-compatible encoding in packages/coding-agent/src/utils/pi-release-version.ts. Local Darwin arm64, Node v25.6.0/npm 11.19.0: npm run check and npm run check:test-policy passed; test/pi-release-version.test.ts passed all 29 cases with Vitest shuffle seeds 61, 62 and 63. A temporary encoding/ordering/selection mutation failed 28 cases and was restored before seed 63. This is fixture evidence only; no package artifacts, registry-independent lockstep staging, CI, Docker lifecycle, or consumer wiring proven. Next: stage the pack-only manifests and prove local pack/install of the lockstep dependencies before building the platform matrix. No acceptance box checked, version bumped, or release published.
 
 Handoff: the owning Conversation accepted slice 1 at code e835c05a8b5b523db3a088494e15ad2604d004b5 / Backlog 9acd30662ead83977c4e0fb330bd7cf0131519fb after independent review found no material versioning defect. The next bounded slice is isolated pack-only lockstep manifest staging and local pack/install without using a registry as a distribution endpoint; keep Prime Agent Pi branding, the prime-agent executable, source versions and public extension imports. Record actual evidence and limits and stop before the eight-target matrix. No inherited publishing, public version bump, tag, release, merge or live install/activation.
+
+Slice 2 (AC1–2, partial): isolated pack-only local Pi manifests and SHA-256 receipt; all four staged packages used 0.10.2-preview.3+pi.10 for public fixture 0.10.2.10 preview 3; source manifests and lockfile unchanged. On Darwin arm64 (Node 25.6.0/npm 11.19.0), npm installed 272 packages offline with lifecycle scripts disabled using the workspace lock and warm third-party npm cache. The installed lock resolved every Pi package to its local tarball, and the installed prime-agent loaded a fixture extension importing runtime exports under the four existing public package names. A tampered tarball failed checksum verification. Both npm run check and npm run check:test-policy passed. Commands, four hashes and limits are in docs/pi-release-engineering.md. Fixture only, not native matrix, runtime public version display, release CI, or Docker lifecycle proof. No version bump, release, tag, merge or live runtime change; all ACs remain unchecked.
 <!-- SECTION:NOTES:END -->
