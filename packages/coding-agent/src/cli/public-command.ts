@@ -18,6 +18,7 @@ import {
 import { handleDaemonCommand } from "./daemon-command.js";
 import { runPs, runReap, runShutdownAll } from "./daemon-ps.js";
 import { DAEMON_UPDATE_RESTART_COORDINATOR_FLAG } from "./daemon-update-restart.js";
+import { runFactoryCommand } from "./factory-command.js";
 import { extractHelpCommandPath, rotateGlobalFlagsBeforeCommand } from "./global-flags.js";
 import {
 	type IncidentCommandOptions,
@@ -128,6 +129,9 @@ async function runPublicCommand(args: string[]): Promise<PublicCommandResult> {
 			return runShutdown(args.slice(1));
 		case "package":
 			return runPackage(args.slice(1));
+		case "factory":
+			await runFactoryCommand(args.slice(1));
+			return HANDLED;
 		case "mcp":
 			return runMcp(args.slice(1));
 		case "update": {

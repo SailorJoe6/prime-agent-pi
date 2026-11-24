@@ -113,6 +113,29 @@ export const COMMAND_SPECS: readonly CommandSpec[] = [
 		options: ["--force  Skip confirmation and kill unresponsive processes", "--json   Print JSON"],
 	},
 	{
+		path: ["factory"],
+		usage: "factory <list|import|export>",
+		summary: "Share validated factory definitions without running them",
+	},
+	{
+		path: ["factory", "list"],
+		usage: "factory list [--json]",
+		summary: "List validated library definitions",
+		options: ["--json  Print JSON"],
+	},
+	{
+		path: ["factory", "import"],
+		usage: "factory import <path> [--json]",
+		summary: "Validate and import a MACHINE.md file into the personal library",
+		options: ["--json  Print JSON"],
+	},
+	{
+		path: ["factory", "export"],
+		usage: "factory export <name> --out <path> [--json]",
+		summary: "Copy a library definition to a new MACHINE.md file",
+		options: ["--out <path>  Destination file; must not exist", "--json        Print JSON"],
+	},
+	{
 		path: ["mcp"],
 		usage: "mcp <add|list|get|remove>",
 		summary: "Manage user MCP servers",

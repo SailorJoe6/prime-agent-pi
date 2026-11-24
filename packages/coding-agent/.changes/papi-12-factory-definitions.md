@@ -1,0 +1,1 @@
+- Added `prime-agent factory` commands to list, import, and export validated `MACHINE.md` definitions without running them.

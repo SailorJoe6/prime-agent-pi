@@ -1,4 +1,26 @@
-# Factory definition validation
+# Factory definitions
+
+## List, import, and export from the CLI
+
+```sh
+prime-agent factory list
+prime-agent factory import ./shared-format/MACHINE.md
+prime-agent factory export format-document --out ./copy/MACHINE.md
+prime-agent help factory export
+```
+
+All three commands accept `--json`. Success prints one JSON object on standard
+output: `list` returns `machines` (with name, description, version, author,
+source, and path) and `warnings`; `import` and `export` return the name and
+path. Errors go to standard error and return a nonzero exit status, including
+with `--json`. The export target must not already exist.
+
+The CLI uses Pi's kernel Python and the same validated `MACHINE.md` library
+as the Python APIs below. It does not read saved harness definitions when
+exporting or run machines. To share a stored definition, first use
+`export_factory_spec` in Python.
+
+## Validate a definition
 
 The Python runtime can validate a factory definition without running it.
 Pass the authored JSON object (as Python data) to `rlm.factory_spec.validate_factory_spec`.
@@ -70,7 +92,7 @@ outside the spec is documentation, not instructions to the runtime.
 Libraries contain `<directory>/MACHINE.md` files. The declared name determines
 lookup, not the directory name. `PRIME_AGENT_MACHINES_DIR` points to the shared
 library; without it, Python checks the runtime package's `machines/` directory.
-This slice does not ship any bundled definitions. The personal library is
+No definitions are bundled. The personal library is
 `machines/` under Pi's agent directory (`PRIME_AGENT_CODING_AGENT_DIR`, then
 `PI_CODING_AGENT_DIR`, then `~/.prime/agent`). Set `shared_dir` and `personal_dir`
 explicitly to work with other roots.

@@ -204,6 +204,37 @@ class MachineLibrary:
         return _write_export(out_path, self.resolve_machine(name)._raw)
 
 
+def _cli_dispatch(request: dict[str, Any]) -> dict[str, Any]:
+    """Internal JSON boundary for the TypeScript CLI; no harness access."""
+    try:
+        library = MachineLibrary()
+        op = request["op"]
+        if op == "list":
+            valid, broken = library._scan()
+            machines = [
+                {
+                    "name": name,
+                    "description": entry.machine.description,
+                    "version": entry.machine.version,
+                    "author": entry.machine.author,
+                    "path": str(entry.path),
+                    "source": entry.source,
+                }
+                for name, entry in sorted(valid.items())
+            ]
+            return {"ok": True, "machines": machines, "warnings": list(broken.values())}
+        if op == "import":
+            destination = library.import_machine(request["path"])
+            return {"ok": True, "name": destination.parent.name, "path": str(destination)}
+        if op == "export":
+            name = request["name"]
+            destination = library.export_machine(name, request["out"])
+            return {"ok": True, "name": name, "path": str(destination), "source": "library"}
+        return {"ok": False, "errors": [f"unknown factory operation {op!r}"]}
+    except (OSError, ValueError, RuntimeError) as exc:
+        return {"ok": False, "errors": [str(exc)]}
+
+
 def _write_export(path: str | Path, raw: bytes) -> Path:
     destination = Path(path).expanduser()
     destination.parent.mkdir(parents=True, exist_ok=True)
