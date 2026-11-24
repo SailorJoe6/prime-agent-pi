@@ -4,7 +4,7 @@ title: Build and validate the Prime Agent Pi packaging and release pipeline
 status: In Progress
 assignee: []
 created_date: '2026-11-24T00:57:00Z'
-updated_date: '2026-11-24T02:48:00Z'
+updated_date: '2026-11-24T03:04:00Z'
 labels: []
 dependencies: []
 documentation:
@@ -29,6 +29,29 @@ modified_files:
   - packages/coding-agent/test/pi-release-discovery.test.ts
   - packages/coding-agent/test/build-pi-release-manifest.test.ts
   - scripts/build-pi-release-manifest.ts
+  - README.md
+  - install.sh
+  - packages/coding-agent/.changes/papi-61-tagged-native-updates.md
+  - packages/coding-agent/src/cli/command-registry.ts
+  - packages/coding-agent/src/cli/native-update.ts
+  - packages/coding-agent/src/cli/node-version-check.ts
+  - packages/coding-agent/src/cli/public-command.ts
+  - packages/coding-agent/src/config.ts
+  - packages/coding-agent/src/core/settings-manager.ts
+  - packages/coding-agent/src/core/slash-commands.ts
+  - packages/coding-agent/src/modes/interactive/interactive-mode.ts
+  - packages/coding-agent/src/package-manager-cli.ts
+  - packages/coding-agent/src/utils/native-installation.ts
+  - packages/coding-agent/src/utils/version-check.ts
+  - packages/coding-agent/test/fixtures/pi-release-feed.ts
+  - packages/coding-agent/test/native-installer.test.ts
+  - packages/coding-agent/test/native-update.test.ts
+  - packages/coding-agent/test/package-command-paths.test.ts
+  - packages/coding-agent/test/package-self-update-daemon.test.ts
+  - packages/coding-agent/test/public-command.test.ts
+  - packages/coding-agent/test/settings-manager.test.ts
+  - packages/coding-agent/test/version-check.test.ts
+  - scripts/check-installer.mjs
 type: task
 ordinal: 61000
 ---
@@ -97,10 +120,12 @@ Handoff: revise slice 4A at code 318cfc075314ccc6001017867599273fb3a04150 / Back
 Slice 4A digest revision ready for review (code tree 3535a8d056b405826e31a24d850b52a7c5526260): compare any GitHub SHA-256 digest for install-pi.sh and all eight archives against their tagged manifest entries. Skip disagreement and continue to the next candidate; omitted and null digests retain prior behavior. Mocked listings verify fallback for a separate mismatch on every payload and acceptance of mixed matching/absent metadata. The nine mismatch tests failed on unmodified discovery and passed after the repair. npm run check passed (including check:test-policy); 61 focused version/manifest/discovery tests passed with shuffle seed 61 and 20 discovery tests passed with seed 62. Only release listing and manifest metadata were simulated; no payload download or execution, live release, tag, merge, install, or activation. Installer/updater integration remains held for review; no acceptance checkbox changed.
 
 Handoff: owner accepted revised slice 4A at code bd8bf6337eedf41c629157ddf84dc906ba0b13a4 / Backlog c10c51e07a4dc40f37f2bf9cbebc072131d6b3e8. Independent review found no material defect in the explicit GitHub SHA-256 mismatch fallback across all nine payloads. That evidence covers metadata consistency, not payload verification. Advance one bounded integration slice: wire the Pi-owned tagged feed into the checksum-verifying installer and existing startup notice, explicit CLI and interactive update/repair paths. Verify installer and selected archive bytes before execution or replacement as applicable. Keep stable default and preview opt-in, preserve explicit confirmation, state and intentional rollback/legacy recovery, and avoid upstream/R2/npm distribution fallbacks. Validate with disposable nonpublishing fixtures, report actual coverage and limits, and stop before full Docker lifecycle/compatibility and publication-gate proof. No live release, tag, version bump, merge, operator-runtime install or activation.
+
+Slice 4B candidate (code tree 23466dae961bf2b095d7d11780beac9ca65469e4): startup notices, CLI and interactive update use Pi-owned tagged GitHub Releases. Stable is default; --preview opts in and explicit legacy nightly maps to preview. Installer bytes are checked after confirmation and before execution. The selected archive inventory must match the manifest and the downloaded archive must pass SHA-256 before extraction/replacement. Managed installs retain offline rollback and explicit legacy recovery, without automatic upstream/R2/npm distribution fallback. npm run check (including installer fixtures and test policy), git diff --check, and 14 focused suites with shuffle seed 61 passed (382 tests; one real compiled-archive case skipped because no matching archive was supplied). Seven caller suites passed with seeds 17 and 101. Disposable shell fixtures cover fresh stable install, preview update, wrong inventory/archive checksum, stale current guard, and offline rollback. Mocked TS tests cover check-only notices, wrong installer bytes, no fallback, and tagged repair planning. Mutations disabling verification or caller safeguards were detected. Exact-artifact Docker lifecycle, saved-state compatibility, actual interactive terminal restart/restore, and publication gates remain. No release, tag, bump, merge, operator install or restart. No acceptance checkbox changed.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
 
 <!-- SECTION:FINAL_SUMMARY:BEGIN -->
-Offline manifest builder and read-only Pi discovery (including GitHub payload digest consistency) are ready for review. Installer, caller cutover, lifecycle/compatibility and publication gates remain.
+Bounded Pi installer and updater integration is ready for review on disposable fixture evidence. Exact-artifact Docker lifecycle, compatibility and publication gates remain open.
 <!-- SECTION:FINAL_SUMMARY:END -->
