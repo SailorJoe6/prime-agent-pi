@@ -4,7 +4,7 @@ title: Build and validate the Prime Agent Pi packaging and release pipeline
 status: In Progress
 assignee: []
 created_date: '2026-11-24T00:57:00Z'
-updated_date: '2026-11-24T02:37:00Z'
+updated_date: '2026-11-24T02:41:00Z'
 labels: []
 dependencies: []
 documentation:
@@ -91,6 +91,8 @@ linux-x64-musl-baseline | 14883502857 | 86e6c71e205e8a8112d2c63f62066172269355f3
 Handoff: the owning Conversation accepted slice 3 at code 8583ed3dd3f613a11b67c971cd0784a3645e9257 / Backlog a4ea3b7af751c0a80c515fcfd5a469f59c6faff3. Independent audit rehashed all eight archives and executables against Actions run 45310741960 and found no material defect. This is exact-commit matrix build/smoke evidence, not lifecycle or release proof. Next bounded slice: deliver Pi-owned GitHub Release manifest/discovery, checksum-verified installer, and existing startup notice, explicit CLI and interactive update/repair integration consistent with the plan. Stable default, preview opt-in; preserve user confirmation, state and intentional rollback/legacy recovery. No automatic install or upstream/npm/R2 distribution fallback. Validate with disposable nonpublishing fixtures and report actual limits. Leave full Docker lifecycle and compatibility verification and publication gates to subsequent work. No live release, tag, public bump, merge, operator installation or restart.
 
 Slice 4A (AC3 partial), ready for review: implemented the offline tagged release manifest and SHA256SUMS writer and read-only discovery in SailorJoe6/prime-agent-pi. Stable is the default; preview opt-in considers stable and prerelease tags, ranked by numeric Pi release identity. Incomplete or mismatched tagged metadata is not offered. Candidate code tree b3cae6d0d13156e3216845e07b868c5be7b80b46; npm run check, npm run check:test-policy and 51 focused tests passed (combined seed 63), including tampered archive rejection and incomplete/foreign discovery fixtures. Offline smoke rehashed the eight real archives from Actions run 45310741960 against their receipts and generated pi-v0.10.2.10-preview.3 with an inert installer fixture (exact bytes documented), manifest SHA-256 bfcbca8b8de6b973db48b21644977a38e470eae2be7ca5f93ecbadcbdb5ed27b. Discovery was tested with simulated GitHub responses, not a live release. This slice leaves caller behavior unchanged: no startup or CLI/interactive updater cutover, no installer, no repair or rollback validation, no release or activation. Next bounded integration should verify installer and archive bytes before replacement and switch startup/CLI/interactive paths together, preserving confirmation, state and intentional recovery. No acceptance checkbox changed.
+
+Handoff: revise slice 4A at code 318cfc075314ccc6001017867599273fb3a04150 / Backlog c11a8e97d7dd2afd1e4e4b3e68ad2c408b24e1e2 before advancing. Review confirmed discovery checks uploaded names and tagged URLs but ignores available GitHub SHA-256 asset metadata. For the installer and all eight archives, compare available SHA-256 metadata to the tagged manifest and skip a candidate on explicit disagreement; preserve behavior when metadata is omitted. Use inert mocked metadata to prove fallback to an older consistent release; do not download or execute payloads for this check. Publish the bounded repair and evidence, then stop for review before installer or updater integration. No live release, tag, merge, install or activation.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
