@@ -4,7 +4,7 @@ title: Build and validate the Prime Agent Pi packaging and release pipeline
 status: In Progress
 assignee: []
 created_date: '2026-11-24T00:57:00Z'
-updated_date: '2026-11-24T02:27:00Z'
+updated_date: '2026-11-24T02:31:00Z'
 labels: []
 dependencies: []
 documentation:
@@ -82,4 +82,6 @@ linux-x64 | 14883202027 | 311606869fc8239bf44dbe66a57170436845e29cc4d3d94f6a0580
 linux-x64-baseline | 14883516504 | 2ec9dea7c4d398529aa43309c0ec69fb369b66df69392fbf26580b637a59da50 | bf5aae7f9e981fe224fca82acfc8ad176026a41c1b7dceba872127c3bf78c56c
 linux-x64-musl | 14883780550 | af8be24feccbb62ff087a491c038f0211e382eb3d41c00c0de1ef8353c2ad219 | 64b99fbd0436309aa773c8548a7d553f9b021a0793032787a4f141829baff7cf
 linux-x64-musl-baseline | 14883502857 | 86e6c71e205e8a8112d2c63f62066172269355f3a2125e063da2f0c2b411afa8 | b1ccc3bfcc8b9a5b27b1ae0e1a24a0bb576d5aa65637d1375b9937539924a12f
+
+Handoff: the owning Conversation accepted slice 3 at code 8583ed3dd3f613a11b67c971cd0784a3645e9257 / Backlog a4ea3b7af751c0a80c515fcfd5a469f59c6faff3. Independent audit rehashed all eight archives and executables against Actions run 45310741960 and found no material defect. This is exact-commit matrix build/smoke evidence, not lifecycle or release proof. Next bounded slice: deliver Pi-owned GitHub Release manifest/discovery, checksum-verified installer, and existing startup notice, explicit CLI and interactive update/repair integration consistent with the plan. Stable default, preview opt-in; preserve user confirmation, state and intentional rollback/legacy recovery. No automatic install or upstream/npm/R2 distribution fallback. Validate with disposable nonpublishing fixtures and report actual limits. Leave full Docker lifecycle and compatibility verification and publication gates to subsequent work. No live release, tag, public bump, merge, operator installation or restart.
 <!-- SECTION:NOTES:END -->
