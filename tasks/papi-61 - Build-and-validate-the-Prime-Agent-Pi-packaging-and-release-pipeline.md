@@ -4,7 +4,7 @@ title: Build and validate the Prime Agent Pi packaging and release pipeline
 status: In Progress
 assignee: []
 created_date: '2026-11-24T00:57:00Z'
-updated_date: '2026-11-24T02:05:00Z'
+updated_date: '2026-11-24T02:27:00Z'
 labels: []
 dependencies: []
 documentation:
@@ -17,6 +17,13 @@ modified_files:
   - scripts/pack-prime-agent-release.mjs
   - scripts/pack-prime-agent-pi-local.mjs
   - scripts/smoke-pi-local-pack.mjs
+  - .github/workflows/standalone-binaries.yml
+  - packages/coding-agent/test/release-workflow.test.ts
+  - scripts/assemble-release-archives.mjs
+  - packages/coding-agent/test/assemble-release-archives.test.ts
+  - scripts/assemble-release-archives.d.mts
+  - scripts/build-pi-native-archive.mjs
+  - scripts/smoke-pi-native-archive.sh
 type: task
 ordinal: 61000
 ---
@@ -62,4 +69,17 @@ Handoff: the owning Conversation accepted slice 1 at code e835c05a8b5b523db3a088
 Slice 2 (AC1–2, partial): isolated pack-only local Pi manifests and SHA-256 receipt; all four staged packages used 0.10.2-preview.3+pi.10 for public fixture 0.10.2.10 preview 3; source manifests and lockfile unchanged. On Darwin arm64 (Node 25.6.0/npm 11.19.0), npm installed 272 packages offline with lifecycle scripts disabled using the workspace lock and warm third-party npm cache. The installed lock resolved every Pi package to its local tarball, and the installed prime-agent loaded a fixture extension importing runtime exports under the four existing public package names. A tampered tarball failed checksum verification. Both npm run check and npm run check:test-policy passed. Commands, four hashes and limits are in docs/pi-release-engineering.md. Fixture only, not native matrix, runtime public version display, release CI, or Docker lifecycle proof. No version bump, release, tag, merge or live runtime change; all ACs remain unchecked.
 
 Handoff: the owning Conversation accepted slice 2 at code 8110435d5bbda284bae3f34b813220bb3c425725 / Backlog c46ec0be4b2ccd851b9dc97f1172055cf4fa4d45. Independent review matched the four fixture checksums and internal tarball dependencies and found no material defect. The warm-cache local fixture is not exact-commit release evidence. Next bounded slice: wire and validate the nonpublishing eight-target native archive build using existing builders, with Pi artifact identity, the prime-agent executable, runtime assets, licenses, and per-target checksum/source receipts. Report actual coverage and any unavailable runners or production catalog inputs; do not count fixtures as release proof. Stop for review before installer/feed integration. No inherited R2/npm publication, public bump, release, tag, merge, or operator-runtime install/activation.
+
+Slice 3 (AC1/AC3 partial), ready for review: wired the nonpublishing Prime Agent Pi native archive path through the existing compiler and eight-runner matrix; retained prime-agent, runtime assets and LICENSE, excluded the inherited installer, and emitted separate per-target checksum and source receipts. Exact clean code 8583ed3dd3f613a11b67c971cd0784a3645e9257, real catalog 01f4d46dd5157ec73f8faf440214088237c81d59, preview test identity 0.10.2.10-preview.3 (package encoding 0.10.2-preview.3+pi.10). GitHub Actions run https://github.com/SailorJoe6/prime-agent-pi/actions/runs/45310741960 passed all eight targets; each ran extracted --version and --help without a JS runtime on PATH (Alpine 3.21 for musl). Independently downloaded all eight artifacts and matched archive SHA-256 to SHA256SUMS and receipt, executable SHA-256 to receipt, embedded identity to clean code/catalog, and inspected executable, license and runtime assets. Local npm run check, npm run check:test-policy, 47 focused tests, actionlint and bash syntax passed. This is exact-commit native build/smoke evidence, not release readiness, compatibility/parity, Windows/Termux validation, or installer/update/rollback evidence. No release, tag, version bump, merge, registry/R2 write or runtime activation. Stop for review before installer/feed integration; no AC checkbox changed.
+
+Target | Actions artifact ID | Archive SHA-256 | Executable SHA-256
+--- | --- | --- | ---
+darwin-arm64 | 14882832532 | 97f17f12a9691d4c8efb52168ad95df7c78904ee5a3f40913022f48c4108e5fb | 5a47ff3c740ac65a0e0830bc5a26594422229805c4d400db1a43852eb81dbb93
+darwin-x64 | 14882634126 | 59691bb12a7f7b67aede3650f99d6be483960d4acd3fd42aad78f42859771d64 | 1327ea2e94ca6b5a643b9c2d8927b2b8ad563652447f9d7f52ba33bae426a4bf
+linux-arm64 | 14883621271 | 545eb268003d17cf1f478c5447692e4469714a68857757d291bfed8473fe0aa9 | 106a253a708108f2fbae9156d5a1aa757c5fce4f22d55962de0c72b5705be22f
+linux-arm64-musl | 14883097141 | 04b31c09c1c2ceef4425e18dfecd3e73b59c857563b3350d60fd95e2272f33b3 | 2f0bb44bea341ed4953c243554007fe8f8b2937ed9ec57a47ddc6c2ce252fc28
+linux-x64 | 14883202027 | 311606869fc8239bf44dbe66a57170436845e29cc4d3d94f6a0580534d9faef8 | cf1043bd1b38e6fda58870d8c95efe404a1cb6b77ddd38950b8c28e8a87b1fd3
+linux-x64-baseline | 14883516504 | 2ec9dea7c4d398529aa43309c0ec69fb369b66df69392fbf26580b637a59da50 | bf5aae7f9e981fe224fca82acfc8ad176026a41c1b7dceba872127c3bf78c56c
+linux-x64-musl | 14883780550 | af8be24feccbb62ff087a491c038f0211e382eb3d41c00c0de1ef8353c2ad219 | 64b99fbd0436309aa773c8548a7d553f9b021a0793032787a4f141829baff7cf
+linux-x64-musl-baseline | 14883502857 | 86e6c71e205e8a8112d2c63f62066172269355f3a2125e063da2f0c2b411afa8 | b1ccc3bfcc8b9a5b27b1ae0e1a24a0bb576d5aa65637d1375b9937539924a12f
 <!-- SECTION:NOTES:END -->
