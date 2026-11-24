@@ -59,7 +59,7 @@ function bundleFixture(manifest: PiReleaseManifest): PublicationBundle {
 	return {
 		manifestJson: `${JSON.stringify(manifest, null, 2)}\n`,
 		checksums: assets.map(({ sha256, file }) => `${sha256}  ${file}\n`).join(""),
-		releaseNotes: `# ${manifest.tag}\n\nFixture notes for ${manifest.channel}. Upstream version: ${parityClaim}.\n`,
+		releaseNotes: `# ${manifest.tag}\n\nFixture notes for ${manifest.channel}.\n\nUpstream parity: ${parityClaim}\n`,
 		assetDigests: Object.fromEntries(assets.map(({ file, sha256 }) => [file, sha256])),
 	};
 }
@@ -70,7 +70,7 @@ function requireSubject(bundle: PublicationBundle): string {
 	return subject;
 }
 
-function evidenceFor(bundle: PublicationBundle, prerelease: boolean): PublicationInput["checks"] {
+function evidenceFor(bundle: PublicationBundle, prerelease: boolean, claim = parityClaim): PublicationInput["checks"] {
 	const subject = requireSubject(bundle);
 	const checks: PublicationInput["checks"] = {};
 	for (const name of prerelease ? (["repository"] as const) : requiredChecks) {
@@ -78,7 +78,7 @@ function evidenceFor(bundle: PublicationBundle, prerelease: boolean): Publicatio
 			status: "pass",
 			subject,
 			reference: `fixture:${name}`,
-			...(name === "parity" ? { claim: parityClaim } : {}),
+			...(name === "parity" ? { claim } : {}),
 		};
 	}
 	return checks;
@@ -266,6 +266,25 @@ describe("stable evidence", () => {
 			claim: "v0.10.1",
 		};
 		expectDenied(decidePiPublication(input));
+	});
+
+	it.each([
+		["notes claim a different patch with the same prefix", `${parityClaim}1`, parityClaim],
+		["notes and receipt agree on the wrong patch", `${parityClaim}1`, `${parityClaim}1`],
+		["notes cite a Pi repair suffix instead of the upstream version", `${parityClaim}.10`, `${parityClaim}.10`],
+		["notes declare two identities", `${parityClaim}\nUpstream parity: ${parityClaim}1`, parityClaim],
+	])("PAPI-61 denies stable when %s, even with receipts bound to the actual notes", (_label, notesClaim, claim) => {
+		const input = fixture();
+		const bundle = {
+			...input.bundle,
+			releaseNotes: `# ${manifestFixture(false).tag}\n\nUpstream parity: ${notesClaim}\n`,
+		};
+		expect(
+			decidePiPublication({ ...input, parityClaim: claim, bundle, checks: evidenceFor(bundle, false, claim) }),
+		).toEqual({
+			kind: "denied",
+			reason: "parity-claim-mismatch",
+		});
 	});
 
 	it("denies stable when the release notes omit the parity claim despite all receipts matching the bundle", () => {

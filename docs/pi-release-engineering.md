@@ -341,8 +341,11 @@ push matched to the manifest source. A preview needs a code change, explicit
 prerelease marking, and passing repository checks. Stable needs a forward,
 explicit stable-version bump matching the commit and manifest version, plus all
 five checks in [product contract §5](product-contract.md#5-publication-and-release-evidence).
-Compatibility requires a separate Prime Claw receipt. The stable parity receipt
-must cover the exact claim included in the release notes.
+Compatibility requires a separate Prime Claw receipt. Stable notes must include
+exactly one standalone `Upstream parity: PrimeIntellect-ai/prime-agent vX.Y.Z`
+line. The supplied parity claim and receipt claim must both match that identity
+exactly. `X.Y.Z` comes from the manifest; a Pi repair revision does not change
+the upstream identity. Shared version prefixes do not count as a match.
 
 The decision compares the nine supplied asset digests (eight archives and the
 installer) with both the validated manifest and `SHA256SUMS`. The evidence

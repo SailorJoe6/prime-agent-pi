@@ -105,8 +105,14 @@ export function decidePiPublication(input: PublicationInput): PublicationDecisio
 		if (receipt?.status !== "pass" || receipt.subject !== subject || !receipt.reference?.trim()) {
 			return deny(`missing-or-mismatched-check:${check}`);
 		}
-		if (check === "parity" && (!parityClaim?.trim() || receipt.claim !== parityClaim || !bundle.releaseNotes.includes(parityClaim))) {
-			return deny("parity-claim-mismatch");
+		if (check === "parity") {
+			const prefix = "Upstream parity: ";
+			const declarations = bundle.releaseNotes.split(/\r?\n/).filter((line) => line.startsWith("Upstream parity:"));
+			const upstreamVersion = manifest.publicVersion.split(".").slice(0, 3).join(".");
+			const expected = `PrimeIntellect-ai/prime-agent v${upstreamVersion}`;
+			if (declarations.length !== 1 || declarations[0] !== `${prefix}${expected}` || parityClaim !== expected || receipt.claim !== expected) {
+				return deny("parity-claim-mismatch");
+			}
 		}
 	}
 	return { kind: "fixture-candidate", tag: manifest.tag, prerelease, subject };
