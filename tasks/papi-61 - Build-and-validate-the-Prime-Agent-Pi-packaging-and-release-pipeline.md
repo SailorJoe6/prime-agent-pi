@@ -1,10 +1,10 @@
 ---
 id: PAPI-61
 title: Build and validate the Prime Agent Pi packaging and release pipeline
-status: Blocked
+status: In Progress
 assignee: []
 created_date: '2026-11-24T00:57:00Z'
-updated_date: '2026-11-24T06:51:00Z'
+updated_date: '2026-11-24T07:18:00Z'
 labels: []
 dependencies: []
 documentation:
@@ -153,6 +153,8 @@ Corrected the fixture-only stable parity check: exactly one standalone `Upstream
 Handoff: Joe approved and, after restart, explicitly released the hold on one new Docker-only Prime Claw compatibility test. The earlier no-test restriction is superseded only for this slice. Use Prime Agent Pi source a8b6aa3338f1863121aafd9ef895e0e8b737c419, existing 0.10.2.2 Linux ARM64 musl archive `/var/folders/4_/twy0wz3s1mq650wnqzn1b8rr0000gq/T/papi61-docker-bpc7nxc0/new/prime-agent-pi-0.10.2.2-linux-arm64-musl.tar.gz` (owner-rehashed SHA-256 1757e01e1a54f0cdca890a20c3837b7fafa2be45a11bcc66666b14144abe933d), executable SHA-256 c186d178cc1844bbcd07cccc70b5e78a4723be8e1f2a401252e449c83eb75eed, catalog 01f4d46dd5157ec73f8faf440214088237c81d59. Read Prime Claw DD-003/DD-005 and use only supported Tier 1 disposable Docker inputs and `scripts/run-prime-agent-probe.sh`; prior evidence pins Prime Claw 177be95655a01024bb2db3a1acfb3c9d2342718a. Compare with qualified legacy runtime as needed, especially on failure, using the same benign probe and synthetic state. No host plugin apply or secondary host daemon, live credentials/provider calls, live state or daemon socket mounts. If no supported exact input path, report that constraint without bypassing it. Preserve logs, exact evidence and limits; on failure distinguish fixture failure from candidate regression before proposing a repair. Stop at result or blocker. No code repairs, qualification policy changes, public bump, merge, tag, release or activation.
 
 Prime Claw compatibility slice stopped at input preflight; no candidate or legacy control was executed, so no compatibility result or regression was observed. Rehashed the existing Pi 0.10.2.2 Linux ARM64 musl archive (`prime-agent-pi-0.10.2.2-linux-arm64-musl.tar.gz`) to 1757e01e1a54f0cdca890a20c3837b7fafa2be45a11bcc66666b14144abe933d and streamed its prime-agent member through SHA-256 without execution: c186d178cc1844bbcd07cccc70b5e78a4723be8e1f2a401252e449c83eb75eed. Adjacent build receipt records clean source a8b6aa3338f1863121aafd9ef895e0e8b737c419 and catalog 01f4d46dd5157ec73f8faf440214088237c81d59. At Prime Claw 177be95655a01024bb2db3a1acfb3c9d2342718a, DD-003 retains the exact qualified cwd-fix-v0.9.8-r1 identity and DD-005 requires disposable Tier 1 with scripts/run-prime-agent-probe.sh. Reviewed docs/prime-agent-installation.md, scripts/test-tier1.sh, scripts/testing/source_builder.py, and tests/conftest.py: PRIME_AGENT_SOURCE builds from a checkout and installs its generated npm .tgz, not the existing native archive; PRIME_AGENT_PINNED goes through the historical vendor installer, cannot name this four-component version, and is unsupported for a new candidate. No supported native archive input found. No Docker run, substitute build, probe, host apply, provider call, release action, or policy change. Unblock condition: a supported disposable Tier 1 input for the exact checksummed Pi archive, with the official probe and synthetic state; if adding that path requires changes, obtain separate owner authorization. No Prime Claw receipt; stable remains fail-closed.
+
+Blocker cleared for the operator-approved Docker-only compatibility probe: independently reviewed PRIMECLAW-70 commit 7437f719353f694bdea8308d6d0ce78ef1e7bcaf provides a checksummed local Pi archive input, exact four-component version handling, and the ARM64 musl runtime in isolated Tier 1. The reviewed benign fixture and qualified-source bridge passed; neither is a real Pi compatibility result. Exact archive SHA-256 reverified. No merge, activation or policy change.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
