@@ -4,7 +4,7 @@ title: Define and share named factory machines
 status: In Progress
 assignee: []
 created_date: '2026-11-22T22:17:00Z'
-updated_date: '2026-11-24T14:43:00Z'
+updated_date: '2026-11-24T14:50:00Z'
 labels: []
 milestone: m-0
 dependencies: []
@@ -23,6 +23,10 @@ modified_files:
   - prime-agent-runtime/src/rlm/factory_spec.py
   - prime-agent-runtime/test/test_factory_spec.py
   - docs/factory-definitions.md
+  - prime-agent-runtime/src/rlm/harness.py
+  - prime-agent-runtime/test/test_harness.py
+  - packages/coding-agent/src/core/refinement/refinement.ts
+  - packages/coding-agent/test/refinement.test.ts
 type: feature
 ordinal: 12000
 ---
@@ -49,10 +53,14 @@ Make validated machine graphs available by name through the harness and library 
 5. Prove both ACs with a formatting graph: definition/store/reopen, stored export/import and library byte round trip, invalid state/DAG reference leaving no new state or changed prior bytes, shared/personal and stored/library collisions, library-only selection without mutation, broken vs missing diagnostics, and no-clobber CLI export. Cover CLI help/text/JSON/exit behavior through tests using temporary homes and native Python; no models, children or terminal run controls. Run each touched test file under its package environment, verify regressions fail when hooks are temporarily broken, and run `npm run check` and `npm run check:test-policy`. Record evidence and exact candidate for independent review; stop before merge, release or activation.
 
 Slice checkpoint: Python definition validation implemented and tested. Continue with step 2 after slice review; defer the changelog to the CLI slice in step 4.
+
+Slice checkpoint: harness save/get/list implemented. Stored-first selection remains pending until the validated library reader is available. Continue with the MACHINE.md slice only after review.
 <!-- SECTION:PLAN:END -->
 
 ## Implementation Notes
 
 <!-- SECTION:NOTES:BEGIN -->
 Slice 1: implemented only the inert v0.10.0 Python schema validation and DAG compiler in rlm.factory_spec. Formatting fixtures prove input preservation, one effective-predecessor join, bounded guard/loop/fan-out handling, and rejection of invalid explicit and DAG references. No prompt or guard execution, storage, library, CLI, or wire changes. Retained the released rules; use isdecimal for spawned-label suffix checks to avoid int() on nondecimal digit glyphs. Validation: cd prime-agent-runtime && uv run --locked python -m unittest discover -s test -p test_factory_spec.py -v (5 tests pass; temporary validation, join and mutation breaks gave 18 failures; restored and reran successfully). npm run check and npm run check:test-policy passed. Both ACs remain unchecked pending persistence, sharing and selection evidence. Next: add validated harness save/get/list through existing storage.
+
+Slice 2: added validated HarnessState save_factory/get_factory/list_factories for session-local and explicitly global named definitions in the existing harness_state.json. Stores authored explicit machines and DAGs as opaque JSON strings in an optional field so TypeScript /refine preserves them without introducing prompt or refinement entries. No migration, execution, stored/library selector, library IO, or CLI. Document-formatting graph and DAG round-trip after reopen; invalid references neither create a file nor change prior bytes; existing entries and refinement events survive. Passed 57 harness, 5 factory validation, and 87 host refinement tests; temporarily broke validation, persistence, scope routing, and host preservation and observed the four focused regressions fail, then restored and reran all three suites. Commands: (cd prime-agent-runtime && uv run --locked python -m unittest discover -s test -p test_harness.py); (cd prime-agent-runtime && uv run --locked python -m unittest discover -s test -p test_factory_spec.py -v); (cd packages/coding-agent && npx tsx ../../node_modules/vitest/dist/cli.js --run test/refinement.test.ts); npm run check; npm run check:test-policy.
 <!-- SECTION:NOTES:END -->
