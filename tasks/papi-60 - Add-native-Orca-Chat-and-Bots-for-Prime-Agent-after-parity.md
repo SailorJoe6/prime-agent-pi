@@ -4,6 +4,7 @@ title: Add native Orca Chat and Bots for Prime Agent after parity
 status: In Design
 assignee: []
 created_date: '2026-11-23T23:34:00Z'
+updated_date: '2026-11-24T00:20:00Z'
 labels: []
 dependencies: []
 references:
@@ -22,6 +23,12 @@ ordinal: 60000
 ## Pickup gate
 
 This is a Prime Agent Pi enhancement, not an upstream parity requirement. Pick it up only after all other parity tickets are complete and parity with the then-current stable upstream Prime Agent release is verified under the product contract. Recheck the released ACP behavior and the supported Orca build at pickup; do not freeze the November 2026 baseline or repeat work already covered by parity.
+
+## Orca delivery dependency
+
+Most user-facing changes belong in `stablyai/orca`: native Chat registration for `prime-agent`, the two live Continue actions, and Bot eligibility and Home Chat wiring. Prime Agent Pi supplies the supported interface to attach to a live daemon session, receive shared updates, and detach or stop. A Pi-only change does not deliver these slices.
+
+After parity, recheck [Orca’s contribution guide](https://github.com/stablyai/orca/blob/main/.github/CONTRIBUTING.md) and [Orca #34735](https://github.com/stablyai/orca/issues/34735). Use #34735 as the starting point for native Chat, not as evidence that live Chat/CLI attachment or Bots are accepted. With operator approval, seek Orca maintainer feedback on live attachment and the two-slice scope before investing in cross-repo implementation. If there is no viable upstream path, bring that back to the operator rather than assuming a fork or shipping a Pi-only substitute. Orca accepts focused outside PRs with a linked issue, test evidence, and before/after screenshots or video for behavior changes; follow its current PR template. Orca maintainers control merge and release.
 
 ## Slice 1 — Native Chat under the existing `prime-agent` identity
 
