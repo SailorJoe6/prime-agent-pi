@@ -13,8 +13,9 @@ type Request = { op: "list" } | { op: "import"; path: string } | { op: "export";
 
 type Result =
 	| { ok: false; errors: string[] }
-	| { ok: true; machines: { name: string; source: string; description: string }[]; warnings: string[] }
-	| { ok: true; name: string; path: string; source?: string };
+	| { ok: true; machines: { name: string; source: "repo" | "user"; description: string }[]; warnings: string[] }
+	| { ok: true; name: string; path: string; created: boolean }
+	| { ok: true; name: string; path: string; source: "library" };
 
 function parseFactoryArgs([op, ...args]: string[]): { request: Request; json: boolean } {
 	const hint = `Run "${APP_NAME} help factory" for usage.`;

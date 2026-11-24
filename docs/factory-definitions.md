@@ -11,9 +11,12 @@ prime-agent help factory export
 
 All three commands accept `--json`. Success prints one JSON object on standard
 output: `list` returns `machines` (with name, description, version, author,
-source, and path) and `warnings`; `import` and `export` return the name and
-path. Errors go to standard error and return a nonzero exit status, including
-with `--json`. The export target must not already exist.
+source, and path) and `warnings` (one per broken file path). The CLI labels
+shared sources `repo` and personal sources `user`. `import` returns the name,
+path, and `created` (`true` for a first install, `false` for a replacement).
+`export` returns the name and path with `source: "library"`. In text mode, list
+warnings go to standard error. Errors go to standard error and return a nonzero
+exit status, including with `--json`. The export target must not already exist.
 
 The CLI uses Pi's kernel Python and the same validated `MACHINE.md` library
 as the Python APIs below. It does not read saved harness definitions when

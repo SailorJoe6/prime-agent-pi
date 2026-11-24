@@ -128,9 +128,10 @@ class MachineLibrary:
         )
         self.personal_dir = Path(personal_dir).expanduser() if personal_dir is not None else _agent_dir() / "machines"
 
-    def _scan(self) -> tuple[dict[str, LibraryMachine], dict[str, str]]:
+    def _scan(self) -> tuple[dict[str, LibraryMachine], dict[str, str], list[str]]:
         valid: dict[str, LibraryMachine] = {}
         broken: dict[str, str] = {}
+        warnings: dict[Path, str] = {}
         for source, root in (("shared", self.shared_dir), ("personal", self.personal_dir)):
             level: dict[str, LibraryMachine] = {}
             for path in sorted(root.glob(f"*/{_FILE}")):
@@ -143,7 +144,9 @@ class MachineLibrary:
                     name = machine.name
                     _validate_spec(machine)
                 except (OSError, ValueError, RecursionError) as exc:
-                    broken.setdefault(name, f"{path}: {exc}")
+                    warning = f"{path}: {exc}"
+                    broken.setdefault(name, warning)
+                    warnings.setdefault(path, warning)
                     continue
                 if name in level:
                     # Use filesystem identity so a mixed-case path may be canonical.
@@ -155,15 +158,15 @@ class MachineLibrary:
                 level[name] = LibraryMachine(machine, path, source, raw)
             for name, entry in level.items():
                 valid.setdefault(name, entry)
-        return valid, broken
+        return valid, broken, list(warnings.values())
 
     def list_machines(self) -> list[LibraryMachine]:
-        valid, _ = self._scan()
+        valid, _, _ = self._scan()
         return [valid[name] for name in sorted(valid)]
 
     def resolve_machine(self, name: str) -> LibraryMachine:
         _validate_name(name)
-        valid, broken = self._scan()
+        valid, broken, _ = self._scan()
         if name in valid:
             return valid[name]
         if name in broken:
@@ -172,6 +175,10 @@ class MachineLibrary:
 
     def import_machine(self, path: str | Path) -> Path:
         """Validate first, then atomically install the original bytes in the personal library."""
+        destination, _ = self._import_machine(path)
+        return destination
+
+    def _import_machine(self, path: str | Path) -> tuple[Path, bool]:
         source = Path(path).expanduser()
         try:
             raw = source.read_bytes()
@@ -194,10 +201,11 @@ class MachineLibrary:
         try:
             with temp:
                 temp.write(raw)
+            created = not destination.exists()
             temp_path.replace(destination)
         finally:
             temp_path.unlink(missing_ok=True)
-        return destination
+        return destination, created
 
     def export_machine(self, name: str, out_path: str | Path) -> Path:
         """Export the library definition, never a stored harness definition."""
@@ -210,7 +218,7 @@ def _cli_dispatch(request: dict[str, Any]) -> dict[str, Any]:
         library = MachineLibrary()
         op = request["op"]
         if op == "list":
-            valid, broken = library._scan()
+            valid, _, warnings = library._scan()
             machines = [
                 {
                     "name": name,
@@ -218,14 +226,14 @@ def _cli_dispatch(request: dict[str, Any]) -> dict[str, Any]:
                     "version": entry.machine.version,
                     "author": entry.machine.author,
                     "path": str(entry.path),
-                    "source": entry.source,
+                    "source": {"shared": "repo", "personal": "user"}[entry.source],
                 }
                 for name, entry in sorted(valid.items())
             ]
-            return {"ok": True, "machines": machines, "warnings": list(broken.values())}
+            return {"ok": True, "machines": machines, "warnings": warnings}
         if op == "import":
-            destination = library.import_machine(request["path"])
-            return {"ok": True, "name": destination.parent.name, "path": str(destination)}
+            destination, created = library._import_machine(request["path"])
+            return {"ok": True, "name": destination.parent.name, "path": str(destination), "created": created}
         if op == "export":
             name = request["name"]
             destination = library.export_machine(name, request["out"])

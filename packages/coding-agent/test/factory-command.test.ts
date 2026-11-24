@@ -129,7 +129,7 @@ describe("factory sharing CLI", () => {
 		});
 	});
 
-	it("imports, lists and exports authored bytes without overwriting an existing output", () => {
+	it("PAPI-12: imports, replaces, lists and exports authored bytes without overwriting an existing output", () => {
 		withLibrary((root) => {
 			const python = kernelPython();
 			const input = join(root, "input copy", "MACHINE.md");
@@ -142,6 +142,7 @@ describe("factory sharing CLI", () => {
 				ok: true,
 				name: "format-doc",
 				path,
+				created: true,
 			});
 			expect(readFileSync(path)).toEqual(raw);
 			expect(successJson(runCli(root, python, "factory", "list", "--json"))).toEqual({
@@ -152,7 +153,7 @@ describe("factory sharing CLI", () => {
 						description: "Format a document",
 						version: "2.1",
 						author: "Format Team",
-						source: "personal",
+						source: "user",
 						path,
 					},
 				],
@@ -170,6 +171,16 @@ describe("factory sharing CLI", () => {
 			writeFileSync(out, existing);
 			expectFailure(runCli(root, python, "factory", "export", "format-doc", "--out", out, "--json"), /exist/i);
 			expect(readFileSync(out)).toEqual(existing);
+
+			const replacement = fixture("format-doc", "Updated document formatting");
+			writeFileSync(input, replacement);
+			expect(successJson(runCli(root, python, "factory", "import", input, "--json"))).toEqual({
+				ok: true,
+				name: "format-doc",
+				path,
+				created: false,
+			});
+			expect(readFileSync(path)).toEqual(replacement);
 		});
 	});
 
@@ -190,19 +201,55 @@ describe("factory sharing CLI", () => {
 		});
 	});
 
-	it("prints text output and distinguishes a broken definition from a missing name", () => {
+	it.each(["text", "json"] as const)(
+		"PAPI-12: lists one %s warning per broken file, even with the same name",
+		(mode) => {
+			withLibrary((root) => {
+				const python = kernelPython();
+				const path = join(root, "shared", "format-doc", "MACHINE.md");
+				const broken = [
+					{ path: join(root, "shared", "broken-first", "MACHINE.md"), dependency: "unknown-section" },
+					{ path: join(root, "shared", "broken-second", "MACHINE.md"), dependency: "unknown-heading" },
+				];
+				writeFixture(path, fixture("format-doc", "Format a document"));
+				for (const entry of broken) {
+					writeFixture(entry.path, fixture("broken-doc", "Broken", entry.dependency));
+				}
+
+				const args = mode === "json" ? ["--json"] : [];
+				const listed = runCli(root, python, "factory", "list", ...args);
+				let warnings: string[];
+				if (mode === "json") {
+					const result = successJson(listed) as { ok: boolean; warnings: string[] };
+					expect(result.ok).toBe(true);
+					warnings = result.warnings;
+				} else {
+					expect(listed.status, listed.stderr).toBe(0);
+					warnings = listed.stderr.trimEnd().split(/\r?\n/);
+				}
+				expect(warnings).toHaveLength(broken.length);
+				for (const entry of broken) {
+					const prefix = `${mode === "text" ? "Warning: " : ""}${entry.path}:`;
+					expect(warnings.filter((warning) => warning.startsWith(prefix))).toEqual([
+						expect.stringContaining(entry.dependency),
+					]);
+				}
+				if (mode === "text") expect(listed.stdout).toMatch(/format-doc\s+repo\s+Format a document/);
+			});
+		},
+	);
+
+	it("distinguishes a broken declared name from a missing name when exporting", () => {
 		withLibrary((root) => {
 			const python = kernelPython();
-			const path = join(root, "shared", "format-doc", "MACHINE.md");
-			writeFixture(path, fixture("format-doc", "Format a document"));
 			writeFixture(
-				join(root, "shared", "broken-doc", "MACHINE.md"),
+				join(root, "shared", "broken-first", "MACHINE.md"),
 				fixture("broken-doc", "Broken", "unknown-section"),
 			);
-			const listed = runCli(root, python, "factory", "list");
-			expect(listed.status, listed.stderr).toBe(0);
-			expect(listed.stdout).toMatch(/format-doc\s+shared\s+Format a document/);
-			expect(listed.stderr).toMatch(/Warning: .*unknown-section/);
+			writeFixture(
+				join(root, "shared", "broken-second", "MACHINE.md"),
+				fixture("broken-doc", "Broken", "unknown-heading"),
+			);
 			expectFailure(
 				runCli(root, python, "factory", "export", "broken-doc", "--out", "broken.md"),
 				/unknown-section/,
@@ -214,7 +261,7 @@ describe("factory sharing CLI", () => {
 		});
 	});
 
-	it("lists and exports the shared definition when a personal definition has the same name", () => {
+	it("PAPI-12: lists and exports the repo definition when a user definition has the same name", () => {
 		withLibrary((root) => {
 			const python = kernelPython();
 			const shared = join(root, "shared", "format-doc", "MACHINE.md");
@@ -232,7 +279,7 @@ describe("factory sharing CLI", () => {
 						description: "Shared definition",
 						version: "2.1",
 						author: "Format Team",
-						source: "shared",
+						source: "repo",
 						path: shared,
 					},
 				],
