@@ -4,7 +4,7 @@ title: Define and share named factory machines
 status: In Progress
 assignee: []
 created_date: '2026-11-22T22:17:00Z'
-updated_date: '2026-11-24T20:45:00Z'
+updated_date: '2026-11-24T20:47:00Z'
 labels: []
 milestone: m-0
 dependencies: []
@@ -73,6 +73,8 @@ Accepted Astra review findings on code c1fbb276: (1) Within each library level p
 Python library revision checkpoint: both accepted Astra findings are repaired and regression-tested. Stop for review; CLI and execution were not changed. Both acceptance criteria remain unchecked.
 
 Accepted Astra follow-up on code 1ee9b24078f126ebd57343226ecf3a3b60323f69: on a case-insensitive volume a valid format-Document/MACHINE.md declaring format-document is reachable through the lowercase canonical import path, but comparing literal directory spelling lets a-draft win after a successful import. Prefer the valid matching file actually reachable via <root>/<name>/MACHINE.md within each library, using real filesystem path semantics rather than unconditional case folding. Preserve shared precedence, different-name occupant protection, and invalid-canonical fallback. Add a portable benign formatting regression proving imported bytes win list/select/export and the draft is unchanged; demonstrate failure before repair on the affected volume. Publish exact code and task evidence and stop for review without CLI, execution, status changes, merge, release or activation.
+
+Filesystem canonical lookup is repaired and regression-tested. Stop for review before CLI work. Both criteria remain unchecked.
 <!-- SECTION:PLAN:END -->
 
 ## Implementation Notes
@@ -87,10 +89,12 @@ Accepted Astra storage finding at 72bd16368d79b80d0634795f7b0c8b4d993276f9 fixed
 Python MACHINE.md slice: formatting graph saved/reopened and exported from the harness, re-imported unchanged, then replaced with a hand-authored UTF-8 BOM/CRLF file that survived import and library export byte for byte. Invalid state and DAG references create no library or export and preserve existing personal bytes. Shared wins by declared name; broken specs are skipped in list and are distinguished from missing names in resolution. Stored definitions win selection but never intercept library export, and library-only selection leaves harness state absent. Existing export targets are refused by both writers. Validation: 6 library, 58 harness, 5 factory spec tests, npm run check, and npm run check:test-policy passed. Seven deliberate mutations (agent directory, byte preservation, reference validation, single-fence check, shared precedence, stored precedence, exclusive open) failed the library tests before restoration. Commands: (cd prime-agent-runtime && uv run --locked python -m unittest discover -s test -p test_machine_library.py -v); (cd prime-agent-runtime && uv run --locked python -m unittest discover -s test -p test_harness.py); (cd prime-agent-runtime && uv run --locked python -m unittest discover -s test -p test_factory_spec.py -v).
 
 Python library revision of c1fbb276b7dbbc78ee5738232cc3a4b8791cbe76: both Astra regressions failed on the original implementation and passed after the fix. A same-name formatting import replaces the canonical copy, wins list and Python selection, and exports its new bytes without changing the noncanonical draft. Shared canonical wins inside shared; when invalid, the shared draft still wins over personal canonical. A valid different-name occupant blocks import and retains its original bytes. Validation: 8 library, 58 harness, 5 factory-spec tests, npm run check, npm run check:test-policy, and git diff --check passed. Reproduce: (cd prime-agent-runtime && uv run --locked python -m unittest discover -s test -p test_machine_library.py -v); (cd prime-agent-runtime && uv run --locked python -m unittest discover -s test -p test_harness.py); (cd prime-agent-runtime && uv run --locked python -m unittest discover -s test -p test_factory_spec.py -v).
+
+Filesystem canonical lookup revision of 1ee9b24078f126ebd57343226ecf3a3b60323f69: the portable mixed-case formatting regression failed before repair on the case-insensitive macOS test volume (list selected a-draft) and passed after repair. Match the filesystem identity of the canonical path only among valid same-name definitions within each library. Import wins list/select/export, export preserves source bytes, the draft stays unchanged, and invalid canonical files fall back. Shared precedence and different-name occupant protection still pass. Validation: 9 library, 58 harness, and 5 factory-spec tests, both npm checks, and git diff --check passed. Reproduce: (cd prime-agent-runtime && uv run --locked python -m unittest discover -s test -p test_machine_library.py -v); (cd prime-agent-runtime && uv run --locked python -m unittest discover -s test -p test_harness.py); (cd prime-agent-runtime && uv run --locked python -m unittest discover -s test -p test_factory_spec.py -v).
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
 
 <!-- SECTION:FINAL_SUMMARY:BEGIN -->
-Python validation, storage, and inert MACHINE.md selection and sharing are implemented, including canonical precedence within each library and protection against replacing valid definitions with a different declared name. Pending review and CLI work; machine execution is out of scope.
+Python validation, storage, and inert MACHINE.md selection and sharing are implemented, including filesystem-aware canonical precedence within each library and protection against replacing valid definitions with a different declared name. Pending review and CLI work; machine execution is out of scope.
 <!-- SECTION:FINAL_SUMMARY:END -->
