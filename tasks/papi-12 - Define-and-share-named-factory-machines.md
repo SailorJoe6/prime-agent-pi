@@ -4,7 +4,7 @@ title: Define and share named factory machines
 status: In Progress
 assignee: []
 created_date: '2026-11-22T22:17:00Z'
-updated_date: '2026-11-24T20:41:00Z'
+updated_date: '2026-11-24T20:45:00Z'
 labels: []
 milestone: m-0
 dependencies: []
@@ -71,6 +71,8 @@ Python library checkpoint: inert MACHINE.md import, export, listing, and stored-
 Accepted Astra review findings on code c1fbb276: (1) Within each library level prefer a valid matching canonical path over another folder declaring the same name, consistently for list, selection and library export, while shared still wins over personal. Prove that an imported document-formatting update wins and exports its new bytes without changing the noncanonical draft. (2) Refuse imports when the canonical destination holds a valid definition declaring a different name; preserve its bytes and retain valid same-name replacement. Make only this bounded library revision, with benign formatting regressions. Publish task evidence and code independently, keep In Progress and both criteria unchecked, and stop for review before CLI work. No execution, merge, release or activation.
 
 Python library revision checkpoint: both accepted Astra findings are repaired and regression-tested. Stop for review; CLI and execution were not changed. Both acceptance criteria remain unchecked.
+
+Accepted Astra follow-up on code 1ee9b24078f126ebd57343226ecf3a3b60323f69: on a case-insensitive volume a valid format-Document/MACHINE.md declaring format-document is reachable through the lowercase canonical import path, but comparing literal directory spelling lets a-draft win after a successful import. Prefer the valid matching file actually reachable via <root>/<name>/MACHINE.md within each library, using real filesystem path semantics rather than unconditional case folding. Preserve shared precedence, different-name occupant protection, and invalid-canonical fallback. Add a portable benign formatting regression proving imported bytes win list/select/export and the draft is unchanged; demonstrate failure before repair on the affected volume. Publish exact code and task evidence and stop for review without CLI, execution, status changes, merge, release or activation.
 <!-- SECTION:PLAN:END -->
 
 ## Implementation Notes
