@@ -169,6 +169,33 @@ class MachineLibraryTest(unittest.TestCase):
         assert_winner(shared_draft, draft_spec, draft, "fallback.md")
         self.assertFalse(self.state_path.exists())
 
+    def test_papi_12_import_uses_filesystem_canonical_lookup(self):
+        draft_bytes = document(formatting("Use the draft style."))
+        draft = self.file(self.personal / "a-draft" / "MACHINE.md", draft_bytes)
+        old_bytes = document(formatting("Use the old style."))
+        mixed = self.file(self.personal / "format-Document" / "MACHINE.md", old_bytes)
+        canonical = self.personal / NAME / "MACHINE.md"
+        aliases_canonical = canonical.is_file()
+        spec = formatting("Format as a memo.")
+        raw = document(spec)
+        source = self.file(self.root / "update.md", raw)
+        state = HarnessState(self.state_path)
+
+        self.assertEqual(self.library.import_machine(source), canonical)
+        self.assertEqual(canonical.read_bytes(), raw)
+        [entry] = self.library.list_machines()
+        self.assertTrue(entry.path.samefile(canonical))
+        self.assertEqual(entry.machine.spec, spec)
+        self.assertEqual(select_factory(NAME, state, library=self.library), spec)
+        self.assertEqual(self.library.export_machine(NAME, self.root / "copy.md").read_bytes(), raw)
+        self.assertEqual(draft.read_bytes(), draft_bytes)
+        self.assertEqual(mixed.read_bytes(), raw if aliases_canonical else old_bytes)
+        self.assertFalse(self.state_path.exists())
+
+        # With no valid canonical file, a distinct mixed-case directory is an ordinary fallback.
+        canonical.write_bytes(b"not a machine")
+        self.assertEqual(self.library.resolve_machine(NAME).path, draft)
+
     def test_papi_12_import_preserves_valid_different_name_at_destination(self):
         other_name = "format-letter"
         original = document(formatting("Format as a letter."), name=other_name)

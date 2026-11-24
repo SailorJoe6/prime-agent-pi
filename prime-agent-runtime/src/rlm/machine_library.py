@@ -145,8 +145,14 @@ class MachineLibrary:
                 except (OSError, ValueError, RecursionError) as exc:
                     broken.setdefault(name, f"{path}: {exc}")
                     continue
-                if name not in level or path.parent.name == name:
-                    level[name] = LibraryMachine(machine, path, source, raw)
+                if name in level:
+                    # Use filesystem identity so a mixed-case path may be canonical.
+                    try:
+                        if not path.samefile(root / name / _FILE):
+                            continue
+                    except OSError:
+                        continue
+                level[name] = LibraryMachine(machine, path, source, raw)
             for name, entry in level.items():
                 valid.setdefault(name, entry)
         return valid, broken

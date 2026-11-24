@@ -77,8 +77,9 @@ explicitly to work with other roots.
 
 - `list_machines()` and `resolve_machine(name)` consider only valid definitions,
   with shared definitions winning name collisions. Within each library, a valid
-  `<name>/MACHINE.md` wins over a file in another directory declaring the same
-  name. Selection and library export use the same rules.
+  matching file reachable at `<name>/MACHINE.md` wins over another file declaring
+  the same name. The filesystem determines whether alternate path spellings
+  refer to that file. Selection and library export use the same rules.
   `MachineResolutionError.broken` distinguishes a broken file from a missing name.
 - `import_machine(path)` validates before atomically installing the original
   bytes in the personal library. A valid import can replace a same-name copy,
