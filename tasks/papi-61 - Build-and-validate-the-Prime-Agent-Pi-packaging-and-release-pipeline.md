@@ -4,7 +4,7 @@ title: Build and validate the Prime Agent Pi packaging and release pipeline
 status: In Progress
 assignee: []
 created_date: '2026-11-24T00:57:00Z'
-updated_date: '2026-11-25T17:30:00Z'
+updated_date: '2026-11-25T17:32:00Z'
 labels: []
 dependencies: []
 documentation:
@@ -461,6 +461,12 @@ Verified archive and executable SHA-256 by target (ZIP digests/receipts in `/tmp
 - `linux-x64-musl-baseline` (artifact 15046256178): archive `761ed8b60f09607ca8c5696720c4b8a3647f4157e30c6aa993d4b6d55e9cb7cc`, executable `0a6dfdd2254c64fc34f32be3c45dd7f78d3b7405a9a9d9d4290df266c96b9d3c`.
 
 Exact installer SHA-256 `a275549947442ba8765833335e29fc76033e1dd1e464c3508b4f52efc1f1472e`; identical rehearsal report SHA-256 `d372c9c89987c7b6e1d0982dc09d8debf867cd9f4caea0cf6514c4d065268e12`. No more CI triggers, code changes, tag, release, activation, or merge. The Episode-only validation gate is not intended for product main; owner review must decide the landing path separately, and this evidence belongs only to the exact Episode SHA. Task status and acceptance remain unchanged (In Progress, 0/5).
+
+### Owner continuation: remove Episode-only CI routing before landing
+
+The owner accepts exact hosted validation on `66c4fbb5b52a33ee72869c09d81ce4cde00610e3` at `0777b7284701db3a0bc65ce147a2b674d74dc54e` as evidence only for that SHA and those hosted bytes. The hardcoded Episode branch and fixture version/catalog in general CI must not land. On the same Episode branch, remove the temporary branch-specific push/dispatch routing and fixed fixture defaults. Retain a small, explicitly invoked artifact-only validation route, preferably optional validated version and pinned public catalog inputs on existing manual CI. Ordinary main and PR behavior, contributor trust, read-only permissions, artifact-mode secret isolation, smoke assertions and timeouts must remain intact.
+
+Read-only review the inherited release entrypoints for publication risk if merged; report the risk without enabling or invoking a writer or expanding release scope. On the actual final candidate SHA, verify hosted required CI and all eight Pi archives, rehearse the exact hosted bundle without publishing, and rerun relevant disposable lifecycle and compatibility probes using those final hosted bytes. Show preview and stable policy decisions using nonpublishing fixtures. Capture final intent, exact evidence and coverage limits here and in durable docs where useful. Publish only to the existing Episode/task refs; report complete merge-readiness evidence or a concrete blocker. No main merge, version bump, tag, publication, live installation or activation, PAPI-62, parity, or lifecycle/acceptance change.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
