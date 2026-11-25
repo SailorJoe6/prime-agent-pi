@@ -4,7 +4,7 @@ title: Build and validate the Prime Agent Pi packaging and release pipeline
 status: In Progress
 assignee: []
 created_date: '2026-11-24T00:57:00Z'
-updated_date: '2026-11-25T15:22:00Z'
+updated_date: '2026-11-25T15:23:00Z'
 labels: []
 dependencies: []
 documentation:
@@ -264,6 +264,14 @@ Built only `linux-arm64-musl` in Pi archive mode from clean `3cd00e7125547a6c65d
 Disposable Docker `alpine@sha256:bc21487101ae47172509130ee1092cc273a831968d64b617776d1f69c81e42ab` (`--rm --init --pull never --network none --platform linux/arm64`, read-only fixture, fresh synthetic home): tagged baseline install → CLI update to `0.10.2.4` → CLI rollback after stopping the loopback HTTPS feed all passed; container absent after exit. First attempt installed baseline but reused a fixture router limited to versions `.1/.2`; corrected the router to `.1/.4`, not product code. Fixture feed advertised placeholder metadata for the seven unserved targets; no full Pi inventory was tested. At all three stages runtime version/help, executable and installed archive receipt, existing session export and ID, extension load and tool/command registration through the public AI import passed. Seeded session, settings, synthetic auth, extension and skill were byte-identical at all stages. No real provider traffic. Exact build/feed receipts, artifact map (including ZIP and executable hashes), and both Docker logs retained in local scratch `papi61-accepted-055s3d22`.
 
 Orca route identified, not run: historical headless image is absent; local `sha256:1822bbcb9182c2d1e564935fe5b09fe6c3e796eeda2db096bef771094ab6c248` has Linux ARM64 Orca 1.4.247 in its image history. In a separate offline disposable fixture, override startup, verify packaged Orca/Node/Orcad and musl identities, and launch only the verified candidate using `orca-ide` with synthetic repo/profile and no pairing, host mounts or sockets. Verify real PTY, expected cwd, exact candidate banner, writable terminal and durable session header, then dispose. This would not prove Mac Orca 1.4.269/Desktop, assignment routing or recovery. Interactive lifecycle and packaged Python on these candidate bytes were not run. No change to the code ref, Windows README, parity, runtime, versions, tags, releases or acceptance criteria.
+
+### Accepted package evidence and remaining compatibility validation
+
+Owner accepted the bounded nonpublishing checkpoint at `4c196d014e7db730ef98d72758c5253280c7b346`: eight CI standalone smoke artifact chains plus the separate Pi Linux ARM64 musl Docker CLI lifecycle at source `3cd00e7125547a6c65db57d802156468549e7841`. Reuse evidence only for unchanged bytes; do not substitute smoke or historical artifacts for the exact Pi package.
+
+Prioritize a bounded compatibility pass using the pinned offline Linux headless Orca route and the verified Pi `0.10.2.4` archive (`a1edf03a6a3e3f580cb5f2857470dc4b8bbfa84c3d357f980729bf278418a8b8`). Exercise a supported interaction beyond startup where feasible. Remaining checks include deterministic benign packaged Python tool use, exact-byte Prime Claw compatibility, and disposable interactive lifecycle with an offline or faux provider. Where feasible in parallel, verify the remaining true Pi release archives using real catalog input and exact per-target receipts, and exercise full-manifest rehearsal with real assets, not placeholders. Do not claim Desktop or other version parity from Linux headless results; use a safe disposable VM or runner if Desktop evidence proves necessary. No second Prime Agent on Joe’s Mac and no live runtime access.
+
+Review integration drift against current main without merging and preserve Windows README and failover changes. Keep PAPI-62 and platform parity out of scope. Report exact verified paths and remaining checks or concrete blockers to the owner; publish scoped Episode work and PAPI-61 evidence only. No merge, release, public version bump or live activation.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
