@@ -1,0 +1,1 @@
+- Added roster rename for selected live or saved subagents using the existing rename shortcut.

@@ -95,6 +95,52 @@ function invoke(method: string, self: object, ...args: unknown[]): unknown {
 	return member.call(self, ...args);
 }
 
+describe("Agents view session rename", () => {
+	it.each([
+		{ kind: "agent", activeSessionId: "root-active" },
+		{ kind: "subagent", activeSessionId: "child-active" },
+		{ kind: "subagent", activeSessionId: undefined },
+	] as const)("PAPI-20: renames the selected $kind ($activeSessionId)", async ({ kind, activeSessionId }) => {
+		const sessionFile = "/tmp/selected-session.jsonl";
+		const request = vi.fn(async () => ({ success: true }));
+		const self = {
+			rows: [
+				{ kind: "subagent", selectable: true, summary: summary({ activeSessionId: "sibling-active" }) },
+				{ kind, selectable: true, summary: summary({ activeSessionId, sessionFile, sessionName: "old-name" }) },
+			],
+			selectedIndex: 1,
+			editor: { getText: () => "", isShowingAutocomplete: () => false, setText: vi.fn(), setPlaceholder: vi.fn() },
+			isDeleteConfirmationVisible: () => false,
+			ui: { requestRender: vi.fn() },
+			keybindings: { matches: (_data: string, action: string) => action === "app.agents.rename" },
+			clearStickyStatusMessage: vi.fn(),
+			openSelected: vi.fn(),
+			setReplyTarget: vi.fn(),
+			setStatusMessage: vi.fn(),
+			rebuildRows: vi.fn(),
+			refreshSessions: vi.fn(async () => {}),
+			refreshSavedSessionsIfLoaded: vi.fn(),
+			requireClient: () => ({ request }),
+			getSavedSessionCatalogContext: () => ({ cwd: "/tmp" }),
+			enterRenameMode: () => invoke("enterRenameMode", self),
+			exitRenameMode: () => invoke("exitRenameMode", self),
+			confirmRename: (value: string) => invoke("confirmRename", self, value),
+			renameSession: (target: SessionSummary, name: string) => invoke("renameSession", self, target, name),
+		};
+
+		invoke("handleInput", self, "configured-rename-key");
+		await invoke("submit", self, " new-name ");
+
+		expect(request.mock.calls).toEqual([
+			[
+				activeSessionId
+					? { type: "rename", activeSessionId, name: "new-name" }
+					: { type: "rename_saved_session", sessionPath: sessionFile, name: "new-name" },
+			],
+		]);
+	});
+});
+
 function savedSession(id: string): AgentConnectionSavedSessionInfo {
 	return {
 		id,
