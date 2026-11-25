@@ -4,7 +4,7 @@ title: Rename the current session or a direct child from Python
 status: In Progress
 assignee: []
 created_date: '2026-11-22T22:18:00Z'
-updated_date: '2026-11-25T22:28:00Z'
+updated_date: '2026-11-25T22:35:00Z'
 labels: []
 milestone: m-0
 dependencies: []
@@ -26,6 +26,8 @@ documentation:
     https://github.com/SailorJoe6/prime-agent-pi/blob/b74b97ec95e0974412b2b775ebf92584254b41c7/docs/upstream-feature-inventory.md#python-shell-and-durable-session-control
   - >-
     https://github.com/SailorJoe6/prime-agent-pi/blob/5199fde647258e8a13fcf8a04ad16e0086903bfb/docs/upstream-feature-inventory.md#python-shell-and-durable-session-control
+  - >-
+    https://github.com/SailorJoe6/prime-agent-pi/blob/de7304377282d55d045a2ca98b13040dbf75f076/docs/upstream-feature-inventory.md#python-shell-and-durable-session-control
 modified_files:
   - packages/coding-agent/src/modes/agents-view/agents-view-mode.ts
   - packages/coding-agent/test/agents-view-mode.test.ts
@@ -102,10 +104,12 @@ Canonical execute verified the same Episode and exact observation 8c55c757, sync
 Owner accepted the shared-worktree blocker reported at 70a7d535b193611181c1c2e1a0c52dd1ac4471bd. The Episode stopped before revision edits. Exact readiness child 01a2148b-70b9-75f9-96cb-2c8386b39c26 still reports working; the Episode reports four queued items and an earlier check that wrote formatting. Unblock after the child settles or an authorized targeted cancellation, with its queue and worktree effects accounted for. Preserve the current Episode and saved sessions. Both review fixes remain pending.
 
 Blocker cleared: operator authorized stopping the exact readiness child. The Episode confirmed that child is inactive with no queued work, its saved session is retained, and other direct children are idle with empty queues. The owner verified a clean Episode worktree at the unchanged published candidate 5199fde647258e8a13fcf8a04ad16e0086903bfb. Resume only the two accepted review fixes in the same Episode.
+
+Review revision de7304377282d55d045a2ca98b13040dbf75f076: Python rename of a passivated direct child publishes the new name through the existing worker roster delta, without reopening the child or changing its roster ID, durable ID or file. Public supervisor roster shows the new name; its saved-sibling rename command denies the collision without changing either transcript or the roster. Python collect uses the current name, so an absent former name is rejected and a reused former name selects its replacement. Renamed original remains selectable by new name, spawn handle ID and durable ID. Offline negative controls: the supervisor showed the old name before the fix; both collect regressions failed before the fix (former name resolved the old run before reuse and was ambiguous after reuse). Green: 259 offline tests (ledger/agents-view/supervisor 104, recursion/bootstrap 127 with RLM_DEPTH and RLM_MAX_DEPTH unset, Python registry 28); focused ledger cases passed shuffle seeds 41 and 73. npm run check and git diff --check passed. No manual UAT, merge, release or activation.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
 
 <!-- SECTION:FINAL_SUMMARY:BEGIN -->
-Python self and direct-child rename preserve session identity. Exact unrelated targets and sibling-name collisions are rejected without mutation. Actual Python renames of already named daemon sessions persist a visible transcript notice; older Python runtimes get nonblocking recovery guidance. Existing live/saved roster rename and root behavior are preserved. Full-task candidate for independent review.
+Candidate for independent review: Python self/direct-child rename and roster rename preserve session identity; the supervisor shows a renamed saved child under its current name and rejects sibling collisions without mutation. Python collect resolves a reused name to the replacement, while the original remains available by stable ID or handle. Configured Python compatibility guidance and transcript notices are unchanged.
 <!-- SECTION:FINAL_SUMMARY:END -->
