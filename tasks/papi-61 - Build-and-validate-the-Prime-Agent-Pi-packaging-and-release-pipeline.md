@@ -4,7 +4,7 @@ title: Build and validate the Prime Agent Pi packaging and release pipeline
 status: In Progress
 assignee: []
 created_date: '2026-11-24T00:57:00Z'
-updated_date: '2026-11-25T18:01:00Z'
+updated_date: '2026-11-25T18:10:00Z'
 labels: []
 dependencies: []
 documentation:
@@ -505,6 +505,14 @@ The active inherited `.github/workflows/build-binaries.yml` can still publish a 
 The owner accepts validation on `150ee9eb5fe0184ff913fc7733b7938cb592a7a7` recorded at `da7f9b901d51a993ac9a6a0500242c7998fd2f52` for those exact hosted bytes only. Independent review confirmed that a main push can select the inherited beta writer without a bump; missing R2 configuration is not a safeguard. Prepare the smallest additive opt-out for this nonpublishing fast-forward landing. Prefer one documented exact head-commit marker evaluated before either R2 or GitHub publication can be selected, and put the marker on the actual final candidate tip. Do not interpolate commit text into shell code. Preserve ordinary CI, unmarked defaults, the writer, and explicit tag/manual routes. Do not change repository settings. Prove the committed workflow and head-message relationship, check for other matching writers, and test marked/unmarked main, PR, tag and manual offline. If it cannot be proven without removing intentional behavior, report the precise decision instead of removing functionality.
 
 Use the existing explicit artifact-only CI route for the resulting final SHA, verify all eight release archive receipts and the exact bundle rehearsal, and repeat applicable disposable lifecycle/compatibility probes on changed hosted bytes. Publish only Episode code and task evidence; report exact merge readiness or a concrete blocker and coverage limits. Do not merge, invoke a writer, release, tag, bump versions, activate live, change task lifecycle/acceptance, or expand parity/PAPI-62 scope.
+
+### Nonpublishing fast-forward candidate published; exact artifact-only CI admitted
+
+Episode `0c30da6db1e8589d7f858e79cfc3c00a6ddcaa33` can fast-forward published main `c87cd0598acaae6ee806a77a8b31f1ca3f845bdb`. Its actual tip message contains exactly `Legacy-Publication: skip`, and committed `build-binaries.yml` (SHA-256 `593954389d52a1c9248f032f29744afe084dde0462869f304c6d9236d4f38f25`) checks only the pushed main head, before release context. The message is handled as environment data, not shell source. All R2/GitHub release writes require successful release context, which the marked main push skips independent of credentials. Ordinary CI and the reusable standalone workflow are unchanged; audit found no other release writer reachable from that push. This proof applies to a fast-forward to this exact SHA, not a rewritten or new head, a separate tag/manual release, or previously queued work. No live main-push proof was attempted.
+
+13 offline event cases passed plus one expected mutation rejection: marked main with existing/missing version tag and bump, ordinary unmarked main, near-marker and head-ID mismatch, vouched/unvouched PR, and explicit tag/manual. Real extracted guard and context ran offline; dependency graph evaluated without running the writer. All 83 focused tests, npm checks and pre-commit passed. Actionlint passed with only its known unsupported inherited `concurrency.queue` key ignored. Evidence and commands: `/tmp/papi61-ff-p0i9n0xr`.
+
+One artifact-only CI dispatch with `0.10.2.4` and catalog `01f4d46dd5157ec73f8faf440214088237c81d59` returned HTTP 204 (`FBA6:2DBFD4:E3693B:F32469:6B07248E`). [Run 45672381837](https://github.com/SailorJoe6/prime-agent-pi/actions/runs/45672381837) attempt 1 admitted on this exact SHA, suite `123576981016`. Hosted artifacts and fresh disposable checks are pending. Earlier validation does not transfer. Main and task lifecycle unchanged; no writer or release triggered.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
