@@ -1,6 +1,7 @@
 export {
 	buildChildAgentDoctrine,
 	buildRlmPrompt,
+	buildRlmPromptParts,
 	buildSubagentGuidance,
 	type ChildAgentDoctrineOptions,
 	type RlmPromptOptions,

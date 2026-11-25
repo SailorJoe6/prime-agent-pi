@@ -28,6 +28,8 @@ import {
 	runIncident,
 } from "./incident.js";
 
+import { runPromptCommand } from "./prompt-command.js";
+
 export interface PublicCommandResult {
 	handled: boolean;
 	args: string[];
@@ -162,6 +164,9 @@ async function runPublicCommand(args: string[]): Promise<PublicCommandResult> {
 			await handlePackageCommand(["update", "--self", ...options]);
 			return HANDLED;
 		}
+		case "prompt":
+			await runPromptCommand(args.slice(1));
+			return HANDLED;
 		case "model":
 			return rewriteNestedCommand("model", "list", "--list-models", args.slice(1));
 		case "session":

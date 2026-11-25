@@ -714,7 +714,10 @@ export class DefaultPackageManager implements PackageManager {
 		}
 	}
 
-	async resolve(onMissing?: (source: string) => Promise<MissingSourceAction>): Promise<ResolvedPaths> {
+	async resolve(
+		onMissing?: (source: string) => Promise<MissingSourceAction>,
+		options?: { noConfiguredCommands?: boolean },
+	): Promise<ResolvedPaths> {
 		const accumulator = this.createAccumulator();
 		const globalSettings = this.settingsManager.getGlobalSettings();
 		const projectSettings = this.settingsManager.getProjectSettings();
@@ -728,7 +731,7 @@ export class DefaultPackageManager implements PackageManager {
 		}
 		// Deduplicate by package identity after recording project precedence.
 		const packageSources = this.dedupePackages(allPackages);
-		await this.resolvePackageSources(packageSources, accumulator, onMissing);
+		await this.resolvePackageSources(packageSources, accumulator, onMissing, options?.noConfiguredCommands);
 
 		const globalBaseDir = this.agentDir;
 		const projectBaseDir = join(this.cwd, CONFIG_DIR_NAME);
@@ -1056,6 +1059,7 @@ export class DefaultPackageManager implements PackageManager {
 		sources: Array<{ pkg: PackageSource; scope: SourceScope }>,
 		accumulator: ResourceAccumulator,
 		onMissing?: (source: string) => Promise<MissingSourceAction>,
+		noConfiguredCommands?: boolean,
 	): Promise<void> {
 		for (const { pkg, scope } of sources) {
 			const sourceStr = typeof pkg === "string" ? pkg : pkg.source;
@@ -1085,6 +1089,8 @@ export class DefaultPackageManager implements PackageManager {
 			};
 
 			if (parsed.type === "npm") {
+				// Global npm discovery queries the configured executable. Inspection must not run project commands.
+				if (noConfiguredCommands && scope === "user" && this.settingsManager.getNpmCommand()?.length) continue;
 				const installedPath = this.getNpmInstallPath(parsed, scope);
 				const needsInstall =
 					!existsSync(installedPath) ||

@@ -81,6 +81,11 @@ export function buildChildAgentDoctrine(options: ChildAgentDoctrineOptions): str
 }
 
 export function buildRlmPrompt(options: RlmPromptOptions): string {
+	const { beforeRuntime, runtime, afterRuntime } = buildRlmPromptParts(options);
+	return beforeRuntime + runtime + afterRuntime;
+}
+
+export function buildRlmPromptParts(options: RlmPromptOptions) {
 	const { cwd, skillsDir, messagesPath } = options;
 	const installedSkills = options.installedSkills ?? [];
 	const hasAgentMessage = installedSkills.includes("agent_message");
@@ -90,7 +95,7 @@ export function buildRlmPrompt(options: RlmPromptOptions): string {
 	const activeTools = options.activeTools ?? [];
 	const hasIpython = options.activeTools === undefined ? true : activeTools.includes("ipython");
 	const canRunShellSkills = hasIpython || activeTools.includes("bash");
-	const parts = [
+	const beforeRuntime = [
 		"You are a general purpose agent that uses code to solve tasks.",
 		"You solve tasks by breaking down problems into sub-tasks, writing and executing code, observing results, and iterating one step at a time.",
 		"When you are done, stop calling tools and state your final answer.",
@@ -100,9 +105,13 @@ export function buildRlmPrompt(options: RlmPromptOptions): string {
 		...(depth === 0 ? [USER_PROGRESS_PROMPT, ""] : []),
 		SIMPLIFIED_TECHNICAL_ENGLISH_PROMPT,
 		"",
+	];
+	const runtime = [
 		`Working directory: ${cwd}`,
 		`Conversation log: ${messagesPath}`,
 		`Recursive agent depth: ${depth}`,
+	];
+	const parts = [
 		`Pre-installed Python packages: ${DEFAULT_RLM_EXTRA_IMPORT_LABELS.join(", ")}.`,
 		"Install additional packages with `uv pip install <pkg>` (this is a uv-managed venv with no pip module).",
 	];
@@ -198,7 +207,11 @@ export function buildRlmPrompt(options: RlmPromptOptions): string {
 		}
 	}
 
-	return parts.join("\n");
+	return {
+		beforeRuntime: `${beforeRuntime.join("\n")}\n`,
+		runtime: `${runtime.join("\n")}\n`,
+		afterRuntime: parts.join("\n"),
+	};
 }
 
 /**

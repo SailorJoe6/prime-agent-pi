@@ -1,0 +1,1 @@
+- Added `prime-agent prompt` to preview fresh-root system instructions offline in text or JSON.
