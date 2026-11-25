@@ -4,7 +4,7 @@ title: Build and validate the Prime Agent Pi packaging and release pipeline
 status: In Progress
 assignee: []
 created_date: '2026-11-24T00:57:00Z'
-updated_date: '2026-11-25T17:25:00Z'
+updated_date: '2026-11-25T17:30:00Z'
 labels: []
 dependencies: []
 documentation:
@@ -441,6 +441,26 @@ GitHub recorded push `51854347013` at `17:12:48Z`. No matching run or suite was 
 [CI 45662495325](https://github.com/SailorJoe6/prime-agent-pi/actions/runs/45662495325), attempt 1, completed `17:23:53Z` on `66c4fbb5b52a33ee72869c09d81ce4cde00610e3`. All 28 jobs passed, including the required aggregate (139382146714), eight legacy builds, and eight distinct Pi targets. Intel legacy diagnostics (139375891964) showed startup, both persistent-cell markers and shell completion, CLI exit and close 0, acknowledged shutdown and successful fixture removal; the earlier timeout did not recur and its cause remains unknown.
 
 All eight hosted artifact ZIP digests match the Actions API. Verified archive and embedded executable hashes, clean source receipts and catalog `01f4d46dd5157ec73f8faf440214088237c81d59`. Installer matches the Git blob at that source SHA; SHA-256 `a275549947442ba8765833335e29fc76033e1dd1e464c3508b4f52efc1f1472e`. Two nonpublishing rehearsals of these exact bytes were identical (report SHA-256 `d372c9c89987c7b6e1d0982dc09d8debf867cd9f4caea0cf6514c4d065268e12`); stable publication denied `missing-or-mismatched-stable-bump`. For each platform: ZIP digest, archive digest and executable digest are recorded in `/tmp/papi61-final-ci-8p8mgh81/verified.json`. ARM64 musl archive `20d3fad7db4338a46af8d938fb3ebafcaf33fdb4708d0a2dcf38a21d01ac67a1`, executable `81fe81f54b204d78f91ae776e6dedc9ebd88b0ee45a6ea1c2bec2360c3da6aec`. Disposable exact-byte lifecycle and compatibility probes are in progress, not yet evidence of readiness. No rerun, release, code, acceptance, or lifecycle change.
+
+### Exact hosted validation complete; candidate ready for owner review, not release
+
+[CI 45662495325](https://github.com/SailorJoe6/prime-agent-pi/actions/runs/45662495325) attempt 1 passed all 28 jobs on `66c4fbb5b52a33ee72869c09d81ce4cde00610e3`. All eight true Pi archives and the exact installer were verified; two nonpublishing rehearsals matched and stable publication was denied. Intel Python passed with diagnostics; the historical timeout remains unexplained.
+
+Exact hosted ARM64 musl `0.10.2.4` passed CLI and TUI install from `0.10.2.1`, update, and rollback with the fixture feed stopped. CLI preserved synthetic settings, credentials, extension, skill and saved session bytes; extension load and session export passed at each phase. The TUI decline was a no-op; opt-in accepted the stable fallback, not a real prerelease. `/session` confirmed the same UUID/path before update, after update, and after rollback. The same foreground PID re-executed, the transcript retained its original prefix and added ordered restore events, and `/quit` returned 0. Daemon/worker remained immediately after TUI exit; containers were removed, not a graceful daemon shutdown claim. Alpine 3.21.10, ARM64, pinned offline runtime APKs, `--pull never --network none`, loopback HTTPS and synthetic state. Evidence and commands: `/tmp/papi61-final-ci-8p8mgh81/lifecycle/run-01/RESULT.md`, `run-cli.sh`, `run-tui.exp`, `cli.log`, `tui-verify.log`.
+
+Same ARM64 musl executable passed core Python-first (default ipython-only, retained value across two cells in one kernel, no stderr), headless Orca 1.4.247 PTY launch and benign extension command in the exact same durable session/worktree, and one Prime Claw read-only `review-request` with staged/unstaged patch and unchanged files/index/status. Eight optional bundled Python skill installs were not exercised successfully offline (`pythonSkills=[]`); no Orca Desktop, pairing, routing/recovery, Prime Claw supported-target qualification, real live feed, other-platform lifecycle, live activation or upstream parity claim. Evidence/commands: `/tmp/papi61-final-ci-8p8mgh81/compat/RESULT.md`, `compat/run.sh`.
+
+Verified archive and executable SHA-256 by target (ZIP digests/receipts in `/tmp/papi61-final-ci-8p8mgh81/verified.json`):
+- `darwin-arm64` (artifact 15045293124): archive `8e584f9f34cf05d429337d9219e996d1876d12519a3496b9affa609701df913b`, executable `510a1f8d23471f6b5ffead738f7f1b376e2b0bf4650ac3b6c436bcb8a00046dc`.
+- `darwin-x64` (artifact 15045238684): archive `59832ebcb0946acc72082a33c508da3c432d4ef5ba3c97dc8d520e031558288f`, executable `b12df06991d053be11511068ee114d05bada04137104b48c76520745bbada562`.
+- `linux-arm64` (artifact 15046161416): archive `d48635fc33802338c572397d8d35dc7b14066c0a2097fbb3df22566ff1cb8cb0`, executable `9283d8152bfbff40e216955d569b6c01a83543f8fec18134a64e0b7d594dd1b9`.
+- `linux-arm64-musl` (artifact 15044738325): archive `20d3fad7db4338a46af8d938fb3ebafcaf33fdb4708d0a2dcf38a21d01ac67a1`, executable `81fe81f54b204d78f91ae776e6dedc9ebd88b0ee45a6ea1c2bec2360c3da6aec`.
+- `linux-x64` (artifact 15046016594): archive `1e4d9f4acfdff1e9a349d859ffffe70128c29ccb082d5942494fed48c6fe5cdb`, executable `a01eb89807efffc0fa5d813ea4a9800e2e5ae002c3b9f5e2944528c794176c72`.
+- `linux-x64-baseline` (artifact 15046855532): archive `b3a2552e7f7f271fa46dad450fc995b512bf6ffd61b9f6844505346b00cf7a22`, executable `ce1dccf8cc860208252f29ec5e509f2d35009d9c623bf467abd50806cceb9f8b`.
+- `linux-x64-musl` (artifact 15046850479): archive `17a364d0ee0b493f352529f3e7b42833b04726d52a9dca4fae4442c51358bfee`, executable `05a9da097d81af7e0f027318f1facdf94b810c9e287479c955915cc96de567ed`.
+- `linux-x64-musl-baseline` (artifact 15046256178): archive `761ed8b60f09607ca8c5696720c4b8a3647f4157e30c6aa993d4b6d55e9cb7cc`, executable `0a6dfdd2254c64fc34f32be3c45dd7f78d3b7405a9a9d9d4290df266c96b9d3c`.
+
+Exact installer SHA-256 `a275549947442ba8765833335e29fc76033e1dd1e464c3508b4f52efc1f1472e`; identical rehearsal report SHA-256 `d372c9c89987c7b6e1d0982dc09d8debf867cd9f4caea0cf6514c4d065268e12`. No more CI triggers, code changes, tag, release, activation, or merge. The Episode-only validation gate is not intended for product main; owner review must decide the landing path separately, and this evidence belongs only to the exact Episode SHA. Task status and acceptance remain unchanged (In Progress, 0/5).
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
