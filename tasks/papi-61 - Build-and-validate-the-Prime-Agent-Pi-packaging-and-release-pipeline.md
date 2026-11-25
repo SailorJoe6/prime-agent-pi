@@ -4,7 +4,7 @@ title: Build and validate the Prime Agent Pi packaging and release pipeline
 status: In Progress
 assignee: []
 created_date: '2026-11-24T00:57:00Z'
-updated_date: '2026-11-25T20:49:00Z'
+updated_date: '2026-11-25T20:50:00Z'
 labels: []
 dependencies: []
 documentation:
@@ -537,6 +537,12 @@ Hosted inventory (SHA-256):
 - `linux-x64-musl-baseline`: artifact `15049668597`, ZIP `sha256:c7ac8ab997ae2be7ed2e1f7cec45fe1615cb5c7d6edb50c28da1e4c3bb301f0f`, archive `a56786686449bfb2a8e0b8829c8287d3e695b24ea3879a503a28789565a29ecd`, executable `90999710eaf4922c9fb975ae81a91a00173a4e10bfc8fff2f85612cb876557b0`.
 
 Nothing was merged, released, tagged, version-bumped or activated. No writer was invoked. Task remains In Progress (0/5); owner controls lifecycle and landing.
+
+### Owner continuation: integrate advanced main and revalidate the exact marked tip
+
+Owner reopened PAPI-61 as In Progress at `0a9c77386ac49069e360d72402cc34d47c04de85` after main advanced. The last validated Episode tip is `0c30da6db1e8589d7f858e79cfc3c00a6ddcaa33`; earlier evidence applies only to that SHA and those hosted bytes. On the existing Episode branch, recheck published main (observed `60b6cf70dc7b207f6ec6c98ae599a876a6a7b2fb`), then merge that exact main into the Episode without rewriting history. Preserve PAPI-18 prompt preview, Pi-only update notices/feed/installer behavior, ordinary CI and the legacy publication opt-out. Put the exact standalone `Legacy-Publication: skip` line on the actual final tip, preferably in the integration merge message.
+
+Prove final ancestry, the exact tip marker and committed main-push writer isolation, and use existing artifact-only CI and relevant checks on the resulting SHA. Verify the exact newly built artifacts rather than transferring earlier receipts; parallelize independent evidence where useful. Report the new exact code/main/task tuple and readiness or a concrete blocker. This continuation authorizes integration and validation on the Episode only: no main modification, release, tag, version bump, live upgrade/install/activation, parity work or PAPI-62.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
