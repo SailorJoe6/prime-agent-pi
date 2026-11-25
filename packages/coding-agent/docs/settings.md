@@ -269,11 +269,14 @@ set `retry.failover.providers` in your global settings, for example:
 ```
 
 Use exact `provider/model-id` references in the order you want them tried.
-Only configured, compatible, policy-allowed routes for the active model ID
-are eligible. Credentials alone never opt a provider in. A switch happens
+Only configured, policy-allowed routes for the active model ID are eligible.
+A text-only route can serve a text request, but not one that includes images
+in the prompt or history. Credentials alone never opt a provider in. A switch happens
 after that provider's `retry.maxRetries` budget is spent, with at most eight
-retry decisions across the chain, including switches. Retry-After delays above
-the configured cap do not trigger a switch. The next turn starts on the
+retry decisions across the chain, including switches. A 404 that specifically
+rejects tool use ends the failover chain; ordinary routing 404s remain retryable.
+Quota errors can report a reset in the error text if there is no Retry-After.
+Delays above the configured cap do not trigger a switch. The next turn starts on the
 original route. If no eligible alternate is listed, the existing retry,
 wait and park behavior is unchanged.
 

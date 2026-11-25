@@ -1245,12 +1245,17 @@ describe("AgentSession retry and event characterization", () => {
 	async function withFailoverRoutes(
 		retry: NonNullable<Settings["retry"]>,
 		run: (harness: Harness, routes: ReturnType<typeof registerFauxProvider>[]) => Promise<void>,
+		firstInput?: Model<string>["input"],
 	): Promise<void> {
 		const harness = await parkHarness({
 			retry: { baseDelayMs: 1, ...retry, failover: { providers: failoverProviders.map((p) => `${p}/faux-1`) } },
 		});
 		const routes = failoverProviders.map((provider) =>
-			registerFauxProvider({ api: `papi-6-${provider}`, provider, models: [{ id: "faux-1" }] }),
+			registerFauxProvider({
+				api: `papi-6-${provider}`,
+				provider,
+				models: [{ id: "faux-1", input: provider === failoverProviders[0] ? firstInput : undefined }],
+			}),
 		);
 		try {
 			for (const route of routes) {
@@ -1270,6 +1275,63 @@ describe("AgentSession retry and event characterization", () => {
 			for (const route of routes) route.unregister();
 		}
 	}
+
+	it.each(["text", "image history"])("PAPI-6 picks a compatible alternate for %s", async (input) => {
+		await withFailoverRoutes(
+			{ maxRetries: 0 },
+			async (harness, [first, second, last]) => {
+				if (input === "image history") {
+					harness.setResponses([fauxAssistantMessage("saw image")]);
+					await harness.session.prompt("image in history", {
+						images: [{ type: "image", mimeType: "image/png", data: "aW1hZ2U=" }],
+					});
+				}
+				harness.setResponses([transientUnavailableFailure()]);
+				first.setResponses([fauxAssistantMessage("text-only route")]);
+				second.setResponses([
+					(context) => {
+						expect(
+							context.messages.some(
+								(message) =>
+									Array.isArray(message.content) && message.content.some((part) => part.type === "image"),
+							),
+						).toBe(true);
+						return fauxAssistantMessage("image route");
+					},
+				]);
+				await harness.session.prompt("retry this request");
+				expect([first.state.callCount, second.state.callCount, last.state.callCount]).toEqual(
+					input === "text" ? [1, 0, 0] : [0, 1, 0],
+				);
+				expect(getAssistantTexts(harness).at(-1)).toBe(input === "text" ? "text-only route" : "image route");
+			},
+			["text"],
+		);
+	});
+
+	it.each(["primary", "alternate"])("PAPI-6 stops on the tool capability 404 on the %s", async (route) => {
+		await withFailoverRoutes({ maxRetries: 1 }, async (harness, [first, second]) => {
+			const rejected = {
+				...transientUnavailableFailure(),
+				errorMessage: "404 No endpoints found that support tool use.",
+			};
+			harness.setResponses(
+				route === "primary"
+					? [rejected, fauxAssistantMessage("unexpected retry")]
+					: [transientUnavailableFailure(), transientUnavailableFailure()],
+			);
+			first.setResponses([rejected, fauxAssistantMessage("unexpected retry")]);
+			second.setResponses([fauxAssistantMessage("unexpected switch")]);
+			await harness.session.prompt("tool capability rejection");
+			expect([harness.faux.state.callCount, first.state.callCount, second.state.callCount]).toEqual(
+				route === "primary" ? [1, 0, 0] : [2, 1, 0],
+			);
+			expect(harness.session.messages.at(-1)).toMatchObject({
+				stopReason: "error",
+				errorMessage: rejected.errorMessage,
+			});
+		});
+	});
 
 	it("PAPI-6 follows configured order and stops after eight retry decisions", async () => {
 		await withFailoverRoutes({ maxRetries: 2 }, async (harness, [first, second, last]) => {
@@ -1351,31 +1413,38 @@ describe("AgentSession retry and event characterization", () => {
 		});
 	});
 
-	it("PAPI-6 parks an alternate's over-cap quota wait and wakes on the original route", async () => {
-		await withFailoverRoutes(
-			{
-				maxRetries: 0,
-				provider: { maxRetryDelayMs: 1_000, waitForUsage: { maxPauseMs: 3_601_000 } },
-			},
-			async (harness, [first, second, last]) => {
-				harness.setResponses([transientUnavailableFailure(), fauxAssistantMessage("recovered on primary")]);
-				first.setResponses([farReset()]);
-				await promptParked(harness, "park instead of switching again");
-				expect(harness.session.isQuotaParked).toBe(true);
-				expect([
-					harness.faux.state.callCount,
-					first.state.callCount,
-					second.state.callCount,
-					last.state.callCount,
-				]).toEqual([1, 1, 0, 0]);
-				const resumed = await wakeQuotaProbe(harness)();
-				expect(resumed.stopReason).toBe("stop");
-				expect(harness.session.isQuotaParked).toBe(false);
-				expect(harness.faux.state.callCount).toBe(2);
-				expect(getAssistantTexts(harness).at(-1)).toBe("recovered on primary");
-			},
-		);
-	});
+	it.each(["header", "text fallback"])(
+		"PAPI-6 parks an alternate’s over-cap quota wait (%s) and wakes on the original route",
+		async (hint) => {
+			await withFailoverRoutes(
+				{
+					maxRetries: 0,
+					provider: { maxRetryDelayMs: 1_000, waitForUsage: { maxPauseMs: 3_601_000 } },
+				},
+				async (harness, [first, second, last]) => {
+					harness.setResponses([transientUnavailableFailure(), fauxAssistantMessage("recovered on primary")]);
+					first.setResponses([
+						hint === "header"
+							? quotaFailure({ retryAfterMs: 3_600_000, errorMessage: "429 quota; try again in 1 second" })
+							: quotaFailure({ errorMessage: "429 quota; try again in 1 hour" }),
+					]);
+					await promptParked(harness, "park instead of switching again");
+					expect(harness.session.isQuotaParked).toBe(true);
+					expect([
+						harness.faux.state.callCount,
+						first.state.callCount,
+						second.state.callCount,
+						last.state.callCount,
+					]).toEqual([1, 1, 0, 0]);
+					const resumed = await wakeQuotaProbe(harness)();
+					expect(resumed.stopReason).toBe("stop");
+					expect(harness.session.isQuotaParked).toBe(false);
+					expect(harness.faux.state.callCount).toBe(2);
+					expect(getAssistantTexts(harness).at(-1)).toBe("recovered on primary");
+				},
+			);
+		},
+	);
 
 	it("routes quota-blocked turns to the configured backup model and returns to the primary", async () => {
 		const harness = await createHarness({

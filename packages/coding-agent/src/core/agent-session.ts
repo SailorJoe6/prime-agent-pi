@@ -1632,6 +1632,7 @@ export class AgentSession {
 	private _quotaResumeJobStore: AgentCronJobStore | undefined = undefined;
 	/** Wake jobs branch navigation cancelled, so returning to the parked branch can rebuild one. */
 	private readonly _navigationCancelledWakeJobs = new Set<string>();
+	private _failoverRequestHasImages = false;
 	private _providerFailover?: { routes: Model<string>[]; next: number; routeRetries: number };
 	/** Snapshot of the original route while a retry is serving elsewhere. */
 	private _backupModel:
@@ -1836,7 +1837,13 @@ export class AgentSession {
 			parentSessionId: config.semanticParentSessionId,
 			spawnedByRequestId: config.semanticSpawnedByRequestId,
 		});
-		this.agent.streamFn = wrapStreamFnWithSemanticEdges(this.agent.streamFn, this._semanticEdges);
+		const stream = wrapStreamFnWithSemanticEdges(this.agent.streamFn, this._semanticEdges);
+		this.agent.streamFn = (model, context, options) => {
+			// Inspect the request after context hooks and conversion to LLM messages.
+			this._failoverRequestHasImages =
+				this.settingsManager.getProviderFailoverRoutes().length > 0 && context.messages.some(messageCarriesImages);
+			return stream(model, context, options);
+		};
 		// A resumed child may have replied before this process started; false would
 		// claim knowledge that is not present in the session transcript.
 		this._repliedToParentSinceTask =
@@ -13437,19 +13444,26 @@ export class AgentSession {
 		const maxRetryDelayMs = this.settingsManager.getProviderRetrySettings().maxRetryDelayMs;
 		const delay = providerRetryDelay(
 			(failover?.routeRetries ?? this._retryAttempt) + 1,
-			providerStreamFailureRetryAfterMs(message),
+			providerStreamFailureRetryAfterMs(message) ??
+				(failover && waitClass === "quota" ? parseProviderResetMs(message.errorMessage) : undefined),
 			{
 				baseDelayMs: settings.baseDelayMs,
 				maxRetryDelayMs,
 			},
 		);
 		if (failover) {
-			if (!eligibleFailure || this._retryAttempt >= MAX_PROVIDER_FAILOVER_RETRIES) {
+			const unsupportedToolUse =
+				providerStreamFailureStatus(message) === 404 &&
+				message.errorMessage?.toLowerCase().includes("no endpoints found that support tool use");
+			if (!eligibleFailure || unsupportedToolUse || this._retryAttempt >= MAX_PROVIDER_FAILOVER_RETRIES) {
 				this._finishActiveRetryWithFailure(message);
 				return false;
 			}
 			if (delay.kind === "wait" && failover.routeRetries >= settings.maxRetries) {
-				const next = failover.routes[failover.next++];
+				let next = failover.routes[failover.next++];
+				while (next && !this._canRetryInputOnRoute(next)) {
+					next = failover.routes[failover.next++];
+				}
 				if (!next) {
 					this._finishActiveRetryWithFailure(message);
 					return false;
@@ -13633,6 +13647,10 @@ export class AgentSession {
 		return backupModel;
 	}
 
+	private _canRetryInputOnRoute(route: Model<string>): boolean {
+		return route.input.includes("image") || !this._failoverRequestHasImages;
+	}
+
 	private _resolveProviderFailoverRoutes(): Model<string>[] {
 		const primary = this._runModel();
 		const references = this.settingsManager.getProviderFailoverRoutes();
@@ -13644,11 +13662,7 @@ export class AgentSession {
 			const route = available.find(
 				(model) => model.id === primary.id && `${model.provider}/${model.id}` === reference,
 			);
-			if (
-				!route ||
-				seenProviders.has(route.provider) ||
-				!primary.input.every((input) => route.input.includes(input))
-			) {
+			if (!route || seenProviders.has(route.provider) || !this._canRetryInputOnRoute(route)) {
 				continue;
 			}
 			try {
