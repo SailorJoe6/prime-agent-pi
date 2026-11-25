@@ -1,7 +1,7 @@
 ---
 id: PAPI-20
 title: Rename the current session or a direct child from Python
-status: Ready for Merge
+status: Done
 assignee: []
 created_date: '2026-11-22T22:18:00Z'
 updated_date: '2026-11-25T22:39:00Z'
