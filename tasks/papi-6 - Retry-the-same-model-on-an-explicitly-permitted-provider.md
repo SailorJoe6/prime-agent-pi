@@ -1,10 +1,10 @@
 ---
 id: PAPI-6
 title: Retry the same model on an explicitly permitted provider
-status: In Design
+status: In Planning
 assignee: []
 created_date: '2026-11-22T22:03:00Z'
-updated_date: '2026-11-24T00:57:00Z'
+updated_date: '2026-11-25T03:07:00Z'
 labels: []
 milestone: m-0
 dependencies: []
@@ -34,3 +34,14 @@ Original Pi partially covers turn failover. Its explicit providerBackupModel can
 - [ ] #2 The new post-budget mechanism does not use a route serving only N or a route not explicitly permitted for M.
 - [ ] #3 With the new policy unset and providerBackupModel set to N, a transient primary failure can select N before primary retries run out, then restore the primary. With neither policy set, current primary-route retry/park behavior remains.
 <!-- AC:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+1. Add one opt-in user-global `retry.failover.providers` list of exact alternate `provider/model-id` references in settings. Resolve in list order from the existing model registry; only a different provider serving the effective model's exact ID is eligible. Reject unknown, unconfigured, incompatible, daemon-policy-denied, primary, and duplicate routes. Credentials or a broad daemon allowlist alone are not opt-in. Do not change model admission, new-session/child discovery, or `providerBackupModel` settings.
+2. Add one branch to the existing `AgentSession` retry path, before the quota-wait shortcut and budget-exhausted wait/give-up when valid same-model alternates exist. Use the existing retry tail and keep only the in-memory route position, retry accounting and original route needed by this turn. Do not introduce a second retry loop, worker, scheduler, durable state, or a new routing framework. A usable route list activates the v0.10.0 behavior: exhaust a per-provider retry budget, switch immediately and continue the same turn, and stop at the end of the list or at the released chain ceiling (8 retry decisions, including switches). Reuse Pi's retry count, delay/cap and cancellation, not the Rust-specific defaults/timing knobs. Keep the legacy immediate backup first; if taken, keep that turn on the legacy path. With no usable list, preserve the current retry/wait/park path. Deterministic errors and cancellation never advance. Honor Retry-After and preserve the existing quota-park outcome for waits above the cap rather than treating the cap as budget exhaustion.
+3. Restore the original route and effective thinking, service tier and overrides at turn exit (including failure, abort, and handoff to quota park), without undoing an explicit user model change. Reuse the existing temporary switch/restore seam and backup retry event, preserving the original snapshot across multiple switches; no new event or daemon protocol. No model change persists into the next turn.
+4. Extend existing faux retry tests with the three acceptance scenarios, ordered/bounded route progression, and terminal restore/cancel/capped-wait cases using the existing harness and fake time; no new test framework or live calls. Assert request order, same turn completion and next-turn routing; prove regressions fail without the behavior. Run the changed suites and repository checks. Document the opt-in, precedence, and Pi divergence from upstream credential-based discovery in settings docs and the parity inventory; add one changelog fragment.
+
+Keep this a runtime routing change only. Do not add deterministic task reconciliation, iterative plan updates, or workflow machinery; leave planning and review judgment to the Conversation/Episode.
+<!-- SECTION:PLAN:END -->
