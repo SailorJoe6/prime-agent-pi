@@ -4,7 +4,7 @@ title: Build and validate the Prime Agent Pi packaging and release pipeline
 status: In Progress
 assignee: []
 created_date: '2026-11-24T00:57:00Z'
-updated_date: '2026-11-25T15:29:00Z'
+updated_date: '2026-11-25T15:30:00Z'
 labels: []
 dependencies: []
 documentation:
@@ -280,6 +280,12 @@ Tested Pi `0.10.2.4` Linux ARM64 musl at source `3cd00e7125547a6c65db57d80215646
 Loaded the version-matched `orca-ide` guide; created and verified a ready project setup and worktree at the synthetic base. A standalone nonce from the shell PTY proved actual input execution rather than echo. `orca-ide agent launch --agent prime-agent --surface terminal` then opened exactly one visible, connected, writable TUI with the `0.10.2.4` banner and the expected cwd. `terminal wait --for tui-idle` passed. The durable synthetic session header matched that worktree and had no initial assignment. After startup, `terminal send --text '/papi61-check <nonce>' --enter` invoked a deterministic fixture extension command through the supported TUI; its receipt matched the nonce, cwd and exact same session ID. Both terminals closed successfully, exit code was 0, and the disposable container was absent afterward. First attempt failed before Orca startup because the fixture treated `/sys/class/net/bonding_masters` as an interface directory; corrected the fixture only. Scripts, command and logs retained in `papi61-orca-exact-m8zpvxge`; passing log SHA-256 `e7ca165a41307c01dd21bfed926941b8b689a82c20486c2bae52b148d5e602fa`.
 
 This proves local headless Orca terminal launch and post-startup interaction only. No Desktop or other Orca version parity, assignment routing/recovery, packaged Python, exact-byte Prime Claw, or interactive update/rollback proof. The remaining true Pi matrix and full real-assets manifest rehearsal are still open. Read-only drift review at `main` `c87cd0598acaae6ee806a77a8b31f1ca3f845bdb` found the Windows README and provider failover changes; integration review must preserve them, including overlapping command-registry and settings surfaces. No code change or merge. No CI rerun, release or live runtime change.
+
+### Accepted Orca checkpoint; remaining nonpublishing validation
+
+Owner accepted the exact Pi Linux ARM64 musl Orca 1.4.247 headless terminal result at `4a40315a242eb37fe4b8714a1b842130d1e5f03f`. Reuse it on unchanged bytes only; do not rerun or spend another slice on Orca. It does not establish macOS Desktop or other-version parity.
+
+Continue the remaining checks in parallel where feasible: (1) verify all eight true Pi archives using the real catalog, exact target receipts and byte hashes; rehearse the complete manifest and publication decision with real assets, without a release; (2) exercise benign deterministic packaged Python, a supported Prime Claw behavior beyond discovery, and interactive update/rollback with preserved synthetic state. Use disposable environments and faux/local inputs with no provider credentials. Record concrete blocked paths separately and continue unaffected checks. Identify how to integrate and revalidate against current main while preserving the Windows README and provider failover; do not merge into main. No PAPI-62, second host Prime instance, live activation, tag, public bump or release. Publish scoped evidence and return when feasible tracks are complete or a material defect or blocker requires owner judgment.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
