@@ -4,7 +4,7 @@ title: Build and validate the Prime Agent Pi packaging and release pipeline
 status: In Progress
 assignee: []
 created_date: '2026-11-24T00:57:00Z'
-updated_date: '2026-11-25T17:05:00Z'
+updated_date: '2026-11-25T17:06:00Z'
 labels: []
 dependencies: []
 documentation:
@@ -421,6 +421,14 @@ Admission is not a successful check. Follow this run without reruns. Current man
 [CI run 45659747468](https://github.com/SailorJoe6/prime-agent-pi/actions/runs/45659747468), attempt 1, `workflow_dispatch`, completed successfully at `2026-11-25T17:04:03Z` on `569852b22545237fb52cda19649fa41dcf33a77c`. 20 jobs succeeded, including `build-check-test` (139369437794), all three coding-agent shards, and all eight legacy standalone targets. `pi-native` (139366154925) was skipped by the push-only gate. Intel legacy job [139366151488](https://github.com/SailorJoe6/prime-agent-pi/actions/runs/45659747468/job/139366151488) passed the extracted archive test (all eight `compiled-artifact.test.ts` tests, about 140 seconds); the prior timeout did not recur in this run. Stage diagnostics were not enabled, so the prior timeout cause is still unknown. These are legacy CI results, not evidence of any true Pi archive or its lifecycle. Job inventory: `/tmp/papi61-ci-admission-9n4_2vyw/results.json`.
 
 Smallest proposed path for review: in `ci.yml` extend the existing exact repo/ref `episode` output from push to push or `workflow_dispatch`, leaving `allowed`, PR vouch, and normal main/PR behavior unchanged. This reuses the distinct eight-target Pi job with the existing pinned public catalog and enables markers only in Intel legacy smoke via the existing reusable workflow input. The same exact-ref guard must withhold the catalog PAT from both checkout steps and the legacy reusable call; no inherited secrets, persist-credentials remains false, and permissions remain contents-read. No change to the release workflow or any release trigger. A normal branch push may itself trigger CI: reconcile the new exact SHA and use an observed push run before considering any separately authorized dispatch. Require both the legacy aggregate and all eight true Pi jobs to pass on that final SHA before verifying/rehearsing those exact assets. No workflow changes or new triggers were made during this checkpoint.
+
+### Owner continuation: exact-SHA Pi validation through CI
+
+The owner accepts manual CI [45659747468](https://github.com/SailorJoe6/prime-agent-pi/actions/runs/45659747468) on `569852b22545237fb52cda19649fa41dcf33a77c` and published task evidence `f069c28232802589e73f8624b4d2b28bade0562d` for continued validation, not merge: 20 jobs passed, Pi skipped, Intel timeout did not recur, and cause remains unproven.
+
+Extend the existing exact-repo and exact-Episode-ref validation gate in CI to `workflow_dispatch` alongside `push`. Preserve normal main/PR behavior, contributor checks, contents-read, no inherited secrets, no Episode catalog PAT and no release writes or triggers. Verify workflow truth table and lint before publishing to the existing Episode branch only. Use the resulting exact-SHA push CI if admitted; otherwise, after reconciliation, use one documented normal manual CI dispatch on that exact ref. No duplicates or retry-to-green.
+
+Verify required CI and eight true Pi archives on the same final SHA, then verify receipts and installer, rehearse the exact hosted bundle without publishing, and finish affected disposable lifecycle and compatibility probes on those bytes, including benign post-upgrade interaction and orderly exit where supported. Continue past intermediate success; report actual readiness or a material blocker with exact evidence and coverage limits. No main changes, version bump, tag, live activation, second host Prime instance, parity, or PAPI-62 expansion. Acceptance and lifecycle remain unchanged.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
