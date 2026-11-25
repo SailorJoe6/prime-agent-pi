@@ -4,7 +4,7 @@ title: Build and validate the Prime Agent Pi packaging and release pipeline
 status: In Progress
 assignee: []
 created_date: '2026-11-24T00:57:00Z'
-updated_date: '2026-11-25T01:21:00Z'
+updated_date: '2026-11-25T01:26:00Z'
 labels: []
 dependencies: []
 documentation:
@@ -61,6 +61,7 @@ modified_files:
   - packages/coding-agent/test/pi-publication-decision.test.ts
   - scripts/rehearse-pi-release.ts
   - packages/coding-agent/test/npm-native-bridge.test.ts
+  - packages/coding-agent/test/daemon-agent-roster.test.ts
 type: task
 ordinal: 61000
 ---
@@ -226,6 +227,14 @@ Candidate `5ba48dfea8c9a47d247b2b419697d247134a8f90` adds `pi-release-discovery`
 Owner accepted the bridge test fixture repair at `5ba48dfea8c9a47d247b2b419697d247134a8f90`. The owner reviewed [hosted CI run 45499601945](https://github.com/SailorJoe6/prime-agent-pi/actions/runs/45499601945) on that exact commit: all 42 npm native bridge tests and eight standalone jobs passed. Only shard 2/3 failed, in `daemon-agent-roster.test.ts` (`flushes cron and model changes that have no session-event carrier`); the autonomous-session suite passed 37 tests. The owner reproduced the roster failure locally with focused Vitest and traced it to the simulated session missing settings used by `getModelAdmissionPolicy` in the existing `set_model` check.
 
 For this new slice, verify the existing hosted result and reproduce the roster failure before editing. Make only the smallest test-fixture correction using realistic isolated settings; preserve production behavior, model policy and all roster assertions. Run the full modified suite with multiple shuffle seeds per AGENTS.md, plus `npm run check`, `npm run check:test-policy` and `git diff --check`. Distinguish existing hosted evidence from new local red/green evidence. Publish scoped code and exact PAPI-61 evidence separately on the existing review refs, then stop for owner review. Do not rerun hosted CI, chase the earlier Node 25 fallback, merge, release, bump versions, activate runtime, or change other tasks. Preserve existing Episode resources and startup templates.
+
+### Daemon roster fixture correction — candidate for review
+
+Verified [hosted CI 45499601945](https://github.com/SailorJoe6/prime-agent-pi/actions/runs/45499601945) at `5ba48dfea8c9a47d247b2b419697d247134a8f90`: 42 native bridge tests, 37 autonomous-session tests and all eight standalone jobs passed. Shard 2/3 was the only failing test shard: the roster test `flushes cron and model changes that have no session-event carrier` threw while reading `getModelAdmissionPolicy` on undefined. The aggregate CI gate failed.
+
+Local baseline on macOS ARM64, Node 22.23.5: from `packages/coding-agent`, `npx --no-install tsx ../../node_modules/vitest/dist/cli.js --run test/daemon-agent-roster.test.ts -t 'flushes cron and model changes that have no session-event carrier'` reproduced that exception. The existing `set_model` path calls `assertAllowedDaemonModel(session.settingsManager, model)` and this simulated session had no settings manager.
+
+Candidate `3cd00e7125547a6c65db57d802156468549e7841` adds `SettingsManager.inMemory({ allowedModels: ["prov/m2"] })` only to that test fixture. The real admission check still runs. Production code, model policy and all assertions are unchanged. On the same local runtime, `npx --no-install tsx ../../node_modules/vitest/dist/cli.js --run test/daemon-agent-roster.test.ts --sequence.shuffle --sequence.seed=<seed>` passed all 28 tests at each of seeds 61, 62 and 63. `npm run check`, `npm run check:test-policy`, and `git diff --check` passed. No hosted CI was dispatched for the new commit; the hosted result above applies only to the bridge commit. No release, runtime activation or acceptance change.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
@@ -234,4 +243,6 @@ For this new slice, verify the existing hosted result and reproduce the roster f
 The exact Pi 0.10.2.3 Linux ARM64 musl candidate passed Prime Claw Tier 1 discovery in disposable Docker offline from startup; artifact identity and clean teardown verified. Discovery only. Full hosted CI, exact Orca, parity and release gates remain open.
 
 The npm native bridge fixture now includes its Pi release module dependencies. All 42 focused tests passed locally on Node 22.23.5; repository checks passed. Hosted confirmation and the two separate shard 2/3 failures remain open. No production or release change.
+
+The daemon roster model-change test now supplies isolated settings for its synthetic model. The exact hosted failure reproduced locally before the change; all 28 roster tests passed at each of three shuffle seeds after it. Hosted CI was not rerun on the candidate.
 <!-- SECTION:FINAL_SUMMARY:END -->
