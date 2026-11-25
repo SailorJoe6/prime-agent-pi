@@ -4,7 +4,7 @@ title: Retry the same model on an explicitly permitted provider
 status: In Progress
 assignee: []
 created_date: '2026-11-22T22:03:00Z'
-updated_date: '2026-11-25T13:52:00Z'
+updated_date: '2026-11-25T14:00:00Z'
 labels: []
 milestone: m-0
 dependencies: []
@@ -52,6 +52,8 @@ Original Pi partially covers turn failover. Its explicit providerBackupModel can
 4. Extend existing faux retry tests with the three acceptance scenarios, ordered/bounded route progression, and terminal restore/cancel/capped-wait cases using the existing harness and fake time; no new test framework or live calls. Assert request order, same turn completion and next-turn routing; prove regressions fail without the behavior. Run the changed suites and repository checks. Document the opt-in, precedence, and Pi divergence from upstream credential-based discovery in settings docs and the parity inventory; add one changelog fragment.
 
 Keep this a runtime routing change only. Do not add deterministic task reconciliation, iterative plan updates, or workflow machinery; leave planning and review judgment to the Conversation/Episode.
+
+Review revision: use request input for same-model compatibility; cover image-bearing history, quota reset text fallback to structured Retry-After, and the terminal tool-capability 404 without changing routing 404s, legacy backup, or defaults.
 <!-- SECTION:PLAN:END -->
 
 ## Implementation Notes
