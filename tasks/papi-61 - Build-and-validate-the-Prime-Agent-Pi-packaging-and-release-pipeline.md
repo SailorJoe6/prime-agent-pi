@@ -4,7 +4,7 @@ title: Build and validate the Prime Agent Pi packaging and release pipeline
 status: In Progress
 assignee: []
 created_date: '2026-11-24T00:57:00Z'
-updated_date: '2026-11-25T16:21:00Z'
+updated_date: '2026-11-25T16:27:00Z'
 labels: []
 dependencies: []
 documentation:
@@ -379,6 +379,10 @@ Published Episode `b375361bd13dbe749662abc8f3f2cb383f070c4b` (parent `19f2ac2c0c
 The owner accepts the narrowly scoped session repair `b375361bd13dbe749662abc8f3f2cb383f070c4b` and its evidence at `98e8b62caade2798129b96c4ac011b3fe86ec954` for continued validation, not merge. Do not retry either failed dispatch endpoint. On the existing Episode branch only, implement the smallest supported same-repository event-driven CI path (prefer a normal push scoped to this exact branch). Pass optional Pi identity and the pinned real catalog `01f4d46dd5157ec73f8faf440214088237c81d59` to the reusable artifact-only build; preserve legacy defaults, contributor checks, secrets boundaries and normal main/PR behavior. Review actual workflows before the push for release triggers, credential exposure and trust-control regressions. No release writes.
 
 Include narrow Intel Mac Python smoke stage diagnostics to distinguish startup, execution, exit/close and cleanup. Do not change assertions or deadlines. Run required CI and eight true Pi builds for the same exact candidate SHA; monitor any admitted run without claiming it passed. Independently verify and rehearse the actual bundle without publishing, then run affected disposable compatibility and lifecycle checks. Continue work where possible and report concrete external access or event admission blockers. Publish scoped changes and evidence through the existing Episode refs only. No main changes, release/tag/version bump, live activation, second host Prime instance, parity or PAPI-62; keep lifecycle and acceptance unchanged.
+
+### Push validation path prepared (not yet admitted)
+
+Exact Episode push is the only new direct trigger; the release workflow still only matches main, `v*` tags, PRs to main and manual release. No open PR has this exact Episode head in the product repo. Benchmark completion listens for benchmarks, not CI. CI and reusable build are contents-read; the Episode jobs do not pass the catalog PAT or inherit secrets, and checkouts disable credential persistence. The pinned catalog commit is publicly readable (unauthenticated GitHub API returned 200). On the Episode event, the legacy aggregate and a distinct Pi matrix will build the same push SHA; legacy modes elsewhere remain default. Both changed workflows passed actionlint 1.7.11; 14 existing release workflow tests passed locally. Waiting on diagnostic fixture validation before committing/pushing; no hosted validation, dispatch, or release performed at this checkpoint.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
