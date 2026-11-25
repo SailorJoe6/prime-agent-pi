@@ -4,7 +4,7 @@ title: Offer a rotating local log for enabled telemetry
 status: In Progress
 assignee: []
 created_date: '2026-11-22T22:04:00Z'
-updated_date: '2026-11-25T01:22:00Z'
+updated_date: '2026-11-25T01:28:00Z'
 labels: []
 milestone: m-0
 dependencies: []
@@ -16,6 +16,14 @@ references:
 documentation:
   - >-
     https://github.com/SailorJoe6/prime-agent-pi/blob/df22fd7deca6a02e50a86375e36c7fecff0b8e5f/docs/upstream-feature-inventory.md#what-the-release-notes-leave-out
+  - packages/coding-agent/docs/settings.md
+modified_files:
+  - packages/coding-agent/.changes/papi-8-telemetry-local-mirror.md
+  - packages/coding-agent/docs/settings.md
+  - packages/coding-agent/src/core/settings-manager.ts
+  - packages/coding-agent/src/core/telemetry.ts
+  - packages/coding-agent/test/settings-manager.test.ts
+  - packages/coding-agent/test/telemetry.test.ts
 type: feature
 ordinal: 8000
 ---
@@ -28,9 +36,9 @@ Allow the operator to mirror already-enabled telemetry events to a local JSON-li
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 With mirroring selected, a synthetic event sent to a captured transport appears as one local JSON record.
-- [ ] #2 At the size limit the log rotates and recent events remain readable.
-- [ ] #3 Disabling the mirror stops local event writes without changing remote settings; disabling telemetry suppresses events even when mirroring is selected.
+- [x] #1 With mirroring selected, a synthetic event sent to a captured transport appears as one local JSON record.
+- [x] #2 At the size limit the log rotates and recent events remain readable.
+- [x] #3 Disabling the mirror stops local event writes without changing remote settings; disabling telemetry suppresses events even when mirroring is selected.
 <!-- AC:END -->
 
 ## Implementation Plan
@@ -40,4 +48,22 @@ Allow the operator to mirror already-enabled telemetry events to a local JSON-li
 2. Use a small filesystem helper in the existing telemetry batch drain, not a second delivery pipeline. Follow the pinned v0.10.0 file sink: append one UTF-8 JSON line per already-collected event to `<agentDir>/telemetry.jsonl`, with only `name`, UTC `timestamp`, `distinct_id` (the existing installation ID), and `properties`. Before a nonempty batch, if the current file is at least 5 MiB (5,242,880 bytes), replace `telemetry.jsonl.1` with it and append the whole batch to a fresh current file. Do nothing for empty batches. Create and keep both files private (`0600` on Unix; agent-directory ACLs elsewhere). Local errors must not fail the session or block remote delivery. Turning the mirror off does not delete or replay logs. The two log files are the only new persistent state; no separate queue, worker, retry, journal, or rotation state machine. No new collection, account state, CLI, or dependencies. Do not add deterministic machinery for task reconciliation, iterative plan changes, or other judgment the Episode or Conversation can make.
 3. Extend the existing coding-agent telemetry and settings-manager tests. Reuse their fixtures with temporary paths, synthetic events, and captured fetch; no network or new harness. Group equivalent settings cases in one table. In the same delivery fixture compare the JSONL record to the unchanged remote batch and cover queued master opt-out, empty batches, exact cap and crossing-batch rotation, backup replacement and readable retained records, Unix private modes, and local failure isolation. Preserve existing disclosure coverage rather than duplicating it. Run each modified package test directly, plus root `npm run check:test-policy` and `npm run check`.
 4. Update the coding-agent settings docs and add its changelog fragment. Document opt-in, when settings take effect, paths, rotation, retained files, and the intentional default difference.
+
+Execution: steps 1–4 implemented and verified in the bounded Episode slice. Review the code branch and the separate task-history commit; no further implementation is known.
 <!-- SECTION:PLAN:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Implemented the planned global-only boolean setting and wired all three built-in clients into the existing batch drain. Verified released v0.10.0 file sink at 763094e1b6a7c17450ee8399b06cda1853847ca5: JSONL fields, 5 MiB pre-batch rotation, one backup. Pi intentionally opts in; master opt-out gates queued local writes without changing the existing remote queue behavior.
+
+AC 1: captured built-in command transport and compared its synthetic event to exactly one local record with the same timestamp, properties and installation ID. AC 2: exact-limit and crossing-batch fixtures verified readable current and backup records, backup replacement, no empty-batch writes, and 0600 on macOS. AC 3: mirror-off retained the prior log and kept captured remote delivery; effective master opt-out suppressed new command capture and queued local writes. A forced rotation failure did not prevent transport.
+
+Validation (Node v25.6.0): from packages/coding-agent, `npx tsx ../../node_modules/vitest/dist/cli.js --run test/telemetry.test.ts test/settings-manager.test.ts` passed 63/63, also with `--sequence.shuffle --sequence.seed=11` and `--sequence.shuffle --sequence.seed=29`. Root `npm run check:test-policy` and `npm run check` passed. In disposable copies the settings tests detected a combined truthiness/precedence mutant; each of seven separate delivery mutants (record key, two cap comparisons, live opt-out, mirror choice, rotation error handling, and backup mode) failed a PAPI-8 test. No live telemetry used. Windows ACL behavior was not exercised.
+<!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Adds the opt-in global telemetry.localMirror setting, private telemetry.jsonl plus one rotated backup, and captured-transport tests and settings documentation. Does not change telemetry collection, consent, disclosure, or remote delivery.
+<!-- SECTION:FINAL_SUMMARY:END -->
