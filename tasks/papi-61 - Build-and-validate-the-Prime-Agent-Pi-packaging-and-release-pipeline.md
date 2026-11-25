@@ -4,7 +4,7 @@ title: Build and validate the Prime Agent Pi packaging and release pipeline
 status: In Progress
 assignee: []
 created_date: '2026-11-24T00:57:00Z'
-updated_date: '2026-11-25T15:57:00Z'
+updated_date: '2026-11-25T15:59:00Z'
 labels: []
 dependencies: []
 documentation:
@@ -332,6 +332,15 @@ Passed `npm run check` under Node 22.23.5, including clean pre-commit recheck; e
 **External artifact blocker.** The separate `standalone-binaries.yml` dispatch for `JLanders/prime-agent-papi-61-episode-b35069ea`, `public_version=0.10.2.4`, `catalog_sha=01f4d46dd5157ec73f8faf440214088237c81d59` returned HTTP 500 (workflow ID `402840615`). Direct Actions API and run list showed no matching dispatched run for `19f2ac2c0ca6a68114060025964f2e736b17db1d`; no duplicate dispatch attempted. No integrated Pi bundle to verify or rehearse, so affected hosted-byte compatibility/lifecycle, benign post-update slash and orderly exit remain unverified. Pre-integration byte evidence does not carry over.
 
 Unblock: resolve the already-red main session checks separately, run required CI for the resulting exact Episode candidate, and obtain a successful standalone Pi dispatch with the pinned real catalog. Verify the eight receipts/archives and real installer before rehearsal and disposable hosted-byte probes. Evidence: `/tmp/papi61-integration-pxz8rdat` (CI snapshot, failed shard, both-parent review, focused source and Docker provenance/results, and both baseline comparison logs). No release, version bump, tag, live activation, merge into main, acceptance, or lifecycle change.
+
+### Continuation after integration review
+
+Evidence at `537af2b9976e58a54ee15b09b3fe60cbf63d475c` is accepted as scoped evidence, not merge readiness. Continue only on the existing Episode branch from published `19f2ac2c0ca6a68114060025964f2e736b17db1d`. Run two independent tracks where feasible:
+
+1. Trace both semantic-edge CI failures on exact published main and the integrated candidate through the synthetic fixture, per-call observations, and Git history before editing. Preserve both assertions’ intent and test-policy rules. Fix only a proven, narrow fixture/validation defect needed for PAPI-61, on the Episode branch only; run focused/default and shuffled coverage and hosted checks as applicable. If the evidence instead requires a production session semantics change or broader repair, record the confirmed cause and minimal separate fix proposal; do not change production semantics, rewrite the subsystem, or waive CI.
+2. Reconcile standalone workflow `402840615` HTTP 500 against direct ref and exact-SHA run observations; use a supported fresh artifact-only dispatch only once evidence establishes no admitted match, or report the precise external blocker. Never duplicate an admitted run. Prioritize the eight-target real Pi matrix and real-assets nonpublishing rehearsal on the final SHA if a repair changes it. Use actual verified hosted integrated bytes for affected disposable compatibility/lifecycle probes, including benign post-update slash input and orderly exit if supported. Keep CI, artifact evidence, and fixture limitations distinct.
+
+Keep doing feasible independent work while a track waits. Report exact source, artifact identities, and passing and failing evidence separately when the checks complete or only concrete blockers remain. No changes to main, release, public bump, tag, live activation, concurrent host Prime Agent, parity work, or PAPI-62.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
