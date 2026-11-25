@@ -275,6 +275,7 @@ export interface AgentTracesSettings {
 export interface TelemetrySettings {
 	enabled?: boolean;
 	noticeShown?: boolean;
+	localMirror?: boolean;
 }
 
 /** Deep merge settings: project/overrides take precedence, nested objects merge recursively */
@@ -992,6 +993,10 @@ export class SettingsManager {
 		const projectEnabled = this.projectSettings.telemetry?.enabled ?? true;
 		const runtimeEnabled = this.runtimeOverrides.telemetry?.enabled ?? true;
 		return globalEnabled && projectEnabled && runtimeEnabled;
+	}
+
+	getTelemetryLocalMirror(): boolean {
+		return this.globalSettings.telemetry?.localMirror === true;
 	}
 
 	private getOrCreateGlobalTelemetrySettings(): TelemetrySettings {

@@ -1,4 +1,15 @@
-import { lstatSync, mkdtempSync, readFileSync, statSync, symlinkSync, writeFileSync } from "node:fs";
+import {
+	chmodSync,
+	existsSync,
+	lstatSync,
+	mkdirSync,
+	mkdtempSync,
+	readFileSync,
+	rmSync,
+	statSync,
+	symlinkSync,
+	writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { AssistantMessage } from "@earendil-works/pi-ai";
@@ -9,6 +20,7 @@ import {
 	captureAgentCommandUsed,
 	getOrCreateTelemetryInstallationId,
 	installAgentTelemetry,
+	type TelemetryBatch,
 	TelemetryClient,
 	type TelemetryEvent,
 	type TelemetryEventName,
@@ -194,6 +206,136 @@ describe("telemetry identity and transport", () => {
 		const unwritable = new TelemetryClient({ agentDir, randomId: uuidGenerator() });
 		expect(() => unwritable.capture("agent started", {})).not.toThrow();
 		await expect(unwritable.flush()).resolves.toBeUndefined();
+	});
+});
+
+describe("PAPI-8 local telemetry mirror", () => {
+	let agentDir: string;
+	let path: string;
+	let backup: string;
+	let batches: TelemetryBatch[];
+	let fetchFixture: typeof fetch;
+
+	beforeEach(() => {
+		vi.stubEnv("PI_OFFLINE", "0");
+		vi.stubEnv("DO_NOT_TRACK", "0");
+		vi.stubEnv("PRIME_AGENT_TELEMETRY", "");
+		agentDir = mkdtempSync(join(tmpdir(), "prime-agent-telemetry-"));
+		path = join(agentDir, "telemetry.jsonl");
+		backup = `${path}.1`;
+		batches = [];
+		fetchFixture = async (_input, init) => {
+			batches.push(JSON.parse(String(init?.body)) as TelemetryBatch);
+			return new Response(null, { status: 204 });
+		};
+	});
+
+	afterEach(() => {
+		vi.unstubAllGlobals();
+		rmSync(agentDir, { recursive: true, force: true });
+	});
+
+	function createClient(settingsManager = SettingsManager.inMemory({ telemetry: { localMirror: true } })) {
+		return new TelemetryClient({ agentDir, settingsManager, fetch: fetchFixture, randomId: uuidGenerator() });
+	}
+
+	function readLines(file: string): unknown[] {
+		return readFileSync(file, "utf8")
+			.split("\n")
+			.filter(Boolean)
+			.map((line) => JSON.parse(line));
+	}
+
+	it("mirrors the built-in command event without changing the transport payload", async () => {
+		vi.stubGlobal("fetch", fetchFixture);
+		await captureAgentCommandUsed({
+			agentDir,
+			settingsManager: SettingsManager.inMemory({ telemetry: { localMirror: true } }),
+			commandName: "model",
+			now: () => Date.UTC(2026, 6, 23),
+			randomId: uuidGenerator(),
+		});
+		expect(batches).toHaveLength(1);
+		expect(batches[0].events).toHaveLength(1);
+		const { name, timestamp, properties } = batches[0].events[0];
+		expect(name).toBe("agent command used");
+		expect(timestamp).toBe("2026-07-23T00:00:00.000Z");
+		expect(readLines(path)).toEqual([{ name, timestamp, distinct_id: batches[0].installation_id, properties }]);
+	});
+
+	it.each(["exact cap", "crossing batch"])("rotates at the %s before the next nonempty batch", async (boundary) => {
+		const client = createClient();
+		await client.flush();
+		expect(existsSync(path)).toBe(false);
+		const cap = 5 * 1024 * 1024;
+		const seed = '{"fixture":"retained"}';
+		const size = boundary === "exact cap" ? cap : cap - 1;
+		writeFileSync(path, `${seed.padEnd(size - 1)}\n`);
+		writeFileSync(backup, '{"fixture":"expired"}\n');
+		if (process.platform !== "win32") chmodSync(path, 0o644);
+		await client.flush();
+		expect(statSync(path).size).toBe(size);
+		expect(readLines(backup)).toEqual([{ fixture: "expired" }]);
+
+		client.capture("agent started", { sample: "first" });
+		client.capture("agent session ended", { sample: "second" });
+		await client.flush();
+		const firstBatch = [
+			expect.objectContaining({ properties: { sample: "first" } }),
+			expect.objectContaining({ properties: { sample: "second" } }),
+		];
+		if (boundary === "crossing batch") {
+			expect(statSync(path).size).toBeGreaterThan(cap);
+			expect(readLines(path)).toEqual([{ fixture: "retained" }, ...firstBatch]);
+			expect(readLines(backup)).toEqual([{ fixture: "expired" }]);
+			client.capture("agent started", { sample: "after rotation" });
+			await client.flush();
+			expect(readLines(path)).toEqual([expect.objectContaining({ properties: { sample: "after rotation" } })]);
+			expect(readLines(backup)).toEqual([{ fixture: "retained" }, ...firstBatch]);
+		} else {
+			expect(readLines(path)).toEqual(firstBatch);
+			expect(readLines(backup)).toEqual([{ fixture: "retained" }]);
+		}
+		if (process.platform !== "win32") {
+			expect([path, backup].map((file) => statSync(file).mode & 0o777)).toEqual([0o600, 0o600]);
+		}
+	});
+
+	it("stops local writes when the mirror is off or master telemetry is disabled", async () => {
+		const client = createClient();
+		client.capture("agent started", { sample: "already queued" });
+		vi.stubEnv("PRIME_AGENT_TELEMETRY", "0");
+		await client.flush();
+		expect(existsSync(path)).toBe(false);
+		expect(batches).toHaveLength(1); // The mirror does not change existing remote queue semantics.
+
+		vi.stubGlobal("fetch", fetchFixture);
+		const settingsManager = SettingsManager.inMemory({ telemetry: { localMirror: true } });
+		await captureAgentCommandUsed({ agentDir, settingsManager, commandName: "model" });
+		expect(batches).toHaveLength(1);
+		expect(existsSync(path)).toBe(false);
+
+		vi.stubEnv("PRIME_AGENT_TELEMETRY", "");
+		await captureAgentCommandUsed({ agentDir, settingsManager, commandName: "model" });
+		const retained = readFileSync(path, "utf8");
+		await captureAgentCommandUsed({
+			agentDir,
+			settingsManager: SettingsManager.inMemory({ telemetry: { localMirror: false } }),
+			commandName: "model",
+		});
+		expect(batches).toHaveLength(3);
+		expect(readFileSync(path, "utf8")).toBe(retained);
+	});
+
+	it("preserves remote delivery when the mirror cannot rotate", async () => {
+		writeFileSync(path, " ".repeat(5 * 1024 * 1024));
+		mkdirSync(backup);
+		const client = createClient();
+		client.capture("agent started", {});
+		await client.flush();
+		expect(batches).toHaveLength(1);
+		expect(batches[0].events).toHaveLength(1);
+		expect(statSync(path).size).toBe(5 * 1024 * 1024);
 	});
 });
 

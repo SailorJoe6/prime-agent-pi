@@ -130,6 +130,7 @@ Telemetry can be disabled globally or for an individual project. Project setting
 | Setting | Type | Default | Description |
 |---------|------|---------|-------------|
 | `telemetry.enabled` | boolean | `true` | Send pseudonymous aggregate usage and performance events |
+| `telemetry.localMirror` | boolean | `false` | Also write enabled telemetry events to a local JSON-lines log (global settings only) |
 
 Disable analytics with any of:
 
@@ -148,6 +149,10 @@ prime-agent --offline
 ```
 
 `PRIME_AGENT_TELEMETRY_ENDPOINT` overrides the ingestion endpoint for development and self-hosted deployments.
+
+To inspect the events locally, set `"telemetry": { "localMirror": true }` in your global settings. Unlike upstream v0.10.0, Pi leaves the mirror off until you opt in. Only the JSON boolean `true` enables it; project settings cannot opt in. New telemetry clients pick up changes to this setting. The mirror does not change remote delivery settings. If telemetry is effectively disabled, the mirror does not write even events that were already queued.
+
+The configured agent directory contains `telemetry.jsonl`, with one UTF-8 JSON record per event. Before writing a batch, if the active log is already at least 5 MiB, Pi moves it to `telemetry.jsonl.1`, replacing the previous backup. A batch can take the active file past 5 MiB; rotation happens before the next nonempty batch. Both files are private (`0600` on Unix; agent-directory ACLs elsewhere). Turning the mirror off leaves existing files alone. It does not replay them when turned back on.
 
 ### Warnings
 
