@@ -4,7 +4,7 @@ title: Build and validate the Prime Agent Pi packaging and release pipeline
 status: In Progress
 assignee: []
 created_date: '2026-11-24T00:57:00Z'
-updated_date: '2026-11-25T18:10:00Z'
+updated_date: '2026-11-25T18:27:00Z'
 labels: []
 dependencies: []
 documentation:
@@ -513,6 +513,10 @@ Episode `0c30da6db1e8589d7f858e79cfc3c00a6ddcaa33` can fast-forward published ma
 13 offline event cases passed plus one expected mutation rejection: marked main with existing/missing version tag and bump, ordinary unmarked main, near-marker and head-ID mismatch, vouched/unvouched PR, and explicit tag/manual. Real extracted guard and context ran offline; dependency graph evaluated without running the writer. All 83 focused tests, npm checks and pre-commit passed. Actionlint passed with only its known unsupported inherited `concurrency.queue` key ignored. Evidence and commands: `/tmp/papi61-ff-p0i9n0xr`.
 
 One artifact-only CI dispatch with `0.10.2.4` and catalog `01f4d46dd5157ec73f8faf440214088237c81d59` returned HTTP 204 (`FBA6:2DBFD4:E3693B:F32469:6B07248E`). [Run 45672381837](https://github.com/SailorJoe6/prime-agent-pi/actions/runs/45672381837) attempt 1 admitted on this exact SHA, suite `123576981016`. Hosted artifacts and fresh disposable checks are pending. Earlier validation does not transfer. Main and task lifecycle unchanged; no writer or release triggered.
+
+### Exact opt-out candidate: hosted CI and bundle verified
+
+[CI 45672381837](https://github.com/SailorJoe6/prime-agent-pi/actions/runs/45672381837) attempt 1 passed all 28 jobs on `0c30da6db1e8589d7f858e79cfc3c00a6ddcaa33` at 18:24:56 UTC, including aggregate `139419685127`, all eight legacy builds and eight Pi builds. Intel legacy `139410891272` recorded startup, two persistent cells (second after shell), exit and close 0, acknowledged shutdown and fixture removal. The prior timeout did not recur; its cause is unproven. Verified all eight API ZIP digests, archive/executable hashes, clean source and public catalog `01f4d46dd5157ec73f8faf440214088237c81d59`. Exact installer SHA-256 `a275549947442ba8765833335e29fc76033e1dd1e464c3508b4f52efc1f1472e`. Two identical nonpublishing rehearsal reports SHA-256 `fce7267b15e5786c5fb3672d83d54c3fe2d912148124d12bb0a5b542c890d938` denied stable (`missing-or-mismatched-stable-bump`). Results and per-target receipts in `/tmp/papi61-ff-p0i9n0xr`. Fresh disposable lifecycle and compatibility probes are running on the exact hosted ARM64 musl bytes (artifact `15050681391`, archive `c190b127358f4e8b0d2d606a12e934e148bd3cd1d9f4f5ad8855893d15b072b8`). No writer or release invoked; final readiness pending probe results.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
