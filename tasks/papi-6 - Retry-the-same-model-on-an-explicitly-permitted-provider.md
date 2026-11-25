@@ -4,7 +4,7 @@ title: Retry the same model on an explicitly permitted provider
 status: In Progress
 assignee: []
 created_date: '2026-11-22T22:03:00Z'
-updated_date: '2026-11-25T13:41:00Z'
+updated_date: '2026-11-25T13:47:00Z'
 labels: []
 milestone: m-0
 dependencies: []
@@ -18,6 +18,14 @@ references:
 documentation:
   - >-
     https://github.com/SailorJoe6/prime-agent-pi/blob/2982dadec68a9fb6b94ade67c1f733b6ca461893/docs/upstream-feature-inventory.md#what-the-release-notes-leave-out
+  - packages/coding-agent/docs/settings.md
+modified_files:
+  - packages/coding-agent/src/core/agent-session.ts
+  - packages/coding-agent/src/core/settings-manager.ts
+  - packages/coding-agent/test/suite/agent-session-retry-events.test.ts
+  - packages/coding-agent/docs/settings.md
+  - docs/upstream-feature-inventory.md
+  - packages/coding-agent/.changes/papi-6-provider-failover.md
 type: feature
 ordinal: 6000
 ---
@@ -30,9 +38,9 @@ Original Pi partially covers turn failover. Its explicit providerBackupModel can
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 With two permitted faux routes serving M, exhausting the first route allows the second to finish the same turn on M.
-- [ ] #2 The new post-budget mechanism does not use a route serving only N or a route not explicitly permitted for M.
-- [ ] #3 With the new policy unset and providerBackupModel set to N, a transient primary failure can select N before primary retries run out, then restore the primary. With neither policy set, current primary-route retry/park behavior remains.
+- [x] #1 With two permitted faux routes serving M, exhausting the first route allows the second to finish the same turn on M.
+- [x] #2 The new post-budget mechanism does not use a route serving only N or a route not explicitly permitted for M.
+- [x] #3 With the new policy unset and providerBackupModel set to N, a transient primary failure can select N before primary retries run out, then restore the primary. With neither policy set, current primary-route retry/park behavior remains.
 <!-- AC:END -->
 
 ## Implementation Plan
@@ -45,3 +53,9 @@ Original Pi partially covers turn failover. Its explicit providerBackupModel can
 
 Keep this a runtime routing change only. Do not add deterministic task reconciliation, iterative plan updates, or workflow machinery; leave planning and review judgment to the Conversation/Episode.
 <!-- SECTION:PLAN:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Slice 1 implemented global opt-in exact route matching, per-provider retry budget, turn-scoped restore and existing backup precedence. Released v0.10.0 tag resolves to 763094e1b6a7c17450ee8399b06cda1853847ca5 (provider_failover.rs; 8 total retry decisions). Retry suite seed 61 passed all 61 tests. Disabling route resolution made the new faux request-order test fail as expected. npm run check passed. Supplementary image-model-override suite passed 13/14; existing “refuses an unusable imageModel” also failed with the two unmodified production files at base caa95ae869730cc94f13821d973e523bdadd98d8 using the same generated catalog. Remaining before claiming full validation: focused multi-alternate/ceiling, deterministic failure, cancellation and capped quota wait cases.
+<!-- SECTION:NOTES:END -->
