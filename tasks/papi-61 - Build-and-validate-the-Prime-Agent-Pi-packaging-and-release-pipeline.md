@@ -4,7 +4,7 @@ title: Build and validate the Prime Agent Pi packaging and release pipeline
 status: In Progress
 assignee: []
 created_date: '2026-11-24T00:57:00Z'
-updated_date: '2026-11-25T21:17:00Z'
+updated_date: '2026-11-25T21:19:00Z'
 labels: []
 dependencies: []
 documentation:
@@ -566,6 +566,14 @@ Exactly one [artifact-only CI run 45700177091](https://github.com/SailorJoe6/pri
 - `linux-x64-baseline`: Actions artifact `15063266109`, ZIP `sha256:c9e37cee125251345c30e37b0557a3bb1609ed52da93d2338c075d41b070330a`, archive `6b6bc19ee88ab6736ebd1ec390b449f24b2fdc03788f010ebabbc076a8e33146`, executable `e420f0ed40c89751afc8785fac73dd2c8188a1a335e6b46ef4357fff5e5047d1`.
 - `linux-x64-musl`: Actions artifact `15063805295`, ZIP `sha256:d26d137858a28ada5ed781f879d23844a38315e603df4b4d3f1a91408b7941dc`, archive `17e344a61aa38100895272b47cfefeb267b3a9fc5cdcfeefb31ba454cf78ca5e`, executable `65eaffaa5d79b551813076b3116331ceaef890e2fabfb3a443d6ff8c1e204c2f`.
 - `linux-x64-musl-baseline`: Actions artifact `15061589979`, ZIP `sha256:e1b4c10e36aac366841123aa2caf8163c7ea03d97f54b8723042c91747e185f3`, archive `a8d508da1de320011cc89d4fa54a04785ae0d8bc60c1183e6b50bf3c2ed84cc4`, executable `474b2e8add87600a5e7514e2bdc6d3e7d4d2cd04fdb348b924bf1c59a098c919`.
+
+### Owner continuation: resolve the required Intel extracted-archive Python smoke blocker
+
+Owner accepted the partial package evidence at `52dbb7b4aa213ad0835ffdcdc3ae8b1e8efa909f` and the independent log comparison for Episode `9903edf3202428e02aface2211eae073257f63ad`. Failed job `139508013882` was still in real `uv` base dependency installation about 290 seconds after it began, before skill installation or either cell, despite matching fixture/bootstrap inputs and tool versions in successful control `139410891272`. Root cause inside uv is unproven. ENOTEMPTY after timeout is a separate observed teardown failure; lingering writers are a hypothesis, not established causality.
+
+Start with bounded, sanitized stage/dependency evidence. Prefer the smallest deterministic fixture correction supported by evidence. A pinned, verified Intel-compatible local dependency source scoped to this test is an option only if justified; keep real uv, a fresh HOME and venv, the real extracted runtime and skill installation, existing assertions, and 300/320-second deadlines. Distinguish cold local installation from public package acquisition. Change teardown only where evidence warrants it: use observed exit/quiescence of fixture-owned resources, preserve the original failure, and avoid broad process kills or polling as synchronization. No retry-to-green or relaxed/skipped gate. Continue independent exact-byte probes where useful; partial evidence does not clear the required failure.
+
+Preserve Pi-only updates, current main ancestry, the exact standalone `Legacy-Publication: skip` line on the actual final tip, and writer isolation. After a justified fix, use required exact-SHA nonpublishing CI and package checks; report exact readiness evidence or a concrete unresolved blocker. No main push, writer, release, version bump, tag, live install, activation, parity, or PAPI-62 work.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
