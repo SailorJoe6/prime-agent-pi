@@ -1,10 +1,10 @@
 ---
 id: PAPI-20
 title: Rename the current session or a direct child from Python
-status: Blocked
+status: In Progress
 assignee: []
 created_date: '2026-11-22T22:18:00Z'
-updated_date: '2026-11-25T21:29:00Z'
+updated_date: '2026-11-25T22:28:00Z'
 labels: []
 milestone: m-0
 dependencies: []
@@ -100,6 +100,8 @@ Independent review of 5199fde647258e8a13fcf8a04ad16e0086903bfb accepted self/ros
 Canonical execute verified the same Episode and exact observation 8c55c757, synchronized native Backlog, and stopped before code edits. The prior readiness child 01a2148b-70b9-75f9-96cb-2c8386b39c26 still reported running/model streaming and four queued items. Its latest visible output was an earlier repository check that can write formatting in the shared worktree; native nonblocking collect returned running/unsettled, with no completion reply. The clean code worktree and published code 5199fde647258e8a13fcf8a04ad16e0086903bfb do not account for queued or future writes. Unblock when the exact child is observed settled and its outstanding actions/effects are accounted for, or the owning Conversation verifies a supported resolution for that child. Both accepted review fixes remain pending; no lifecycle change.
 
 Owner accepted the shared-worktree blocker reported at 70a7d535b193611181c1c2e1a0c52dd1ac4471bd. The Episode stopped before revision edits. Exact readiness child 01a2148b-70b9-75f9-96cb-2c8386b39c26 still reports working; the Episode reports four queued items and an earlier check that wrote formatting. Unblock after the child settles or an authorized targeted cancellation, with its queue and worktree effects accounted for. Preserve the current Episode and saved sessions. Both review fixes remain pending.
+
+Blocker cleared: operator authorized stopping the exact readiness child. The Episode confirmed that child is inactive with no queued work, its saved session is retained, and other direct children are idle with empty queues. The owner verified a clean Episode worktree at the unchanged published candidate 5199fde647258e8a13fcf8a04ad16e0086903bfb. Resume only the two accepted review fixes in the same Episode.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
