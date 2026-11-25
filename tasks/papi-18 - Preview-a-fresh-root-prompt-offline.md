@@ -4,7 +4,7 @@ title: Preview a fresh root prompt offline
 status: In Progress
 assignee: []
 created_date: '2026-11-22T22:18:00Z'
-updated_date: '2026-11-25T19:44:00Z'
+updated_date: '2026-11-25T19:51:00Z'
 labels: []
 milestone: m-0
 dependencies: []
@@ -31,6 +31,8 @@ modified_files:
   - docs/prompt-preview.md
   - packages/coding-agent/.changes/papi-18-prompt-preview.md
   - packages/coding-agent/src/cli/prompt-command.ts
+  - packages/coding-agent/src/core/mcp/mcp-manager.ts
+  - packages/coding-agent/src/core/mcp/generic-servers.ts
 type: feature
 ordinal: 18000
 ---
@@ -63,10 +65,12 @@ Accepted follow-up revision of 87cb27d89: include generic MCP prompt guidance on
 Implementation checkpoint: use the public command dispatch and the existing resource loader with missing-package installation disabled. The prompt builder will retain live instruction order and expose a diagnostic static/dynamic breakdown. Pi does not select a base prompt by model; the preview will report the chosen model input without provider resolution.
 
 Validation: npm run check passed. From packages/coding-agent: npx tsx ../../node_modules/vitest/dist/cli.js --run test/public-command.test.ts --sequence.shuffle --sequence.seed=18 (also seed 19), both green. Process fixtures exercise text and JSON, cwd selection, model override and default, CLI help/errors, with guards for extension execution, package installation, provider/daemon connections and session storage. Deliberate model and text-output mutation triggered four expected failures; exact source restored and validated again. Compared current and pre-change full prompt bytes in six builder variants. Upstream stable reference checked: v0.10.5, 033eea1705c5ae953fe7cd7a5e7c45317e0dfe.
+
+Revision validation against 87cb27d89: npm run check and npm run check:test-policy passed. From packages/coding-agent, npx tsx ../../node_modules/vitest/dist/cli.js --run test/public-command.test.ts passed 78/78; --sequence.shuffle --sequence.seed=<seed> also passed 78/78 at each of 18, 1818, and 2026. Seven isolated mutants failed at their intended assertions (missing MCP guidance, disabled/invalid MCP leaks, ignored compaction setting, incomplete selector, changed explicit override, stdio launch). Production bytes were not modified for mutation checks. Live prompt bytes matched in six builder variants using the old and new generic-server filter with equivalent authentication decisions.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
 
 <!-- SECTION:FINAL_SUMMARY:BEGIN -->
-Added offline prime-agent prompt with text/JSON instructions and a static/dynamic breakdown. Reuses local resources and Python guidance, with model selector metadata and no live extension or session effects.
+Added offline prime-agent prompt with text and JSON, local instructions and skills, settings-only generic MCP guidance for eligible stdio entries, compaction skill filtering, and explicit or fully configured saved model metadata. No live connection, provider resolution, extension execution, or session startup.
 <!-- SECTION:FINAL_SUMMARY:END -->
