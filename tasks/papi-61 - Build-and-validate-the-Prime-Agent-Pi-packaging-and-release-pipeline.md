@@ -4,7 +4,7 @@ title: Build and validate the Prime Agent Pi packaging and release pipeline
 status: In Progress
 assignee: []
 created_date: '2026-11-24T00:57:00Z'
-updated_date: '2026-11-25T16:10:00Z'
+updated_date: '2026-11-25T16:19:00Z'
 labels: []
 dependencies: []
 documentation:
@@ -62,6 +62,8 @@ modified_files:
   - scripts/rehearse-pi-release.ts
   - packages/coding-agent/test/npm-native-bridge.test.ts
   - packages/coding-agent/test/daemon-agent-roster.test.ts
+  - packages/coding-agent/src/core/agent-session.ts
+  - packages/coding-agent/src/core/semantic-edges.ts
 type: task
 ordinal: 61000
 ---
@@ -361,6 +363,16 @@ Resume on this Episode from `19f2ac2c0ca6a68114060025964f2e736b17db1d`. The owne
 In parallel, investigate the separate Intel Mac offline daemon/Python smoke timeout from the recorded logs and on a suitable hosted runner. Only apply a narrowly evidenced fix; do not weaken the smoke check or rerun the failed job to claim green. For the true Pi matrix, do not repeat the twice-failed standalone dispatch. Investigate the trigger and supported CI-driven artifact-only paths; prefer one trustworthy path bound to the final SHA and pinned real catalog with no release writes. Continue unblocked work through exact-SHA CI and, when hosted Pi artifacts are available, verify their identity, rehearse without publishing, and run applicable disposable compatibility checks.
 
 Publish scoped findings and report verified readiness or the concrete remaining blockers. No changes to main, version bump, release, tag, live activation, concurrent host Prime Agent, parity work, or PAPI-62 expansion. Task lifecycle and acceptance remain unchanged.
+
+### Session composition repair published; hosted validation blocked
+
+Published Episode `b375361bd13dbe749662abc8f3f2cb383f070c4b` (parent `19f2ac2c0ca6a68114060025964f2e736b17db1d`), with no change to main `c87cd0598acaae6ee806a77a8b31f1ca3f845bdb`. Kept the semantic recorder as the unwrap-visible outer wrapper. The converted-context image observer is called for the current session, not inherited as part of the raw stream. No assertions, headers, wire shapes, retry policy or workflows changed. Existing side-question, semantic-edge and retry/failover suites passed 147/147 in each of default order and shuffle seeds 61, 62, 63 (588 test executions across four files, offline disposable Linux ARM64, faux providers). `npm run check` and pre-commit passed with Node 22.23.5; test policy verified against exact published main. The committed diff matched the diff used in the offline runs. Commands, focused output and checks: `/tmp/papi61-repair-huq__l53`.
+
+**Exact-SHA hosted CI not admitted as observed.** Verified direct Episode publication and no existing exact-SHA CI before one attempt, then requested existing non-release workflow `402840609` (CI) on the Episode branch. The dispatch returned HTTP 500 and read-only exact-SHA observations afterward showed no matching run. This is a separate endpoint from the twice-failed standalone workflow `402840615`, which was not called again. No retries. Restore a supported, admitted hosted CI trigger for the published SHA; local checks do not substitute for its required results.
+
+**Intel Mac smoke remains unresolved.** Historical job `139329092549`: the daemon control passed; the Python artifact subprocess reached its 300-second limit. Existing logs do not distinguish bootstrap, cell execution or shutdown, and do not connect `ENOTEMPTY` to the original timeout. No runtime or smoke changes. Next useful hosted evidence: macos-15-intel stage markers, CLI exit versus close, and separate owned cleanup diagnostics on a new exact candidate, preserving assertions and deadlines. A filtered diagnostic is not the required gate. See `/tmp/papi61-repair-huq__l53/intel.md`.
+
+**True Pi matrix still missing.** The existing CI call only runs legacy standalone: `workflow_call` exposes `build_ref`, not Pi build inputs. A proposed off-main artifact-only CI path would pass optional Pi identity and pinned catalog `01f4d46dd5157ec73f8faf440214088237c81d59` to the reusable workflow without changing legacy defaults or granting release writes. It still needs an admitted trigger and receipt verification for the exact final source SHA. No workflow edits or run on that path in this slice. See `/tmp/papi61-repair-huq__l53/artifact.md`. Hosted bundle rehearsal, real-archive installer and packaged compatibility/lifecycle remain unverified. No release, tag, version bump, main change, live activation, acceptance or lifecycle change.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
