@@ -4,7 +4,7 @@ title: Build and validate the Prime Agent Pi packaging and release pipeline
 status: In Progress
 assignee: []
 created_date: '2026-11-24T00:57:00Z'
-updated_date: '2026-11-25T20:50:00Z'
+updated_date: '2026-11-25T21:00:00Z'
 labels: []
 dependencies: []
 documentation:
@@ -543,6 +543,12 @@ Nothing was merged, released, tagged, version-bumped or activated. No writer was
 Owner reopened PAPI-61 as In Progress at `0a9c77386ac49069e360d72402cc34d47c04de85` after main advanced. The last validated Episode tip is `0c30da6db1e8589d7f858e79cfc3c00a6ddcaa33`; earlier evidence applies only to that SHA and those hosted bytes. On the existing Episode branch, recheck published main (observed `60b6cf70dc7b207f6ec6c98ae599a876a6a7b2fb`), then merge that exact main into the Episode without rewriting history. Preserve PAPI-18 prompt preview, Pi-only update notices/feed/installer behavior, ordinary CI and the legacy publication opt-out. Put the exact standalone `Legacy-Publication: skip` line on the actual final tip, preferably in the integration merge message.
 
 Prove final ancestry, the exact tip marker and committed main-push writer isolation, and use existing artifact-only CI and relevant checks on the resulting SHA. Verify the exact newly built artifacts rather than transferring earlier receipts; parallelize independent evidence where useful. Report the new exact code/main/task tuple and readiness or a concrete blocker. This continuation authorizes integration and validation on the Episode only: no main modification, release, tag, version bump, live upgrade/install/activation, parity work or PAPI-62.
+
+### Integrated PAPI-61 candidate and fresh artifact-only CI admitted
+
+Published Episode `9903edf3202428e02aface2211eae073257f63ad` has the prior Episode `0c30da6db1e8589d7f858e79cfc3c00a6ddcaa33` and exact published `main` `60b6cf70dc7b207f6ec6c98ae599a876a6a7b2fb` as its parents, tree `96527ebd60c1da176b734676122b425898942d64`, and the exact standalone `Legacy-Publication: skip` line on its actual tip. No history rewrite. PAPI-18 prompt preview integrated without conflict. Release workflows are byte-identical to the previous Episode. Independent audit reran eight main-push guard cases and seven CI input cases: the exact marker blocks legacy publication before release context, ordinary CI and existing contributor trust remain unchanged, and the artifact-only route is read-only with no catalog PAT or release writer. `npm run check` and pre-commit passed; seven focused suites (including PAPI-18 and Pi feed/update/installer) had 302 passes and one skip. Local evidence: `/var/folders/4_/twy0wz3s1mq650wnqzn1b8rr0000gq/T/papi61-integrated-0wsx1fix`.
+
+Exactly one [artifact-only CI run 45700177091](https://github.com/SailorJoe6/prime-agent-pi/actions/runs/45700177091) attempt 1 is admitted on this SHA, suite `123651502733`, fixture release `0.10.2.4`, catalog `01f4d46dd5157ec73f8faf440214088237c81d59`, HTTP 204 request `CC6F:185A3:10D388C:11F4203:6B074C40`. Prior SHA receipts do not transfer. Readiness pending hosted CI, new artifact verification and relevant exact-byte probes. Main, lifecycle and acceptance unchanged. No release, tag, writer or live activation.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
