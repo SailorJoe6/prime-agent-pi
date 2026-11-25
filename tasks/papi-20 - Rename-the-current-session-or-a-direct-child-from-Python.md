@@ -4,7 +4,7 @@ title: Rename the current session or a direct child from Python
 status: In Progress
 assignee: []
 created_date: '2026-11-22T22:18:00Z'
-updated_date: '2026-11-25T20:42:00Z'
+updated_date: '2026-11-25T20:51:00Z'
 labels: []
 milestone: m-0
 dependencies: []
@@ -56,4 +56,6 @@ Reuse the existing persistence, registry and roster controls. No new name store,
 Implementation paused: the isolated Orca Episode started on Anthropic while the owning session was on OpenAI Codex. The owner stopped the exact Episode; its saved session and worktree remain, and code stayed at the starting commit. Unblock by verifying a supported same-Episode continuation on OpenAI Codex without replaying the initial assignment or creating replacement resources.
 
 Initial Episode retired without code changes. Replacement authorized. Prime Claw launched Prime Agent, which used the last-selected model. If the replacement starts on the wrong model, pause it in place for the operator to switch.
+
+Execute checkpoint: implement the roster action (AC #4) first as an independent slice. Released v0.10.0 tag 763094e1b6a7c17450ee8399b06cda1853847ca5 contains 022c90b9f2d79543447aac05c839462b0d64acbd; its roster action accepts agent and subagent rows with live or saved routing. Reuse the existing Pi rename and rename_saved_session commands; no wire change planned. Python rename remains a separate slice.
 <!-- SECTION:NOTES:END -->
