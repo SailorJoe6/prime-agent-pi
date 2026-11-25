@@ -34,6 +34,8 @@ Prime Agent is an open-source coding and research agent for general and long-run
 
 Prime Agent Pi does not yet publish a standalone installer. The Prime Intellect installer installs the upstream Rust product and is not an installer for this repository.
 
+**Windows:** To run Pi from source, use Git Bash or a configured Bash/WSL environment. See [Windows setup](packages/coding-agent/docs/windows.md). Pi does not ship a native Windows archive or PowerShell installer. The [upstream Windows x64 release](https://github.com/PrimeIntellect-ai/prime-agent/releases/tag/v0.10.5) and its PowerShell installer are for upstream Prime Agent, not Pi.
+
 Run the TypeScript product from source:
 
 ```bash
