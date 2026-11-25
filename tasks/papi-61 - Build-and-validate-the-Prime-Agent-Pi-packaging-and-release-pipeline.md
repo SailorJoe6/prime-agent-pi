@@ -4,7 +4,7 @@ title: Build and validate the Prime Agent Pi packaging and release pipeline
 status: In Progress
 assignee: []
 created_date: '2026-11-24T00:57:00Z'
-updated_date: '2026-11-25T16:54:00Z'
+updated_date: '2026-11-25T16:59:00Z'
 labels: []
 dependencies: []
 documentation:
@@ -409,6 +409,12 @@ Through `2026-11-25T16:50:34.978408+00:00`, the exact-SHA Actions runs and commi
 The owner accepts recovery evidence `619afb56ac74fcb5251592cc384d126a8bae48be` for continued validation, not merge. GitHub formally resolved the Actions incident at 16:52:16 UTC, after both pushes. Independent read-only review found an exact case-matching branch trigger, no skip marker, an active workflow, Actions enabled, and no visible runs or check suites at either exact SHA. The internal cause remains unknown.
 
 For unchanged Episode head `569852b22545237fb52cda19649fa41dcf33a77c`, reconcile direct ref, exact CI runs and check suites again. If CI is already present, follow it; otherwise use one documented normal manual CI workflow dispatch on the exact branch (`402840609`) after formal resolution. This is one fresh admission probe, not a job rerun. Capture the HTTP outcome, sanitized request ID and actual admitted SHA. No further empty push, standalone dispatch, or release workflow. Follow any admitted CI to results. Manual CI as currently configured does not enable the push-only Pi matrix or Intel diagnostics. If admission works, evaluate the smallest supported change to reach those exact nonpublishing jobs through the working CI trigger without changing trust or permissions or enabling release writes. Obtain final exact-SHA results before bundle verification. If no run is admitted, stop triggering and return a support-ready report with sanitized request and push activity IDs. No main changes, release, bump, tag, activation, parity, PAPI-62, or acceptance/lifecycle changes.
+
+### Post-resolution CI dispatch admitted on the exact Episode SHA
+
+The exact direct Episode ref remained `569852b22545237fb52cda19649fa41dcf33a77c`. Immediately before the one authorized manual CI dispatch, at `2026-11-25T16:58:43.508386+00:00`, the exact-SHA Actions and check suites APIs showed no entries. GitHub returned HTTP 204 for workflow `402840609` at `2026-11-25T16:58:45.138846+00:00` (request `D4B4:9B4EF:10E41FD:11D04FB:6B0713C3`). Run [45659747468](https://github.com/SailorJoe6/prime-agent-pi/actions/runs/45659747468) was created at `2026-11-25T16:58:44Z`, event `workflow_dispatch`, on the exact branch and SHA; suite `123542978523`, observed queued. Push activity IDs: `51848775233` (original) and `51851307526` (recovery). Evidence: `/tmp/papi61-ci-admission-9n4_2vyw/admission.json`.
+
+Admission is not a successful check. Follow this run without reruns. Current manual dispatch does not exercise Intel diagnostics or the true Pi matrix. Evaluate a narrowly scoped validation route that preserves permissions, trust and secrets boundaries and cannot write releases. Exact hosted artifact rehearsal and lifecycle remain unverified. No code change, release, activation, acceptance, or lifecycle change.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
