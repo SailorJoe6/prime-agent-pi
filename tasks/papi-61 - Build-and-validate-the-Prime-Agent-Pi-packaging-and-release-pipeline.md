@@ -4,7 +4,7 @@ title: Build and validate the Prime Agent Pi packaging and release pipeline
 status: In Progress
 assignee: []
 created_date: '2026-11-24T00:57:00Z'
-updated_date: '2026-11-25T21:25:00Z'
+updated_date: '2026-11-25T21:26:00Z'
 labels: []
 dependencies: []
 documentation:
@@ -580,6 +580,10 @@ Preserve Pi-only updates, current main ancestry, the exact standalone `Legacy-Pu
 [Hosted failure 139508013882](https://github.com/SailorJoe6/prime-agent-pi/actions/runs/45700177091/job/139508013882) is still uncorrected. Its sanitized labels do not identify the package or exact cause; separate `ENOTEMPTY` is not causal evidence. On Apple Silicon under Rosetta, a bounded dependency-only probe used SHA-256 verified Intel `uv 0.11.7`, x86_64 CPython 3.11.15, a fresh HOME/cache/venv, real base install args, and Python sources extracted from the verified `9903edf3202428e02aface2211eae073257f63ad` Pi Intel archive (archive SHA-256 `60ca15e32afb79d2298f9bb307f466652a35af42dd5304626eef70d512344904`). Python and venv creation passed. The open resolver selected `cryptography==50.0.2` as an sdist, entered the Maturin build and tried to acquire an Intel Rust toolchain. It failed locally at TLS certificate verification in 9.65 s of base install, not at the hosted deadline; the hosted resolver outcome, specific stall and teardown causality remain unproved. Sanitized receipt: `/var/folders/4_/twy0wz3s1mq650wnqzn1b8rr0000gq/T/papi61-intel-evidence-crofhlji/sanitized-summary.json`.
 
 PyPI 50.0.2 has no Intel-compatible macOS wheel; the newest listed non-yanked Intel CPython 3.11 wheel is 48.0.1 and is affected by GHSA-m2h6-j472-rp4c, GHSA-jwv3-5hgf-82ww and GHSA-g6cj-pr64-35w5. Do not pin that wheel or allow a wheel-only resolver to silently backtrack to it. The shipped runtime lock does not constrain the smoke's pip install and does not cover the full closure. No justified drop-in wheel or validated deterministic current-version build input is available from the bounded investigation. To unblock, demonstrate a maintained, checksum-verified Intel wheel (or a bounded, reproducible Intel source build for a maintained version), scoped to the fixture; then pass exact-SHA Intel and aggregate with the existing real runtime and skill install, both cells, and 300/320-second deadlines. Distinguish cold installation from public acquisition. No repo code change, no speculative teardown fix, no CI retry or release.
+
+### Independent exact-byte ARM64/musl lifecycle passed; Intel still blocks landing
+
+[Run 45700177091](https://github.com/SailorJoe6/prime-agent-pi/actions/runs/45700177091), attempt 1, exact Episode `9903edf3202428e02aface2211eae073257f63ad`, artifact `15062746875`: verified ZIP `sha256:873f4f065dde502660fc9453ca8e1d68fa8ecda58c49421637a1fd6735265a7c`, archive `a1ccd1f779223020877f66282c0e50678983791708bf0dada2315d0ddb11f430`, executable `8060035a6bf2baf4e6f98d0e27249592f389dba483adfb1695dcf23e2fa38dc1`, and installer `a275549947442ba8765833335e29fc76033e1dd1e464c3508b4f52efc1f1472e`. Both CLI and real PTY passed in disposable Alpine 3.21.10 ARM64/musl containers (pinned cached image, `--pull never --network none`, synthetic loopback feed). CLI passed `.1 → .4 → .1` with offline rollback, session export, extension probe, and unchanged synthetic state. PTY passed preview decline without changes, stable fallback after accepting preview selection, offline rollback, same session and transcript prefix, ordered restores and `/quit` exit 0. Immediate post-UI daemon/worker presence leaves graceful daemon shutdown unproven. Both containers were removed. Evidence `/tmp/papi61-offline-45700177091-eubn03p3`. No other platform, live feed, actual preview asset, or publication claim. This does not clear Intel `139508013882` or aggregate `139514031082`. No CI retry or code change.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
