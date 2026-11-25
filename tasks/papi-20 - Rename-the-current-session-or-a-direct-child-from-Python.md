@@ -1,10 +1,10 @@
 ---
 id: PAPI-20
 title: Rename the current session or a direct child from Python
-status: In Planning
+status: In Progress
 assignee: []
 created_date: '2026-11-22T22:18:00Z'
-updated_date: '2026-11-25T19:59:00Z'
+updated_date: '2026-11-25T20:02:00Z'
 labels: []
 milestone: m-0
 dependencies: []
