@@ -3,10 +3,13 @@ import { join } from "node:path";
 import { AgentContinueError, type AgentEvent, type AgentTool, type ThinkingLevel } from "@earendil-works/pi-agent-core";
 import {
 	type AssistantMessage,
+	type FauxResponseFactory,
 	fauxAssistantMessage,
 	fauxThinking,
 	fauxToolCall,
+	getApiProvider,
 	type Model,
+	registerFauxProvider,
 	type ServiceTier,
 } from "@earendil-works/pi-ai";
 import { Type } from "typebox";
@@ -1175,6 +1178,67 @@ describe("AgentSession retry and event characterization", () => {
 		]);
 		expect(harness.faux.state.callCount).toBe(4);
 		expect(harness.eventsOfType("auto_retry_end").map((event) => event.success)).toEqual([true]);
+	});
+
+	it("PAPI-6 retries on one provider before moving the same model to an explicitly permitted route", async () => {
+		const harness = await createHarness({
+			settings: {
+				retry: {
+					maxRetries: 1,
+					baseDelayMs: 1,
+					failover: {
+						providers: ["faux-alternate/other", "faux-missing/faux-1", "faux-alternate/faux-1"],
+					},
+				},
+			},
+		});
+		harnesses.push(harness);
+		const alternate = registerFauxProvider({
+			api: "papi-6-alternate",
+			provider: "faux-alternate",
+			models: [{ id: "faux-1" }, { id: "other" }],
+		});
+		const unlisted = registerFauxProvider({
+			api: "papi-6-unlisted",
+			provider: "faux-unlisted",
+			models: [{ id: "faux-1" }],
+		});
+		try {
+			for (const registration of [alternate, unlisted]) {
+				const api = getApiProvider(registration.api);
+				if (!api) throw new Error("Missing faux API");
+				const model = registration.getModel();
+				harness.session.modelRegistry.registerProvider(model.provider, {
+					api: registration.api,
+					streamSimple: api.streamSimple,
+					apiKey: "faux-key",
+					baseUrl: model.baseUrl,
+					models: registration.models,
+				});
+			}
+			const requests: string[] = [];
+			const record =
+				(message: AssistantMessage): FauxResponseFactory =>
+				(_context, _options, _state, model) => {
+					requests.push(`${model.provider}/${model.id}`);
+					return message;
+				};
+			harness.setResponses([
+				record(transientUnavailableFailure()),
+				record(transientUnavailableFailure()),
+				record(fauxAssistantMessage("next turn")),
+			]);
+			alternate.setResponses([record(fauxAssistantMessage("same turn recovered"))]);
+			await harness.session.prompt("first prompt");
+			expect(requests).toEqual(["faux/faux-1", "faux/faux-1", "faux-alternate/faux-1"]);
+			expect(getAssistantTexts(harness).at(-1)).toBe("same turn recovered");
+			await harness.session.prompt("second prompt");
+			expect(requests.at(-1)).toBe("faux/faux-1");
+			expect(unlisted.state.callCount).toBe(0);
+		} finally {
+			alternate.unregister();
+			unlisted.unregister();
+		}
 	});
 
 	it("routes quota-blocked turns to the configured backup model and returns to the primary", async () => {

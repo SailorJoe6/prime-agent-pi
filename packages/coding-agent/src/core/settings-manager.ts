@@ -52,6 +52,8 @@ export interface RetrySettings {
 	maxRetries?: number; // default: 3
 	baseDelayMs?: number; // default: 2000 (exponential backoff: 2s, 4s, 8s)
 	provider?: ProviderRetrySettings;
+	/** Exact alternate provider/model-id references, read only from global settings. */
+	failover?: { providers?: string[] };
 }
 
 export interface TerminalSettings {
@@ -1107,6 +1109,11 @@ export class SettingsManager {
 			maxRetries: this.settings.retry?.maxRetries ?? 3,
 			baseDelayMs: this.settings.retry?.baseDelayMs ?? 2000,
 		};
+	}
+
+	getProviderFailoverRoutes(): string[] {
+		const routes = this.globalSettings.retry?.failover?.providers;
+		return Array.isArray(routes) ? routes.filter((route) => typeof route === "string") : [];
 	}
 
 	getProviderRetrySettings(): { timeoutMs?: number; maxRetryDelayMs: number } {

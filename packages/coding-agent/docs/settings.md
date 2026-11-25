@@ -254,12 +254,28 @@ model took over; a `maxPauseMs` above 7 days is clamped. Set
 
 `providerBackupModel` routes failed turns to a user-defined backup model
 instead of waiting while the primary is quota-blocked or unavailable. It is
-disabled by default: with no setting, behavior is unchanged and requests never
-silently switch models. When set, the retry status line shows an explicit
+disabled by default and takes precedence over same-model failover when it can
+serve the failed turn. When set, the retry status line shows an explicit
 "retrying on backup model X" indicator, the switch is recorded in the session
 log, and the session returns to the primary model automatically (the next turn
 probes the primary again). If the backup reference cannot be resolved to an
-available, authenticated model, the bounded wait runs instead.
+available, authenticated model, the normal retry path runs instead.
+
+To allow a turn to retry the **same model ID** through a different provider,
+set `retry.failover.providers` in your global settings, for example:
+
+```json
+{"retry": {"failover": {"providers": ["alternate-provider/model-id"]}}}
+```
+
+Use exact `provider/model-id` references in the order you want them tried.
+Only configured, compatible, policy-allowed routes for the active model ID
+are eligible. Credentials alone never opt a provider in. A switch happens
+after that provider's `retry.maxRetries` budget is spent, with at most eight
+retry decisions across the chain, including switches. Retry-After delays above
+the configured cap do not trigger a switch. The next turn starts on the
+original route. If no eligible alternate is listed, the existing retry,
+wait and park behavior is unchanged.
 
 ```json
 {
