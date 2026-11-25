@@ -4,7 +4,7 @@ title: Build and validate the Prime Agent Pi packaging and release pipeline
 status: In Progress
 assignee: []
 created_date: '2026-11-24T00:57:00Z'
-updated_date: '2026-11-25T17:59:00Z'
+updated_date: '2026-11-25T18:01:00Z'
 labels: []
 dependencies: []
 documentation:
@@ -499,6 +499,12 @@ Hosted inventory (digests SHA-256):
 - `linux-x64-musl-baseline`: artifact `15047162761`, ZIP `sha256:9f90c65aafaf25100f424013bc31eb489540e39e4c46e64935eafeda3db318ff`, archive `4cb8c316014f4942c598138765da964d2a74073f00db8ca5bf621bc7436e9157`, executable `6e8bb7fdf56c4dda81cb5c91b53a460038dbfb8e7e4c645557b4b37a154c7836`.
 
 The active inherited `.github/workflows/build-binaries.yml` can still publish a legacy R2/GitHub beta after a push to main without a version bump. Owner must verify effective writer isolation or separately authorize a correction before a nonpublishing merge. Nothing was merged, released, tagged, installed live or activated; no writer was invoked. PAPI-61 remains In Progress (0/5); no ownership, lifecycle or acceptance mutation.
+
+### Owner continuation: opt out of legacy publication on the exact landing commit
+
+The owner accepts validation on `150ee9eb5fe0184ff913fc7733b7938cb592a7a7` recorded at `da7f9b901d51a993ac9a6a0500242c7998fd2f52` for those exact hosted bytes only. Independent review confirmed that a main push can select the inherited beta writer without a bump; missing R2 configuration is not a safeguard. Prepare the smallest additive opt-out for this nonpublishing fast-forward landing. Prefer one documented exact head-commit marker evaluated before either R2 or GitHub publication can be selected, and put the marker on the actual final candidate tip. Do not interpolate commit text into shell code. Preserve ordinary CI, unmarked defaults, the writer, and explicit tag/manual routes. Do not change repository settings. Prove the committed workflow and head-message relationship, check for other matching writers, and test marked/unmarked main, PR, tag and manual offline. If it cannot be proven without removing intentional behavior, report the precise decision instead of removing functionality.
+
+Use the existing explicit artifact-only CI route for the resulting final SHA, verify all eight release archive receipts and the exact bundle rehearsal, and repeat applicable disposable lifecycle/compatibility probes on changed hosted bytes. Publish only Episode code and task evidence; report exact merge readiness or a concrete blocker and coverage limits. Do not merge, invoke a writer, release, tag, bump versions, activate live, change task lifecycle/acceptance, or expand parity/PAPI-62 scope.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
