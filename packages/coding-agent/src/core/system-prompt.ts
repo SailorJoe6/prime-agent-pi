@@ -2,7 +2,7 @@
  * System prompt construction and project context loading
  */
 
-import { buildChildAgentDoctrine, buildRlmPrompt, buildSubagentGuidance } from "./prompts/index.js";
+import { buildChildAgentDoctrine, buildRlmPromptParts, buildSubagentGuidance } from "./prompts/index.js";
 import { REFINE_SKILL_NAME } from "./refinement/index.js";
 import { formatSkillsForPrompt, getPythonSkillRuntimeInfo, type Skill } from "./skills.js";
 
@@ -35,8 +35,34 @@ export interface BuildSystemPromptOptions {
 	genericMcpServers?: string[];
 }
 
-/** Build the system prompt with tools, guidelines, and context */
+/** Build the system prompt with tools, guidelines, and context. */
 export function buildSystemPrompt(options: BuildSystemPromptOptions): string {
+	return assembleSystemPrompt(options)
+		.map((part) => part.text)
+		.join("");
+}
+
+/** Diagnostic groups, not contiguous provider cache segments. */
+export function previewSystemPrompt(options: BuildSystemPromptOptions) {
+	const parts = assembleSystemPrompt(options);
+	return {
+		instructions: parts.map((part) => part.text).join(""),
+		static: parts
+			.filter((part) => part.kind === "static")
+			.map((part) => part.text)
+			.join("")
+			.trim(),
+		dynamic: parts
+			.filter((part) => part.kind === "dynamic")
+			.map((part) => part.text)
+			.join("")
+			.trim(),
+	};
+}
+
+function assembleSystemPrompt(options: BuildSystemPromptOptions) {
+	const parts: Array<{ kind: "static" | "dynamic"; text: string }> = [];
+	const add = (kind: "static" | "dynamic", text: string) => parts.push({ kind, text });
 	const {
 		customPrompt,
 		selectedTools,
@@ -68,28 +94,22 @@ export function buildSystemPrompt(options: BuildSystemPromptOptions): string {
 	const hasRefineSkill = visibleSkills.some((skill) => skill.name === REFINE_SKILL_NAME);
 	const genericMcpSection = hasIpython ? formatGenericMcpGuidance(options.genericMcpServers) : "";
 
-	if (customPrompt) {
-		let prompt = customPrompt;
-
-		// Append project context files
+	const addResources = (hasFileAccess: boolean) => {
 		if (contextFiles.length > 0) {
-			prompt += "\n\n# Project Context\n\n";
-			prompt += "Project-specific instructions and guidelines:\n\n";
+			add("dynamic", "\n\n# Project Context\n\nProject-specific instructions and guidelines:\n\n");
 			for (const { path: filePath, content } of contextFiles) {
-				prompt += `## ${filePath}\n\n${content}\n\n`;
+				add("dynamic", `## ${filePath}\n\n${content}\n\n`);
 			}
 		}
-
-		// Append skills section only when the model has a way to inspect skill files.
-		const customPromptHasFileAccess =
-			!selectedTools || selectedTools.includes("ipython") || selectedTools.includes("bash");
-		if (customPromptHasFileAccess && skills.length > 0) {
-			prompt += formatSkillsForPrompt(skills);
+		if (hasFileAccess && skills.length > 0) {
+			add("dynamic", formatSkillsForPrompt(skills));
 		}
+	};
 
-		// Add date and working directory last
-		prompt += `\nCurrent date: ${date}`;
-		prompt += `\nCurrent working directory: ${promptCwd}`;
+	if (customPrompt) {
+		add("static", customPrompt);
+		addResources(!selectedTools || hasIpython || tools.includes("bash"));
+		add("dynamic", `\nCurrent date: ${date}\nCurrent working directory: ${promptCwd}`);
 
 		const childDoctrine = buildChildAgentDoctrine({
 			depth: options.rlmDepth,
@@ -97,72 +117,42 @@ export function buildSystemPrompt(options: BuildSystemPromptOptions): string {
 			installedSkills: visiblePythonSkillImportNames,
 			activeTools: tools,
 		});
-		if (childDoctrine) {
-			prompt += `\n\n${childDoctrine}`;
+		if (childDoctrine) add("dynamic", `\n\n${childDoctrine}`);
+		if (genericMcpSection) add("dynamic", `\n\n${genericMcpSection}`);
+	} else {
+		const { beforeRuntime, runtime, afterRuntime } = buildRlmPromptParts({
+			cwd: promptCwd,
+			messagesPath: promptMessagesPath,
+			installedSkills: visiblePythonSkillImportNames,
+			activeTools: tools.filter((name) => name === "ipython" || name === "bash" || name === "edit"),
+			allowRecursion,
+			depth: options.rlmDepth,
+			parentAgent: options.rlmParentAgent,
+		});
+		add("static", beforeRuntime);
+		add("dynamic", runtime);
+		add("static", afterRuntime);
+
+		// Keep delegation doctrine after the trained RLM prefix and before the harness digest.
+		if ((allowRecursion ?? true) && hasIpython) {
+			const visiblePythonSkillNames = new Set(visiblePythonSkillImportNames);
+			add(
+				"static",
+				`\n\n${buildSubagentGuidance({
+					includeRefineExamples: hasRefineSkill,
+					hasAgentMessage: visiblePythonSkillNames.has("agent_message"),
+					hasAgentObserve: visiblePythonSkillNames.has("agent_observe"),
+				})}`,
+			);
 		}
-
-		if (genericMcpSection) {
-			prompt += `\n\n${genericMcpSection}`;
-		}
-
-		if (appendSection) {
-			prompt += appendSection;
-		}
-
-		return prompt;
+		if (genericMcpSection) add("dynamic", `\n\n${genericMcpSection}`);
+		const guidelines = formatPromptGuidelines(promptGuidelines);
+		if (guidelines) add("static", `\n\n# Additional Guidance\n\n${guidelines}`);
+		addResources(hasIpython || tools.includes("bash"));
 	}
 
-	let prompt = buildRlmPrompt({
-		cwd: promptCwd,
-		messagesPath: promptMessagesPath,
-		installedSkills: visiblePythonSkillImportNames,
-		activeTools: tools.filter((name) => name === "ipython" || name === "bash" || name === "edit"),
-		allowRecursion,
-		depth: options.rlmDepth,
-		parentAgent: options.rlmParentAgent,
-	});
-
-	// Appended AFTER the trained buildRlmPrompt prefix: delegation doctrine precedes the subagent specs delivered via the harness digest.
-	if ((allowRecursion ?? true) && hasIpython) {
-		const visiblePythonSkillNames = new Set(
-			getPythonSkillRuntimeInfo(visibleSkills).map((skill) => skill.importName),
-		);
-		prompt += `\n\n${buildSubagentGuidance({
-			includeRefineExamples: hasRefineSkill,
-			hasAgentMessage: visiblePythonSkillNames.has("agent_message"),
-			hasAgentObserve: visiblePythonSkillNames.has("agent_observe"),
-		})}`;
-	}
-
-	if (genericMcpSection) {
-		prompt += `\n\n${genericMcpSection}`;
-	}
-
-	const guidelines = formatPromptGuidelines(promptGuidelines);
-	if (guidelines) {
-		prompt += `\n\n# Additional Guidance\n\n${guidelines}`;
-	}
-
-	// Append project context files
-	if (contextFiles.length > 0) {
-		prompt += "\n\n# Project Context\n\n";
-		prompt += "Project-specific instructions and guidelines:\n\n";
-		for (const { path: filePath, content } of contextFiles) {
-			prompt += `## ${filePath}\n\n${content}\n\n`;
-		}
-	}
-
-	// Append skills section only when the model has a way to inspect skill files.
-	const hasFileAccess = tools.includes("ipython") || tools.includes("bash");
-	if (hasFileAccess && skills.length > 0) {
-		prompt += formatSkillsForPrompt(skills);
-	}
-
-	if (appendSection) {
-		prompt += appendSection;
-	}
-
-	return prompt;
+	if (appendSection) add("static", appendSection);
+	return parts;
 }
 
 function formatGenericMcpGuidance(servers: string[] | undefined): string {

@@ -12,6 +12,7 @@ import type { AcpMcpServerConfig } from "./acp-mcp-types.js";
 import type { probeMcpEndpoint } from "./connection-probe.js";
 import { MCP_PROBE_ERRORS } from "./connection-probe.js";
 import { type McpConnectionRecord, McpConnectionStore } from "./connection-store.js";
+import { isEnabledGenericMcpServer } from "./generic-servers.js";
 import {
 	buildConnectionViews,
 	buildPluginViews,
@@ -59,8 +60,6 @@ export interface McpManagerOptions {
 }
 
 /** A resolved integration: a catalog/user entry plus its provider id. */
-const GENERIC_SERVER_NAME_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/;
-
 interface ResolvedIntegration {
 	server: string;
 	label: string;
@@ -698,7 +697,10 @@ export class McpManager {
 	/** Enabled servers available through the generic kernel API (user-declared + connected catalog services). */
 	getEnabledPersistentGenericServers(): string[] {
 		return Array.from(this.integrations.values())
-			.filter((integration) => GENERIC_SERVER_NAME_PATTERN.test(integration.server) && this.isAuthed(integration))
+			.filter(
+				(integration) =>
+					isEnabledGenericMcpServer(integration.server, integration.config) && this.isAuthed(integration),
+			)
 			.map((integration) => integration.server)
 			.sort((left, right) => left.localeCompare(right));
 	}

@@ -202,6 +202,16 @@ export const COMMAND_SPECS: readonly CommandSpec[] = [
 		],
 	},
 	{
+		path: ["prompt"],
+		usage: "prompt [--cwd DIR] [--model MODEL] [--json]",
+		summary: "Preview the fresh-root system prompt offline",
+		options: [
+			"--cwd DIR      Use local resources from this directory",
+			"--model MODEL  Report this model selector",
+			"--json         Print JSON",
+		],
+	},
+	{
 		path: ["model"],
 		usage: "model list [search]",
 		summary: "Inspect available models",
