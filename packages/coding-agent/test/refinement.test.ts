@@ -536,6 +536,26 @@ describe("harness refinement", () => {
 		});
 	});
 
+	it("PAPI-12 preserves inert factory definitions through a host refinement write", () => {
+		const dir = makeTempDir();
+		const path = getHarnessStatePath(dir);
+		const definition = '{"states":[{"id":"format","entry":true,"subagent":{"prompt":"Format the document."}}]}';
+		writeFileSync(path, JSON.stringify({ schema: 1, factoryDefinitions: { "format-document": definition } }));
+
+		const state = loadHarnessState(dir, "local");
+		applyRefinementProposal(
+			state,
+			proposal("Record style", [
+				{ action: "create", kind: "memory", id: "style", title: "House style", content: "Use headings." },
+			]),
+			{ id: "refine_style" },
+		);
+		saveHarnessState(dir, state);
+
+		expect(JSON.parse(readFileSync(path, "utf8")).factoryDefinitions).toEqual({ "format-document": definition });
+		expect(loadHarnessState(dir, "local").entries.memory.style.content).toBe("Use headings.");
+	});
+
 	it.each(["not json at all", "null", "[]", '"a string"', "123"])(
 		"loads empty harness state from a corrupt or non-object file (%s)",
 		(payload) => {

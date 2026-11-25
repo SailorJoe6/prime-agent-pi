@@ -1,0 +1,1 @@
+- Added an opt-in rotating local log for enabled telemetry events.

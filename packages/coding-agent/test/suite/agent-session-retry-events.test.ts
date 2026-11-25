@@ -3,10 +3,13 @@ import { join } from "node:path";
 import { AgentContinueError, type AgentEvent, type AgentTool, type ThinkingLevel } from "@earendil-works/pi-agent-core";
 import {
 	type AssistantMessage,
+	type FauxResponseFactory,
 	fauxAssistantMessage,
 	fauxThinking,
 	fauxToolCall,
+	getApiProvider,
 	type Model,
+	registerFauxProvider,
 	type ServiceTier,
 } from "@earendil-works/pi-ai";
 import { Type } from "typebox";
@@ -1176,6 +1179,272 @@ describe("AgentSession retry and event characterization", () => {
 		expect(harness.faux.state.callCount).toBe(4);
 		expect(harness.eventsOfType("auto_retry_end").map((event) => event.success)).toEqual([true]);
 	});
+
+	it("PAPI-6 retries on one provider before moving the same model to an explicitly permitted route", async () => {
+		const harness = await createHarness({
+			settings: {
+				retry: {
+					maxRetries: 1,
+					baseDelayMs: 1,
+					failover: {
+						providers: ["faux-alternate/other", "faux-missing/faux-1", "faux-alternate/faux-1"],
+					},
+				},
+			},
+		});
+		harnesses.push(harness);
+		const alternate = registerFauxProvider({
+			api: "papi-6-alternate",
+			provider: "faux-alternate",
+			models: [{ id: "faux-1" }, { id: "other" }],
+		});
+		const unlisted = registerFauxProvider({
+			api: "papi-6-unlisted",
+			provider: "faux-unlisted",
+			models: [{ id: "faux-1" }],
+		});
+		try {
+			for (const registration of [alternate, unlisted]) {
+				const api = getApiProvider(registration.api);
+				if (!api) throw new Error("Missing faux API");
+				const model = registration.getModel();
+				harness.session.modelRegistry.registerProvider(model.provider, {
+					api: registration.api,
+					streamSimple: api.streamSimple,
+					apiKey: "faux-key",
+					baseUrl: model.baseUrl,
+					models: registration.models,
+				});
+			}
+			const requests: string[] = [];
+			const record =
+				(message: AssistantMessage): FauxResponseFactory =>
+				(_context, _options, _state, model) => {
+					requests.push(`${model.provider}/${model.id}`);
+					return message;
+				};
+			harness.setResponses([
+				record(transientUnavailableFailure()),
+				record(transientUnavailableFailure()),
+				record(fauxAssistantMessage("next turn")),
+			]);
+			alternate.setResponses([record(fauxAssistantMessage("same turn recovered"))]);
+			await harness.session.prompt("first prompt");
+			expect(requests).toEqual(["faux/faux-1", "faux/faux-1", "faux-alternate/faux-1"]);
+			expect(getAssistantTexts(harness).at(-1)).toBe("same turn recovered");
+			await harness.session.prompt("second prompt");
+			expect(requests.at(-1)).toBe("faux/faux-1");
+			expect(unlisted.state.callCount).toBe(0);
+		} finally {
+			alternate.unregister();
+			unlisted.unregister();
+		}
+	});
+
+	const failoverProviders = ["faux-z-first", "faux-a-second", "faux-last"];
+	async function withFailoverRoutes(
+		retry: NonNullable<Settings["retry"]>,
+		run: (harness: Harness, routes: ReturnType<typeof registerFauxProvider>[]) => Promise<void>,
+		firstInput?: Model<string>["input"],
+	): Promise<void> {
+		const harness = await parkHarness({
+			retry: { baseDelayMs: 1, ...retry, failover: { providers: failoverProviders.map((p) => `${p}/faux-1`) } },
+		});
+		const routes = failoverProviders.map((provider) =>
+			registerFauxProvider({
+				api: `papi-6-${provider}`,
+				provider,
+				models: [{ id: "faux-1", input: provider === failoverProviders[0] ? firstInput : undefined }],
+			}),
+		);
+		try {
+			for (const route of routes) {
+				const api = getApiProvider(route.api);
+				if (!api) throw new Error("Missing faux API");
+				const model = route.getModel();
+				harness.session.modelRegistry.registerProvider(model.provider, {
+					api: route.api,
+					streamSimple: api.streamSimple,
+					apiKey: "faux-key",
+					baseUrl: model.baseUrl,
+					models: route.models,
+				});
+			}
+			await run(harness, routes);
+		} finally {
+			for (const route of routes) route.unregister();
+		}
+	}
+
+	it.each(["text", "image history"])("PAPI-6 picks a compatible alternate for %s", async (input) => {
+		await withFailoverRoutes(
+			{ maxRetries: 0 },
+			async (harness, [first, second, last]) => {
+				if (input === "image history") {
+					harness.setResponses([fauxAssistantMessage("saw image")]);
+					await harness.session.prompt("image in history", {
+						images: [{ type: "image", mimeType: "image/png", data: "aW1hZ2U=" }],
+					});
+				}
+				harness.setResponses([transientUnavailableFailure()]);
+				first.setResponses([fauxAssistantMessage("text-only route")]);
+				second.setResponses([
+					(context) => {
+						expect(
+							context.messages.some(
+								(message) =>
+									Array.isArray(message.content) && message.content.some((part) => part.type === "image"),
+							),
+						).toBe(true);
+						return fauxAssistantMessage("image route");
+					},
+				]);
+				await harness.session.prompt("retry this request");
+				expect([first.state.callCount, second.state.callCount, last.state.callCount]).toEqual(
+					input === "text" ? [1, 0, 0] : [0, 1, 0],
+				);
+				expect(getAssistantTexts(harness).at(-1)).toBe(input === "text" ? "text-only route" : "image route");
+			},
+			["text"],
+		);
+	});
+
+	it.each(["primary", "alternate"])("PAPI-6 stops on the tool capability 404 on the %s", async (route) => {
+		await withFailoverRoutes({ maxRetries: 1 }, async (harness, [first, second]) => {
+			const rejected = {
+				...transientUnavailableFailure(),
+				errorMessage: "404 No endpoints found that support tool use.",
+			};
+			harness.setResponses(
+				route === "primary"
+					? [rejected, fauxAssistantMessage("unexpected retry")]
+					: [transientUnavailableFailure(), transientUnavailableFailure()],
+			);
+			first.setResponses([rejected, fauxAssistantMessage("unexpected retry")]);
+			second.setResponses([fauxAssistantMessage("unexpected switch")]);
+			await harness.session.prompt("tool capability rejection");
+			expect([harness.faux.state.callCount, first.state.callCount, second.state.callCount]).toEqual(
+				route === "primary" ? [1, 0, 0] : [2, 1, 0],
+			);
+			expect(harness.session.messages.at(-1)).toMatchObject({
+				stopReason: "error",
+				errorMessage: rejected.errorMessage,
+			});
+		});
+	});
+
+	it("PAPI-6 follows configured order and stops after eight retry decisions", async () => {
+		await withFailoverRoutes({ maxRetries: 2 }, async (harness, [first, second, last]) => {
+			const requests: string[] = [];
+			const fail: FauxResponseFactory = (_context, _options, _state, model) => {
+				requests.push(`${model.provider}/${model.id}`);
+				return transientUnavailableFailure();
+			};
+			const recover: FauxResponseFactory = (_context, _options, _state, model) => {
+				requests.push(`${model.provider}/${model.id}`);
+				return fauxAssistantMessage("next turn");
+			};
+			harness.setResponses([fail, fail, fail, recover]);
+			first.setResponses([fail, fail, fail]);
+			second.setResponses([fail, fail, fail]);
+			last.setResponses([recover]);
+			await harness.session.prompt("exhaust the chain");
+			expect(requests).toEqual([
+				...Array(3).fill("faux/faux-1"),
+				...Array(3).fill("faux-z-first/faux-1"),
+				...Array(3).fill("faux-a-second/faux-1"),
+			]);
+			expect(harness.eventsOfType("auto_retry_start")).toHaveLength(8);
+			expect(harness.eventsOfType("auto_retry_end").at(-1)).toMatchObject({ success: false, attempt: 8 });
+			await harness.session.prompt("back to primary");
+			expect(requests.at(-1)).toBe("faux/faux-1");
+			expect(last.state.callCount).toBe(0);
+		});
+	});
+
+	it("PAPI-6 does not switch again after a deterministic failure on an alternate", async () => {
+		await withFailoverRoutes({ maxRetries: 0 }, async (harness, [first, second, last]) => {
+			harness.setResponses([transientUnavailableFailure(), fauxAssistantMessage("back on primary")]);
+			first.setResponses([structuredProviderFailure("invalid_request")]);
+			await harness.session.prompt("stop on invalid request");
+			expect([
+				harness.faux.state.callCount,
+				first.state.callCount,
+				second.state.callCount,
+				last.state.callCount,
+			]).toEqual([1, 1, 0, 0]);
+			expect(harness.eventsOfType("auto_retry_end").at(-1)).toMatchObject({ success: false, attempt: 1 });
+			await harness.session.prompt("retry with a new prompt");
+			expect(harness.faux.state.callCount).toBe(2);
+			expect(getAssistantTexts(harness).at(-1)).toBe("back on primary");
+		});
+	});
+
+	it("PAPI-6 cancels an alternate's pending retry without advancing the chain", async () => {
+		await withFailoverRoutes({ maxRetries: 1 }, async (harness, [first, second, last]) => {
+			harness.setResponses([
+				transientUnavailableFailure(),
+				transientUnavailableFailure(),
+				fauxAssistantMessage("back on primary"),
+			]);
+			first.setResponses([rateLimitedFailure(5_000)]);
+			const pending = waitFor(harness, () =>
+				harness.eventsOfType("auto_retry_start").some((event) => event.delayMs === 5_000),
+			);
+			const prompt = harness.session.prompt("cancel the retry wait");
+			await Promise.race([
+				pending,
+				prompt.then(() => {
+					throw new Error("Turn ended before the alternate retry wait");
+				}),
+			]);
+			harness.session.abortRetry();
+			await prompt;
+			expect([
+				harness.faux.state.callCount,
+				first.state.callCount,
+				second.state.callCount,
+				last.state.callCount,
+			]).toEqual([2, 1, 0, 0]);
+			expect(harness.eventsOfType("auto_retry_end").at(-1)).toMatchObject({ success: false, attempt: 3 });
+			await harness.session.prompt("back to primary");
+			expect(harness.faux.state.callCount).toBe(3);
+			expect(getAssistantTexts(harness).at(-1)).toBe("back on primary");
+		});
+	});
+
+	it.each(["header", "text fallback"])(
+		"PAPI-6 parks an alternate’s over-cap quota wait (%s) and wakes on the original route",
+		async (hint) => {
+			await withFailoverRoutes(
+				{
+					maxRetries: 0,
+					provider: { maxRetryDelayMs: 1_000, waitForUsage: { maxPauseMs: 3_601_000 } },
+				},
+				async (harness, [first, second, last]) => {
+					harness.setResponses([transientUnavailableFailure(), fauxAssistantMessage("recovered on primary")]);
+					first.setResponses([
+						hint === "header"
+							? quotaFailure({ retryAfterMs: 3_600_000, errorMessage: "429 quota; try again in 1 second" })
+							: quotaFailure({ errorMessage: "429 quota; try again in 1 hour" }),
+					]);
+					await promptParked(harness, "park instead of switching again");
+					expect(harness.session.isQuotaParked).toBe(true);
+					expect([
+						harness.faux.state.callCount,
+						first.state.callCount,
+						second.state.callCount,
+						last.state.callCount,
+					]).toEqual([1, 1, 0, 0]);
+					const resumed = await wakeQuotaProbe(harness)();
+					expect(resumed.stopReason).toBe("stop");
+					expect(harness.session.isQuotaParked).toBe(false);
+					expect(harness.faux.state.callCount).toBe(2);
+					expect(getAssistantTexts(harness).at(-1)).toBe("recovered on primary");
+				},
+			);
+		},
+	);
 
 	it("routes quota-blocked turns to the configured backup model and returns to the primary", async () => {
 		const harness = await createHarness({

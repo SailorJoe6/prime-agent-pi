@@ -1,5 +1,15 @@
 import { randomUUID } from "node:crypto";
-import { lstatSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import {
+	chmodSync,
+	closeSync,
+	fchmodSync,
+	lstatSync,
+	mkdirSync,
+	openSync,
+	readFileSync,
+	renameSync,
+	writeFileSync,
+} from "node:fs";
 import { arch, platform } from "node:os";
 import { join } from "node:path";
 import type { AssistantMessage, Usage } from "@earendil-works/pi-ai";
@@ -15,6 +25,8 @@ import { isBuiltinSlashCommandName, resolveBuiltinSlashCommandName } from "./sla
 const DEFAULT_TELEMETRY_ENDPOINT = "https://api.primeintellect.ai/api/v1/agent-analytics/events";
 const TELEMETRY_STATE_FILE = "telemetry.json";
 const TELEMETRY_STATE_VERSION = 1;
+const TELEMETRY_MIRROR_FILE = "telemetry.jsonl";
+const TELEMETRY_MIRROR_MAX_BYTES = 5 * 1024 * 1024;
 const DEFAULT_BATCH_SIZE = 10;
 const DEFAULT_FLUSH_INTERVAL_MS = 10_000;
 const DEFAULT_REQUEST_TIMEOUT_MS = 1_500;
@@ -67,6 +79,7 @@ interface TelemetryState {
 
 interface TelemetryClientOptions {
 	agentDir: string;
+	settingsManager?: SettingsManager;
 	endpoint?: string;
 	fetch?: typeof fetch;
 	now?: () => number;
@@ -294,8 +307,30 @@ export function getOrCreateTelemetryInstallationId(agentDir: string, randomId: (
 	}
 }
 
+function appendTelemetryMirror(path: string, batch: TelemetryBatch): void {
+	const current = lstatSync(path, { throwIfNoEntry: false });
+	if (current && !current.isFile()) {
+		return;
+	}
+	if (current && current.size >= TELEMETRY_MIRROR_MAX_BYTES) {
+		if (process.platform !== "win32") chmodSync(path, 0o600);
+		renameSync(path, `${path}.1`);
+	}
+	const records = batch.events.map(({ name, timestamp, properties }) =>
+		JSON.stringify({ name, timestamp, distinct_id: batch.installation_id, properties }),
+	);
+	const fd = openSync(path, "a", 0o600);
+	try {
+		if (process.platform !== "win32") fchmodSync(fd, 0o600);
+		writeFileSync(fd, `${records.join("\n")}\n`, "utf8");
+	} finally {
+		closeSync(fd);
+	}
+}
+
 export class TelemetryClient implements TelemetrySink {
 	private readonly endpoint: string;
+	private readonly mirrorPath?: string;
 	private readonly fetchImpl: typeof fetch;
 	private readonly now: () => number;
 	private readonly randomId: () => string;
@@ -310,6 +345,9 @@ export class TelemetryClient implements TelemetrySink {
 
 	constructor(private readonly options: TelemetryClientOptions) {
 		this.endpoint = options.endpoint ?? process.env.PRIME_AGENT_TELEMETRY_ENDPOINT ?? DEFAULT_TELEMETRY_ENDPOINT;
+		if (options.settingsManager?.getTelemetryLocalMirror()) {
+			this.mirrorPath = join(options.agentDir, TELEMETRY_MIRROR_FILE);
+		}
 		this.fetchImpl = options.fetch ?? fetch;
 		this.now = options.now ?? Date.now;
 		this.randomId = options.randomId ?? randomUUID;
@@ -390,6 +428,14 @@ export class TelemetryClient implements TelemetrySink {
 				installation_id: this.installationId,
 				events,
 			};
+			const { settingsManager } = this.options;
+			if (this.mirrorPath && settingsManager && isTelemetryEnabled(settingsManager)) {
+				try {
+					appendTelemetryMirror(this.mirrorPath, batch);
+				} catch {
+					// The mirror is best-effort and independent of remote delivery.
+				}
+			}
 			await this.send(batch);
 		}
 	}
@@ -505,6 +551,7 @@ export async function captureOnboardingCompleted(options: CaptureOnboardingCompl
 		options.sink ??
 		new TelemetryClient({
 			agentDir: options.agentDir,
+			settingsManager: options.settingsManager,
 			now,
 			randomId,
 		});
@@ -530,6 +577,7 @@ export async function captureAgentCommandUsed(options: CaptureAgentCommandUsedOp
 		options.sink ??
 		new TelemetryClient({
 			agentDir: options.agentDir,
+			settingsManager: options.settingsManager,
 			now,
 			randomId,
 		});
@@ -609,6 +657,7 @@ export function installAgentTelemetry(session: AgentSession, options: InstallAge
 		options.sink ??
 		new TelemetryClient({
 			agentDir: options.agentDir,
+			settingsManager: options.settingsManager,
 			now,
 			randomId,
 		});

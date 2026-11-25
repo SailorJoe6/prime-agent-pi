@@ -21,6 +21,8 @@ from pathlib import Path
 from uuid import uuid4
 from typing import Any, Literal
 
+from .factory_spec import validate_factory_spec
+
 HarnessKind = Literal["prompt", "memory", "skill", "subagent"]
 HarnessScope = Literal["local", "global"]
 
@@ -343,6 +345,7 @@ class HarnessState:
         self._local_write_error = local_write_error
         self.entries: dict[HarnessKind, dict[str, HarnessEntry]] = {kind: {} for kind in _KINDS}
         self.refinements: list[RefinementEvent] = []
+        self._factory_definitions: dict[str, str] = {}
         self._global_target_state_dir: Path | None = None
         # mtime of the file as of the last load/save, used to detect out-of-process
         # writes (e.g. the host `/refine` command) and avoid clobbering them.
@@ -435,6 +438,11 @@ class HarnessState:
                         entries[kind][str(entry_id)] = HarnessEntry(**entry_data)
         self.entries = entries
 
+        definitions = data.get("factoryDefinitions")
+        self._factory_definitions = (
+            {name: spec for name, spec in definitions.items() if isinstance(spec, str)}
+            if isinstance(definitions, dict) else {}
+        )
         self.refinements = []
         raw_refinements = data.get("refinements", [])
         if isinstance(raw_refinements, list):
@@ -477,6 +485,8 @@ class HarnessState:
             },
             "refinements": [asdict(event) for event in self.refinements],
         }
+        if self._factory_definitions:
+            data["factoryDefinitions"] = self._factory_definitions
         # Atomic replace on the real file: aliases survive, readers never see a torn file.
         target_path = Path(os.path.realpath(self.file_path))
         temp_path = target_path.with_name(f"{target_path.name}.{os.getpid()}.{uuid4().hex}.tmp")
@@ -497,6 +507,55 @@ class HarnessState:
             temp_path.unlink(missing_ok=True)
         self._loaded_mtime = self._disk_mtime()
         return self
+
+    def save_factory(
+        self, name: str, spec: dict[str, Any], *, global_: bool = False, **kwargs: Any
+    ) -> None:
+        """Validate and store the authored definition, replacing the exact name in this scope."""
+        name, global_ = _strip_scope_prefix(name, global_)
+        if not isinstance(name, str) or not name.strip():
+            raise ValueError("factory name must be a non-empty string")
+        if target := self._global_target(global_, kwargs):
+            target.save_factory(name, spec)
+            return
+        self._ensure_local_writable()
+        if errors := validate_factory_spec(spec):
+            raise ValueError(f"factory {name!r} rejected: {'; '.join(errors)}")
+        try:
+            encoded = json.dumps(spec, allow_nan=False)
+            if json.loads(encoded) != spec:
+                raise ValueError("JSON serialization would change the definition")
+        except (TypeError, ValueError, RecursionError) as exc:
+            raise ValueError(f"factory {name!r} rejected: spec must be JSON data ({exc})") from exc
+        self._sync_from_disk()
+        previous = self._factory_definitions.get(name)
+        self._factory_definitions[name] = encoded
+        try:
+            self.save()
+        except BaseException:
+            if previous is None:
+                del self._factory_definitions[name]
+            else:
+                self._factory_definitions[name] = previous
+            raise
+
+    def get_factory(
+        self, name: str, *, global_: bool = False, **kwargs: Any
+    ) -> dict[str, Any] | None:
+        """Return a detached authored definition, or None if absent in this scope."""
+        name, global_ = _strip_scope_prefix(name, global_)
+        if target := self._global_target(global_, kwargs):
+            return target.get_factory(name)
+        self._sync_from_disk()
+        encoded = self._factory_definitions.get(name)
+        return json.loads(encoded) if encoded is not None else None
+
+    def list_factories(self, *, global_: bool = False, **kwargs: Any) -> list[str]:
+        """List saved definition names in the selected harness scope."""
+        if target := self._global_target(global_, kwargs):
+            return target.list_factories()
+        self._sync_from_disk()
+        return sorted(self._factory_definitions)
 
     def upsert(
         self,

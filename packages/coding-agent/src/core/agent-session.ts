@@ -1156,6 +1156,7 @@ const MAX_TIMER_DELAY_MS = 2_147_483_647;
 const QUOTA_WAKE_RETRY_DELAY_MS = 60_000;
 /** Cap on those retries: a park that can never wake is dropped instead of parked forever. */
 const QUOTA_WAKE_MAX_RETRIES = 3;
+const MAX_PROVIDER_FAILOVER_RETRIES = 8;
 
 /** Data carried by a persisted provider_quota_park entry, used to restore a park after a restart. */
 interface PersistedQuotaParkData {
@@ -1631,7 +1632,9 @@ export class AgentSession {
 	private _quotaResumeJobStore: AgentCronJobStore | undefined = undefined;
 	/** Wake jobs branch navigation cancelled, so returning to the parked branch can rebuild one. */
 	private readonly _navigationCancelledWakeJobs = new Set<string>();
-	/** Set while turns are routed to the user-configured backup model. */
+	private _failoverRequestHasImages = false;
+	private _providerFailover?: { routes: Model<string>[]; next: number; routeRetries: number };
+	/** Snapshot of the original route while a retry is serving elsewhere. */
 	private _backupModel:
 		| {
 				backup: Model<any>;
@@ -1834,7 +1837,13 @@ export class AgentSession {
 			parentSessionId: config.semanticParentSessionId,
 			spawnedByRequestId: config.semanticSpawnedByRequestId,
 		});
-		this.agent.streamFn = wrapStreamFnWithSemanticEdges(this.agent.streamFn, this._semanticEdges);
+		const stream = wrapStreamFnWithSemanticEdges(this.agent.streamFn, this._semanticEdges);
+		this.agent.streamFn = (model, context, options) => {
+			// Inspect the request after context hooks and conversion to LLM messages.
+			this._failoverRequestHasImages =
+				this.settingsManager.getProviderFailoverRoutes().length > 0 && context.messages.some(messageCarriesImages);
+			return stream(model, context, options);
+		};
 		// A resumed child may have replied before this process started; false would
 		// claim knowledge that is not present in the session transcript.
 		this._repliedToParentSinceTask =
@@ -8374,6 +8383,10 @@ export class AgentSession {
 		const previousModel = this.model;
 		const thinkingLevel = this._getThinkingLevelForModelSwitch();
 		const serviceTier = this._getServiceTierForModelSwitch();
+		if (this._providerFailover) {
+			this._providerFailover = undefined;
+			this._backupModel = undefined;
+		}
 		this.agent.state.model = model;
 		this._clearModelOverrideWhenIdle();
 		this.sessionManager.appendModelChange(model.provider, model.id);
@@ -8443,6 +8456,10 @@ export class AgentSession {
 		const thinkingLevel = this._getThinkingLevelForModelSwitch(next.thinkingLevel);
 		const serviceTier = this._getServiceTierForModelSwitch();
 
+		if (this._providerFailover) {
+			this._providerFailover = undefined;
+			this._backupModel = undefined;
+		}
 		this.agent.state.model = next.model;
 		this._clearModelOverrideWhenIdle();
 		this.sessionManager.appendModelChange(next.model.provider, next.model.id);
@@ -8484,6 +8501,10 @@ export class AgentSession {
 
 		const thinkingLevel = this._getThinkingLevelForModelSwitch();
 		const serviceTier = this._getServiceTierForModelSwitch();
+		if (this._providerFailover) {
+			this._providerFailover = undefined;
+			this._backupModel = undefined;
+		}
 		this.agent.state.model = nextModel;
 		this._clearModelOverrideWhenIdle();
 		this.sessionManager.appendModelChange(nextModel.provider, nextModel.id);
@@ -13360,7 +13381,7 @@ export class AgentSession {
 	}
 
 	private _finishActiveRetryWithFailure(message: AssistantMessage): void {
-		if (this._retryAttempt === 0) {
+		if (this._retryAttempt === 0 && !this._providerFailover) {
 			return;
 		}
 		this._markProviderAuthStaleForRetryFailure(message);
@@ -13387,6 +13408,7 @@ export class AgentSession {
 		if (!settings.enabled) {
 			this._markProviderAuthStaleForRetryFailure(message, options);
 			this._retryAuthFailureSources = [];
+			if (this._providerFailover) this._finishActiveRetryWithFailure(message);
 			this._resolveRetry();
 			return false;
 		}
@@ -13405,24 +13427,75 @@ export class AgentSession {
 		// compares against the model serving the run, so a backup equal to a
 		// routed turn's image model is recognized as the duplicate it is instead
 		// of reporting a no-op backup switch with a zero-delay retry.
-		if (waitClass !== "permanent") {
+		if (!this._providerFailover && waitClass !== "permanent") {
 			const backupModel = this._resolveBackupModel();
 			if (backupModel && !modelsAreEqual(this._runModel(), backupModel)) {
 				return this._handleBackupModelRetry(message, options, backupModel);
 			}
 		}
 
+		const eligibleFailure = this._isRetryableError(message) && !this._isConcreteProviderAuthFailure(message);
+		if (eligibleFailure && !this._backupModel && this._retryAttempt === 0) {
+			const routes = this._resolveProviderFailoverRoutes();
+			if (routes.length > 0) this._providerFailover = { routes, next: 0, routeRetries: 0 };
+		}
+		const failover = this._providerFailover;
+		const waitPolicy = this.settingsManager.getProviderWaitSettings();
+		const maxRetryDelayMs = this.settingsManager.getProviderRetrySettings().maxRetryDelayMs;
+		const delay = providerRetryDelay(
+			(failover?.routeRetries ?? this._retryAttempt) + 1,
+			providerStreamFailureRetryAfterMs(message) ??
+				(failover && waitClass === "quota" ? parseProviderResetMs(message.errorMessage) : undefined),
+			{
+				baseDelayMs: settings.baseDelayMs,
+				maxRetryDelayMs,
+			},
+		);
+		if (failover) {
+			const unsupportedToolUse =
+				providerStreamFailureStatus(message) === 404 &&
+				message.errorMessage?.toLowerCase().includes("no endpoints found that support tool use");
+			if (!eligibleFailure || unsupportedToolUse || this._retryAttempt >= MAX_PROVIDER_FAILOVER_RETRIES) {
+				this._finishActiveRetryWithFailure(message);
+				return false;
+			}
+			if (delay.kind === "wait" && failover.routeRetries >= settings.maxRetries) {
+				let next = failover.routes[failover.next++];
+				while (next && !this._canRetryInputOnRoute(next)) {
+					next = failover.routes[failover.next++];
+				}
+				if (!next) {
+					this._finishActiveRetryWithFailure(message);
+					return false;
+				}
+				failover.routeRetries = 0;
+				this._retryAuthFailureSources = [];
+				return this._handleBackupModelRetry(message, undefined, next);
+			}
+			if (delay.kind === "exceeds-cap" && waitClass === "quota") {
+				const park = providerParkDecision(this._quotaPark?.parkCount ?? 0, delay.retryAfterMs, waitPolicy);
+				if (waitPolicy.enabled && park.kind === "park") {
+					return this._parkForQuotaReset(
+						message,
+						options,
+						park.delayMs,
+						"Provider wait exceeds the retry delay cap",
+						this._retryAttempt,
+					);
+				}
+			}
+			failover.routeRetries++;
+		}
 		this._retryAttempt++;
 
-		const waitPolicy = this.settingsManager.getProviderWaitSettings();
 		// Quota/subscription exhaustion: wait for usage to come back with bounded
 		// exponential-backoff pings (and a scheduled resume when the provider
 		// reports a reset time) instead of the quick-retry loop.
-		if (waitClass === "quota" && waitPolicy.enabled) {
+		if (!failover && waitClass === "quota" && waitPolicy.enabled) {
 			return this._handleProviderWait(message, options, waitPolicy, "usage");
 		}
 
-		if (this._retryAttempt > settings.maxRetries) {
+		if (!failover && this._retryAttempt > settings.maxRetries) {
 			// Quick retries exhausted on an unavailable provider: keep pinging
 			// with bounded exponential backoff instead of giving up.
 			if (waitClass === "transient" && waitPolicy.enabled) {
@@ -13443,12 +13516,6 @@ export class AgentSession {
 			return false;
 		}
 
-		// Server-requested waits are honored, capped by retry.provider.maxRetryDelayMs (0 disables).
-		const maxRetryDelayMs = this.settingsManager.getProviderRetrySettings().maxRetryDelayMs;
-		const delay = providerRetryDelay(this._retryAttempt, providerStreamFailureRetryAfterMs(message), {
-			baseDelayMs: settings.baseDelayMs,
-			maxRetryDelayMs,
-		});
 		if (delay.kind === "exceeds-cap") {
 			this._markProviderAuthStaleForRetryFailure(message, options);
 			const restoredModel = this._restorePrimaryModelAfterBackup();
@@ -13580,7 +13647,36 @@ export class AgentSession {
 		return backupModel;
 	}
 
-	/** Route the failed turn to the backup model and retry immediately on it. */
+	private _canRetryInputOnRoute(route: Model<string>): boolean {
+		return route.input.includes("image") || !this._failoverRequestHasImages;
+	}
+
+	private _resolveProviderFailoverRoutes(): Model<string>[] {
+		const primary = this._runModel();
+		const references = this.settingsManager.getProviderFailoverRoutes();
+		if (!primary || references.length === 0) return [];
+		const available = this._modelRegistry.getAvailable();
+		const seenProviders = new Set([primary.provider]);
+		const routes: Model<string>[] = [];
+		for (const reference of references) {
+			const route = available.find(
+				(model) => model.id === primary.id && `${model.provider}/${model.id}` === reference,
+			);
+			if (!route || seenProviders.has(route.provider) || !this._canRetryInputOnRoute(route)) {
+				continue;
+			}
+			try {
+				this._validateBuiltInModel?.(route);
+			} catch {
+				continue;
+			}
+			seenProviders.add(route.provider);
+			routes.push(route);
+		}
+		return routes;
+	}
+
+	/** Route the failed turn to an alternate model route and retry immediately on it. */
 	private _handleBackupModelRetry(
 		message: AssistantMessage,
 		options:
@@ -13591,6 +13687,7 @@ export class AgentSession {
 			| undefined,
 		backupModel: Model<any>,
 	): Promise<boolean> {
+		const snapshot = this._providerFailover ? this._backupModel : undefined;
 		const previousModel = this.agent.state.model;
 		const previousThinkingLevel = this.agent.state.thinkingLevel;
 		const previousServiceTier = this.agent.state.serviceTier;
@@ -13601,8 +13698,11 @@ export class AgentSession {
 		this.agent.state.model = backupModel;
 		// Clamp per-request fields to what the backup supports; all of them are
 		// restored when the turn returns to the primary.
-		this.agent.state.thinkingLevel = clampThinkingLevel(backupModel, previousThinkingLevel) as ThinkingLevel;
-		this._clampServiceTierForModel();
+		this.agent.state.thinkingLevel = clampThinkingLevel(
+			backupModel,
+			snapshot?.thinkingLevel ?? previousThinkingLevel,
+		) as ThinkingLevel;
+		this._clampServiceTierForModel(snapshot?.serviceTier);
 		if (routedOverride) {
 			this.agent.modelOverride = {
 				model: backupModel,
@@ -13614,10 +13714,10 @@ export class AgentSession {
 		this.sessionManager.appendModelChange(backupModel.provider, backupModel.id);
 		this._backupModel = {
 			backup: backupModel,
-			primary: previousModel,
-			thinkingLevel: previousThinkingLevel,
-			serviceTier: previousServiceTier,
-			routedOverride,
+			primary: snapshot?.primary ?? previousModel,
+			thinkingLevel: snapshot?.thinkingLevel ?? previousThinkingLevel,
+			serviceTier: snapshot?.serviceTier ?? previousServiceTier,
+			routedOverride: snapshot ? snapshot.routedOverride : routedOverride,
 		};
 		this._retryAttempt++;
 		this._providerWait = undefined;
@@ -13779,7 +13879,14 @@ export class AgentSession {
 		finalError: string,
 	): void {
 		this._markProviderAuthStaleForRetryFailure(message, options);
-		this._emit({ type: "auto_retry_end", success: false, attempt: parkedAttempt, finalError });
+		const restoredModel = this._providerFailover ? this._restorePrimaryModelAfterBackup() : undefined;
+		this._emit({
+			type: "auto_retry_end",
+			success: false,
+			attempt: parkedAttempt,
+			finalError,
+			...(restoredModel ? { restoredModel } : {}),
+		});
 		this._retryAttempt = 0;
 		this._providerWait = undefined;
 		this._retryAuthFailureSources = [];
@@ -14150,6 +14257,7 @@ export class AgentSession {
 	private _restorePrimaryModelAfterBackup(): string | undefined {
 		const backup = this._backupModel;
 		this._backupModel = undefined;
+		this._providerFailover = undefined;
 		if (!backup || !modelsAreEqual(this.model, backup.backup)) return undefined;
 		this.agent.state.model = backup.primary;
 		this.agent.state.thinkingLevel = backup.thinkingLevel;

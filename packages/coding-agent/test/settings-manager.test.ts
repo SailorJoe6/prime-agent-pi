@@ -318,6 +318,26 @@ describe("SettingsManager", () => {
 		});
 	});
 
+	describe("PAPI-8 telemetry local mirror", () => {
+		it.each<[string, unknown, unknown, boolean | undefined, boolean]>([
+			["missing settings", undefined, undefined, undefined, false],
+			["unset mirror", { enabled: true, noticeShown: true }, undefined, undefined, false],
+			["explicit false", { localMirror: false }, { localMirror: true }, true, false],
+			["legacy telemetry boolean", true, undefined, undefined, false],
+			["truthy non-boolean mirror", { localMirror: "true" }, undefined, undefined, false],
+			["project-only opt-in", undefined, { localMirror: true }, undefined, false],
+			["runtime-only opt-in", undefined, undefined, true, false],
+			["literal global opt-in", { localMirror: true }, { localMirror: false }, false, true],
+		])("uses only literal global true: %s", (_label, global, project, override, expected) => {
+			if (global !== undefined) writeSettings(globalPath, { telemetry: global });
+			if (project !== undefined) writeSettings(projectPath, { telemetry: project });
+			const manager = SettingsManager.create(projectDir, agentDir);
+			if (override !== undefined) manager.applyOverrides({ telemetry: { localMirror: override } });
+
+			expect(manager.getTelemetryLocalMirror()).toBe(expected);
+		});
+	});
+
 	// Park bounds are clamped like the other wait bounds: one week per park at most,
 	// and non-finite park settings fall back to the defaults.
 	describe("provider park bounds", () => {

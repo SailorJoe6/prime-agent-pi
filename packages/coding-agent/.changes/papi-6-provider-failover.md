@@ -1,0 +1,1 @@
+- Added opt-in same-model provider failover after a turn exhausts its retry budget on one provider.
