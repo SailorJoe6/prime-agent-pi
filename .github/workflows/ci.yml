@@ -3,7 +3,7 @@ name: CI
 on:
   workflow_dispatch:
   push:
-    branches: [main]
+    branches: [main, JLanders/prime-agent-papi-61-episode-b35069ea]
   pull_request:
     branches: [main]
 
@@ -19,7 +19,11 @@ jobs:
     name: Contributor trust
     runs-on: ubuntu-latest
     outputs:
-      allowed: ${{ github.event_name == 'push' || github.event_name == 'workflow_dispatch' || steps.vouch.outputs.vouched == 'true' }}
+      episode: ${{ github.event_name == 'push' && github.repository == 'SailorJoe6/prime-agent-pi' && github.ref == 'refs/heads/JLanders/prime-agent-papi-61-episode-b35069ea' }}
+      allowed: >-
+        ${{ (github.event_name == 'push' && (github.ref == 'refs/heads/main' ||
+        (github.repository == 'SailorJoe6/prime-agent-pi' && github.ref == 'refs/heads/JLanders/prime-agent-papi-61-episode-b35069ea'))) ||
+        github.event_name == 'workflow_dispatch' || steps.vouch.outputs.vouched == 'true' }}
     steps:
       - name: Check pull request author
         id: vouch
@@ -67,7 +71,7 @@ jobs:
         with:
           repository: PrimeIntellect-ai/prime-agent-catalog
           ref: main
-          token: ${{ secrets.PRIME_CATALOG_REPO_TOKEN || github.token }}
+          token: ${{ needs.trust.outputs.episode != 'true' && secrets.PRIME_CATALOG_REPO_TOKEN || github.token }}
           path: prime-agent-catalog
           persist-credentials: false
 
@@ -158,7 +162,7 @@ jobs:
         with:
           repository: PrimeIntellect-ai/prime-agent-catalog
           ref: main
-          token: ${{ secrets.PRIME_CATALOG_REPO_TOKEN || github.token }}
+          token: ${{ needs.trust.outputs.episode != 'true' && secrets.PRIME_CATALOG_REPO_TOKEN || github.token }}
           path: prime-agent-catalog
           persist-credentials: false
 
@@ -197,7 +201,18 @@ jobs:
     needs: trust
     if: needs.trust.outputs.allowed == 'true'
     uses: ./.github/workflows/standalone-binaries.yml
-    secrets: inherit
+    with:
+      python_smoke_diagnostics: ${{ needs.trust.outputs.episode == 'true' }}
+    secrets:
+      PRIME_CATALOG_REPO_TOKEN: ${{ needs.trust.outputs.episode != 'true' && secrets.PRIME_CATALOG_REPO_TOKEN || '' }}
+
+  pi-native:
+    needs: trust
+    if: needs.trust.outputs.allowed == 'true' && needs.trust.outputs.episode == 'true'
+    uses: ./.github/workflows/standalone-binaries.yml
+    with:
+      public_version: '0.10.2.4'
+      catalog_sha: '01f4d46dd5157ec73f8faf440214088237c81d59'
 
   build-check-test:
     name: build-check-test

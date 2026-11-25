@@ -4,6 +4,7 @@ import {
 	closeSync,
 	copyFileSync,
 	existsSync,
+	fstatSync,
 	mkdirSync,
 	mkdtempSync,
 	openSync,
@@ -11,7 +12,9 @@ import {
 	readFileSync,
 	readSync,
 	realpathSync,
+	renameSync,
 	rmSync,
+	statSync,
 	symlinkSync,
 	writeFileSync,
 	writeSync,
@@ -39,18 +42,151 @@ let cwd = "";
 let socket = "";
 let environment: NodeJS.ProcessEnv;
 
-/** SIGKILL is a deterministic teardown signal and cannot be blocked by the supervisor. */
-function terminateSupervisor(pid: number): void {
+const pythonSmokeDiagnostics = process.env.PRIME_AGENT_PYTHON_SMOKE_DIAGNOSTICS === "1";
+const bootstrapMarker = ".prime/agent/kernel-venv/.bootstrap-version";
+let pythonSmoke: ReturnType<typeof startPythonSmokeDiagnostics> | undefined;
+
+function tail(path: string): string {
+	const fd = openSync(path, "r");
 	try {
-		process.kill(pid, "SIGKILL");
+		const size = fstatSync(fd).size;
+		const buffer = Buffer.alloc(Math.min(size, 4096));
+		return buffer.toString("utf8", 0, readSync(fd, buffer, 0, buffer.length, size - buffer.length));
+	} finally {
+		closeSync(fd);
+	}
+}
+
+function uvLogSummary() {
+	try {
+		// Report only fixed labels, never raw uv output (which can contain URLs or paths).
+		return tail(join(home, "uv.log"))
+			.split(/\r?\n/)
+			.filter((line) => line.trim())
+			.slice(-8)
+			.map((line) => {
+				if (/\b(error|failed|warning)\b/i.test(line)) return "error-or-warning";
+				if (/\b(download(?:ing|ed)?|fetching)\b/i.test(line)) return "download";
+				if (/\b(building|built)\b/i.test(line)) return "build";
+				if (/\b(resolved|prepared|installed|audited|creating)\b/i.test(line)) return "progress";
+				return "other";
+			});
 	} catch {
-		/* The supervisor already exited after acknowledging shutdown. */
+		return null;
+	}
+}
+
+function startPythonSmokeDiagnostics() {
+	const startedAt = new Date().toISOString();
+	const extensionPath = join(cwd, "extension.ts");
+	const marker = (name: string) => join(home, `python-smoke-${name}`);
+	// Instrument only the fixture copy. Keep marker writes independent of test results.
+	const cells = ["print(rlm.__file__)", "print((await bash('printf artifact-shell-ok')).output)"];
+	const sessionStart = 'pi.on("session_start", async () => {';
+	let instrumented = false;
+	try {
+		writeFileSync(marker("enabled"), "");
+		const extension = readFileSync(extensionPath, "utf8");
+		if (![sessionStart, ...cells].every((anchor) => extension.includes(anchor))) throw new Error();
+		let source = extension.replace(
+			sessionStart,
+			`${sessionStart}\n\t\ttry { writeFileSync(${JSON.stringify(marker("session"))}, ""); } catch {}`,
+		);
+		for (const [index, anchor] of cells.entries()) {
+			const code = `\ntry:\n    with open(${JSON.stringify(marker(`cell-${index + 1}`))}, 'w'):\n        pass\nexcept OSError:\n    pass`;
+			source = source.replace(anchor, () => anchor + JSON.stringify(code).slice(1, -1));
+		}
+		const replacement = marker("extension.ts");
+		writeFileSync(replacement, source);
+		renameSync(replacement, extensionPath);
+		instrumented = true;
+	} catch {
+		// Preserve the original fixture if this best-effort instrumentation is unavailable.
+	}
+
+	function markerTime(name: string) {
+		return statSync(marker(name), { throwIfNoEntry: false })?.mtime.toISOString() ?? null;
+	}
+
+	const cli: Partial<Record<"exit" | "close", { at: string; code: number | null; signal: NodeJS.Signals | null }>> =
+		{};
+	let reported = false;
+	return {
+		observe(event: "exit" | "close", code: number | null, signal: NodeJS.Signals | null) {
+			cli[event] = { at: new Date().toISOString(), code, signal };
+		},
+		cli,
+		snapshot(reason: "timeout" | "settled") {
+			if (reported) return;
+			reported = true;
+			try {
+				let bootstrap: { runtimePresent: boolean; pythonSkillCount: number | null } | "missing" | "unreadable" =
+					"missing";
+				const path = join(home, bootstrapMarker);
+				if (existsSync(path)) {
+					try {
+						const data = JSON.parse(readFileSync(path, "utf8"));
+						bootstrap = {
+							runtimePresent: typeof data.runtime === "string" && data.runtime.startsWith("sha256:"),
+							pythonSkillCount: Array.isArray(data.pythonSkills) ? data.pythonSkills.length : null,
+						};
+					} catch {
+						bootstrap = "unreadable";
+					}
+				}
+				let uvStages: string[] | null = null;
+				try {
+					uvStages = tail(marker("uv"))
+						.split("\n")
+						.filter((line) =>
+							/^\d{10} (python-install|venv|base-install|skill-install|other) (start|end [0-9]{1,3})$/.test(
+								line,
+							),
+						)
+						.slice(-16);
+				} catch {
+					/* No uv invocation recorded yet. */
+				}
+				console.info(
+					"[python-smoke]",
+					JSON.stringify({
+						reason,
+						startedAt,
+						snapshotAt: new Date().toISOString(),
+						instrumented,
+						sessionStart: markerTime("session"),
+						cell1: markerTime("cell-1"),
+						cell2AfterShell: markerTime("cell-2"),
+						cliExit: cli.exit ?? null,
+						cliClose: cli.close ?? null,
+						socketPresent: existsSync(socket),
+						bootstrap,
+						uvStages,
+						uvLogTail: uvLogSummary(),
+					}),
+				);
+			} catch {
+				console.info("[python-smoke] snapshot unavailable");
+			}
+		},
+	};
+}
+
+/** SIGKILL is a deterministic teardown signal and cannot be blocked by the supervisor. */
+function terminateSupervisor(pid: number): boolean {
+	try {
+		return process.kill(pid, "SIGKILL");
+	} catch {
+		/* The supervisor may already have exited after acknowledging shutdown. */
+		return false;
 	}
 }
 
 async function run(args: string[], extraEnv: NodeJS.ProcessEnv = {}, timeout = RUN_TIMEOUT, input?: string) {
 	const child = spawn(binary, args, { cwd, env: { ...environment, ...extraEnv }, stdio: ["pipe", "pipe", "pipe"] });
 	children.add(child);
+	const diagnostics = pythonSmoke;
+	if (diagnostics) child.once("exit", (code, signal) => diagnostics.observe("exit", code, signal));
 	let stdout = "";
 	let stderr = "";
 	child.stdout.on("data", (chunk) => {
@@ -62,14 +198,24 @@ async function run(args: string[], extraEnv: NodeJS.ProcessEnv = {}, timeout = R
 	child.stdin.end(input);
 	return await new Promise<{ code: number | null; stdout: string; stderr: string }>((done, reject) => {
 		const timer = setTimeout(() => {
-			child.kill("SIGKILL");
-			reject(new Error(`Artifact timed out: ${args.join(" ")}\n${stderr}`));
+			try {
+				diagnostics?.snapshot("timeout");
+			} finally {
+				const signalSent = child.kill("SIGKILL");
+				reject(
+					new Error(
+						diagnostics ? "Python artifact timed out" : `Artifact timed out: ${args.join(" ")}\n${stderr}`,
+					),
+				);
+				if (diagnostics) console.info("[python-smoke] timeout SIGKILL sent:", signalSent);
+			}
 		}, timeout);
 		child.once("error", (error) => {
 			clearTimeout(timer);
 			reject(error);
 		});
-		child.once("close", (code) => {
+		child.once("close", (code, signal) => {
+			diagnostics?.observe("close", code, signal);
 			clearTimeout(timer);
 			children.delete(child);
 			done({ code, stdout, stderr });
@@ -149,9 +295,29 @@ describe.skipIf(!archive)("extracted standalone archive", () => {
 		}
 		if (uv) {
 			symlinkSync(resolve(uv), join(bin, "uv-real"));
-			writeFileSync(join(bin, "uv"), `#!/bin/sh\nexec "\${0%/*}/uv-real" "$@" 2>> "$HOME/uv.log"\n`, {
-				mode: 0o755,
-			});
+			writeFileSync(
+				join(bin, "uv"),
+				pythonSmokeDiagnostics
+					? `#!/bin/sh
+if [ ! -f "$HOME/python-smoke-enabled" ]; then
+	exec "\${0%/*}/uv-real" "$@" 2>> "$HOME/uv.log"
+fi
+case "$1 $2" in
+	'python install') stage=python-install ;;
+	'venv '*) stage=venv ;;
+	'pip install')
+		if [ "$5" = '--editable' ]; then stage=skill-install; else stage=base-install; fi ;;
+	*) stage=other ;;
+esac
+printf '%s %s start\\n' "$(/bin/date +%s)" "$stage" >> "$HOME/python-smoke-uv"
+"\${0%/*}/uv-real" "$@" 2>> "$HOME/uv.log"
+status=$?
+printf '%s %s end %s\\n' "$(/bin/date +%s)" "$stage" "$status" >> "$HOME/python-smoke-uv"
+exit "$status"
+`
+					: `#!/bin/sh\nexec "\${0%/*}/uv-real" "$@" 2>> "$HOME/uv.log"\n`,
+				{ mode: 0o755 },
+			);
 		}
 	});
 	beforeEach(() => {
@@ -178,14 +344,19 @@ describe.skipIf(!archive)("extracted standalone archive", () => {
 		copyFileSync(resolve(__dirname, "fixtures/compiled-artifact-extension.ts"), join(cwd, "extension.ts"));
 	});
 	afterEach(async () => {
-		for (const child of children) child.kill("SIGTERM");
+		let termSignalsSent = 0;
+		for (const child of children) if (child.kill("SIGTERM")) termSignalsSent++;
 		const client = new DaemonClient(socket);
 		let supervisorPid: number | undefined;
 		let shutdownError: unknown;
+		let daemonShutdown = "not-connected";
 		try {
 			await client.connect(CONNECT_TIMEOUT);
+			daemonShutdown = "hello-not-received";
 			supervisorPid = (await client.waitForHello()).supervisorPid;
-			await client.request({ type: "shutdown", force: true });
+			daemonShutdown = "shutdown-not-acknowledged";
+			const shutdown = await client.request({ type: "shutdown", force: true });
+			daemonShutdown = shutdown.success ? "acknowledged" : "rejected";
 		} catch (error) {
 			if (existsSync(socket)) shutdownError = error;
 		} finally {
@@ -193,13 +364,37 @@ describe.skipIf(!archive)("extracted standalone archive", () => {
 		}
 		// The supervisor is terminated even when the shutdown request failed, so an unresponsive
 		// daemon reports its own error instead of leaking a process into the next test.
-		if (supervisorPid !== undefined) terminateSupervisor(supervisorPid);
-		for (const child of children) if (child.exitCode === null && child.signalCode === null) child.kill("SIGKILL");
+		const supervisorKillSent = supervisorPid !== undefined && terminateSupervisor(supervisorPid);
+		let killSignalsSent = 0;
+		for (const child of children) {
+			if (child.exitCode === null && child.signalCode === null && child.kill("SIGKILL")) killSignalsSent++;
+		}
 		children.clear();
+		if (pythonSmoke) {
+			console.info(
+				"[python-smoke] owned teardown",
+				JSON.stringify({
+					daemonShutdown,
+					supervisorKillSent,
+					termSignalsSent,
+					killSignalsSent,
+					cliExit: pythonSmoke.cli.exit ?? null,
+					cliClose: pythonSmoke.cli.close ?? null,
+					socketPresent: existsSync(socket),
+				}),
+			);
+			pythonSmoke = undefined;
+		}
 		if (shutdownError) throw shutdownError;
 	});
 	afterAll(() => {
-		if (root) rmSync(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
+		let removed = false;
+		try {
+			if (root) rmSync(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
+			removed = true;
+		} finally {
+			if (pythonSmokeDiagnostics && root) console.info("[python-smoke] fixture root removal:", removed);
+		}
 	});
 
 	it("has verified checksums, clean sidecars, and runtime-free help/version startup", async () => {
@@ -378,20 +573,30 @@ writeFileSync(join(process.cwd(), "hot-runtime.json"), JSON.stringify({ value, e
 
 	it("bootstraps the shipped Python sources and executes persistent cells and shell commands", async () => {
 		expect(uv, "Set PRIME_AGENT_TEST_UV to an absolute uv executable for artifact validation").toBeTruthy();
-		const result = await run(
-			[...sessionArgs(), "--tools", "ipython", "-p", "artifact python"],
-			{ PRIME_AGENT_ARTIFACT_CASE: "python" },
-			300000,
-		);
-		const uvLog = join(home, "uv.log");
-		expect(result.code, `${result.stderr}\n${existsSync(uvLog) ? readFileSync(uvLog, "utf8") : ""}`).toBe(0);
-		expect(result.stdout).toContain("artifact-python-result 42");
-		expect(result.stdout).toContain("artifact-shell-ok");
-		const bootstrap = JSON.parse(readFileSync(join(home, ".prime/agent/kernel-venv/.bootstrap-version"), "utf8"));
-		expect(bootstrap.runtime).toMatch(/^sha256:/);
-		expect(bootstrap.pythonSkills.length).toBeGreaterThan(0);
-		expect(
-			bootstrap.pythonSkills.every((skill: { packagePath: string }) => skill.packagePath.startsWith(extracted)),
-		).toBe(true);
+		if (pythonSmokeDiagnostics) pythonSmoke = startPythonSmokeDiagnostics();
+		try {
+			const result = await run(
+				[...sessionArgs(), "--tools", "ipython", "-p", "artifact python"],
+				{ PRIME_AGENT_ARTIFACT_CASE: "python" },
+				300000,
+			);
+			const uvLog = join(home, "uv.log");
+			expect(
+				result.code,
+				pythonSmoke
+					? "See Python smoke diagnostics"
+					: `${result.stderr}\n${existsSync(uvLog) ? readFileSync(uvLog, "utf8") : ""}`,
+			).toBe(0);
+			expect(result.stdout).toContain("artifact-python-result 42");
+			expect(result.stdout).toContain("artifact-shell-ok");
+			const bootstrap = JSON.parse(readFileSync(join(home, bootstrapMarker), "utf8"));
+			expect(bootstrap.runtime).toMatch(/^sha256:/);
+			expect(bootstrap.pythonSkills.length).toBeGreaterThan(0);
+			expect(
+				bootstrap.pythonSkills.every((skill: { packagePath: string }) => skill.packagePath.startsWith(extracted)),
+			).toBe(true);
+		} finally {
+			pythonSmoke?.snapshot("settled");
+		}
 	}, 320000);
 });

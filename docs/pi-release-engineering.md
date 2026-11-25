@@ -98,8 +98,23 @@ The standalone workflow has a manual build-only mode for the eight targets in
 `release-platforms.mjs`. Supply a Pi public version, an optional preview
 sequence, and the exact catalog commit. The workflow uses read-only repository
 permissions and uploads only Actions artifacts after extraction smoke tests.
-The existing reusable workflow path is unchanged; the Pi mode does not invoke
-an installer, release writer, or upload to npm or R2.
+The reusable call defaults to the legacy archive path when `public_version` is
+omitted. Pi mode does not invoke an installer or release writer, or upload to
+npm or R2.
+
+For PAPI-61 validation, a normal push to the existing Episode branch in
+`SailorJoe6/prime-agent-pi` starts both the required legacy CI checks and a
+separate eight-target `pi-native` job in the same CI run. It uses the push SHA,
+test identity `0.10.2.4`, and public catalog commit
+`01f4d46dd5157ec73f8faf440214088237c81d59`. Neither job receives the catalog PAT
+on this event. The legacy Intel Mac smoke logs Python stages without changing
+its assertions or deadlines. Keep this exact branch trigger out of product main.
+
+Before rehearsing, check that `build-check-test` passed, all eight `pi-native-*`
+artifacts came from that run, and each receipt names that SHA and catalog pin.
+Verify the artifact and executable digests and take `install.sh` from the same
+commit. A queued run, a legacy archive, or a previous build with the same test
+version is not evidence for the current bundle.
 
 To build a single target locally with Node, Bun 1.4.0, locked npm dependencies,
 and a clean checkout of the real catalog next to the source:

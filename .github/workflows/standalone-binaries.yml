@@ -21,6 +21,21 @@ on:
         type: string
         required: false
         default: ''
+      public_version:
+        type: string
+        required: false
+      preview_sequence:
+        type: string
+        required: false
+      catalog_sha:
+        type: string
+        required: false
+      python_smoke_diagnostics:
+        type: boolean
+        required: false
+    secrets:
+      PRIME_CATALOG_REPO_TOKEN:
+        required: false
 
 permissions:
   contents: read
@@ -131,6 +146,8 @@ jobs:
       - name: Test extracted application without JavaScript runtimes on PATH
         if: ${{ inputs.public_version == '' && !contains(matrix.platform, 'musl') }}
         working-directory: ${{ runner.temp }}/standalone-source/packages/coding-agent
+        env:
+          PRIME_AGENT_PYTHON_SMOKE_DIAGNOSTICS: ${{ inputs.python_smoke_diagnostics && matrix.platform == 'darwin-x64' && '1' || '' }}
         run: npx tsx ../../node_modules/vitest/dist/cli.js --run test/release-signatures.test.ts test/compiled-artifact.test.ts test/native-installer.test.ts test/native-probe-timeout.test.ts
 
       # Real musl execution evidence: Alpine has no glibc and no JavaScript runtime.
