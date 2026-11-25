@@ -1,10 +1,10 @@
 ---
 id: PAPI-18
 title: Preview a fresh root prompt offline
-status: In Planning
+status: In Progress
 assignee: []
 created_date: '2026-11-22T22:18:00Z'
-updated_date: '2026-11-25T18:30:00Z'
+updated_date: '2026-11-25T18:33:00Z'
 labels: []
 milestone: m-0
 dependencies: []
