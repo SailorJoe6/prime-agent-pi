@@ -4,7 +4,7 @@ title: Build and validate the Prime Agent Pi packaging and release pipeline
 status: In Progress
 assignee: []
 created_date: '2026-11-24T00:57:00Z'
-updated_date: '2026-11-25T21:36:00Z'
+updated_date: '2026-11-25T21:49:00Z'
 labels: []
 dependencies: []
 documentation:
@@ -596,6 +596,10 @@ Publish a correction only if the evidence supports it, only on the Episode branc
 ### Intel build input demonstrated locally
 
 Checksum-verified PyPI cryptography 50.0.2 sdist and build wheels, official x86_64 Rust 1.98.1 (compiler, Cargo and std), and OpenSSL 3.5.9 source. Built static Intel OpenSSL and performed `cargo fetch --locked --target x86_64-apple-darwin` followed by Maturin `--locked --offline` with Intel CPython 3.11.15. Wheel `cryptography-50.0.2-cp311-abi3-macosx_15_0_x86_64.whl` SHA-256 `d733ac4ee5774cb9c1b7aeb728754200472a7ac1e2759ce1ebe6b7ce02faaa38` built in 74.78 s under Rosetta. A separate fresh HOME, managed Python, unseeded venv and cache used the original base arguments with real Intel uv 0.11.7 and a SHA-256 local direct-reference constraint. Base install passed in 3.32 s, followed by x86_64 import of cryptography 50.0.2 reporting OpenSSL 3.5.9. This is not an isolated full-offline install (other dependencies use PyPI), bit-for-bit build claim, or hosted smoke pass. Next: wire only the legacy Intel standalone smoke to a preparation step outside its deadline; keep real extracted-archive test and all assertions. No release writer or CI attempt yet.
+
+### Published Intel fixture correction; exact-SHA CI pending
+
+Episode `754fcebacac241d56aa5824aeddfa2ae23922d2e` adds only the Intel legacy standalone test wheel preparation, SHA-256 verification, scoped smoke constraint and documentation; published fast-forward from `9903edf3202428e02aface2211eae073257f63ad` with exact standalone `Legacy-Publication: skip`. Main still `60b6cf70dc7b207f6ec6c98ae599a876a6a7b2fb`; caller/release writer unchanged. Preparation script reproduced the Intel wheel (second wheel SHA-256 `a0047b3262e0598124c99ae83e778b2ff5c88a5f471746a85cb16fe6feaab2b1`; not bit-identical across different build directories). Tampered wheel rejected by the pre-test checksum. Repository checks, pre-commit, actionlint (known inherited concurrency syntax exception), and all eight compiled archive tests passed using complete hosted Intel artifact 15051260955 with original sidecars. Python smoke ~20 s, nine skills, both cells and fixture removal. Expanded local run: 140 passed, 2 skipped, 1 failed in unchanged native-probe-timeout rollback case (missing PID receipt); no local retry. Required hosted jobs on the exact new tip are still outstanding. No writer or release.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
