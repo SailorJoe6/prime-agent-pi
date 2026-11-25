@@ -4,7 +4,7 @@ title: Build and validate the Prime Agent Pi packaging and release pipeline
 status: In Progress
 assignee: []
 created_date: '2026-11-24T00:57:00Z'
-updated_date: '2026-11-25T16:59:00Z'
+updated_date: '2026-11-25T17:05:00Z'
 labels: []
 dependencies: []
 documentation:
@@ -415,6 +415,12 @@ For unchanged Episode head `569852b22545237fb52cda19649fa41dcf33a77c`, reconcile
 The exact direct Episode ref remained `569852b22545237fb52cda19649fa41dcf33a77c`. Immediately before the one authorized manual CI dispatch, at `2026-11-25T16:58:43.508386+00:00`, the exact-SHA Actions and check suites APIs showed no entries. GitHub returned HTTP 204 for workflow `402840609` at `2026-11-25T16:58:45.138846+00:00` (request `D4B4:9B4EF:10E41FD:11D04FB:6B0713C3`). Run [45659747468](https://github.com/SailorJoe6/prime-agent-pi/actions/runs/45659747468) was created at `2026-11-25T16:58:44Z`, event `workflow_dispatch`, on the exact branch and SHA; suite `123542978523`, observed queued. Push activity IDs: `51848775233` (original) and `51851307526` (recovery). Evidence: `/tmp/papi61-ci-admission-9n4_2vyw/admission.json`.
 
 Admission is not a successful check. Follow this run without reruns. Current manual dispatch does not exercise Intel diagnostics or the true Pi matrix. Evaluate a narrowly scoped validation route that preserves permissions, trust and secrets boundaries and cannot write releases. Exact hosted artifact rehearsal and lifecycle remain unverified. No code change, release, activation, acceptance, or lifecycle change.
+
+### Post-resolution manual CI passed; true Pi artifacts still pending
+
+[CI run 45659747468](https://github.com/SailorJoe6/prime-agent-pi/actions/runs/45659747468), attempt 1, `workflow_dispatch`, completed successfully at `2026-11-25T17:04:03Z` on `569852b22545237fb52cda19649fa41dcf33a77c`. 20 jobs succeeded, including `build-check-test` (139369437794), all three coding-agent shards, and all eight legacy standalone targets. `pi-native` (139366154925) was skipped by the push-only gate. Intel legacy job [139366151488](https://github.com/SailorJoe6/prime-agent-pi/actions/runs/45659747468/job/139366151488) passed the extracted archive test (all eight `compiled-artifact.test.ts` tests, about 140 seconds); the prior timeout did not recur in this run. Stage diagnostics were not enabled, so the prior timeout cause is still unknown. These are legacy CI results, not evidence of any true Pi archive or its lifecycle. Job inventory: `/tmp/papi61-ci-admission-9n4_2vyw/results.json`.
+
+Smallest proposed path for review: in `ci.yml` extend the existing exact repo/ref `episode` output from push to push or `workflow_dispatch`, leaving `allowed`, PR vouch, and normal main/PR behavior unchanged. This reuses the distinct eight-target Pi job with the existing pinned public catalog and enables markers only in Intel legacy smoke via the existing reusable workflow input. The same exact-ref guard must withhold the catalog PAT from both checkout steps and the legacy reusable call; no inherited secrets, persist-credentials remains false, and permissions remain contents-read. No change to the release workflow or any release trigger. A normal branch push may itself trigger CI: reconcile the new exact SHA and use an observed push run before considering any separately authorized dispatch. Require both the legacy aggregate and all eight true Pi jobs to pass on that final SHA before verifying/rehearsing those exact assets. No workflow changes or new triggers were made during this checkpoint.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
