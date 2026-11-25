@@ -1,6 +1,8 @@
 import { statSync } from "node:fs";
 import { resolve } from "node:path";
 import { APP_NAME, getAgentDir } from "../config.js";
+import { COMPACT_SKILL_NAME } from "../core/compaction/compaction.js";
+import { getLocalGenericMcpServers } from "../core/mcp/generic-servers.js";
 import { DefaultResourceLoader } from "../core/resource-loader.js";
 import { SettingsManager } from "../core/settings-manager.js";
 import { previewSystemPrompt } from "../core/system-prompt.js";
@@ -41,7 +43,8 @@ export async function runPromptCommand(args: string[]): Promise<void> {
 
 	const defaultModel = settings.getDefaultModel();
 	const defaultProvider = settings.getDefaultProvider();
-	const modelInput = model ?? (defaultModel && defaultProvider ? `${defaultProvider}/${defaultModel}` : defaultModel);
+	const modelInput = model ?? (defaultModel && defaultProvider ? `${defaultProvider}/${defaultModel}` : undefined);
+	const { skills } = loader.getSkills();
 	const {
 		instructions,
 		static: staticContent,
@@ -51,7 +54,10 @@ export async function runPromptCommand(args: string[]): Promise<void> {
 		customPrompt: loader.getSystemPrompt(),
 		appendSystemPrompt: loader.getAppendSystemPrompt().join("\n\n"),
 		contextFiles: loader.getAgentsFiles().agentsFiles,
-		skills: loader.getSkills().skills,
+		skills: settings.getCompactionAgentCallable()
+			? skills
+			: skills.filter((skill) => skill.name !== COMPACT_SKILL_NAME),
+		genericMcpServers: getLocalGenericMcpServers(settings.getGlobalMcpServers()),
 		allowRecursion: (settings.getRlmMaxDepth() ?? Number(process.env.RLM_MAX_DEPTH || 2)) > 0,
 		rlmDepth: 0,
 	});

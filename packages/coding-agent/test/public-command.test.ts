@@ -571,7 +571,7 @@ describe("public command routing", () => {
 });
 
 describe("PAPI-18 prompt preview over the public CLI", () => {
-	function runCli(args: string[], configure?: (projectDir: string) => void) {
+	function runCli(args: string[], configure?: (projectDir: string, agentDir: string) => void) {
 		const root = mkdtempSync(join(tmpdir(), "pa-prompt-"));
 		try {
 			const tempDir = realpathSync(root);
@@ -619,6 +619,15 @@ export default function () {}`,
 				offlineGuard,
 				`const { writeFileSync } = require("node:fs");
 const { Socket } = require("node:net");
+const { ChildProcess } = require("node:child_process");
+const spawn = ChildProcess.prototype.spawn;
+ChildProcess.prototype.spawn = function (options) {
+  if (options.args.includes(${JSON.stringify(join(projectDir, "mcp-launch-probe.cjs"))})) {
+    writeFileSync(${JSON.stringify(join(projectDir, "mcp-server-launched"))}, "attempted");
+    throw new Error("Prompt preview must not spawn a local MCP server");
+  }
+  return spawn.call(this, options);
+};
 function unexpectedConnection() {
   const error = new Error("Prompt preview must not connect to a provider or daemon");
   writeFileSync(${JSON.stringify(networkMarker)}, error.stack);
@@ -627,7 +636,7 @@ function unexpectedConnection() {
 globalThis.fetch = unexpectedConnection;
 Socket.prototype.connect = unexpectedConnection;`,
 			);
-			configure?.(projectDir);
+			configure?.(projectDir, agentDir);
 			const result = spawnSync(
 				process.execPath,
 				[
@@ -666,7 +675,7 @@ Socket.prototype.connect = unexpectedConnection;`,
 			expect(existsSync(extensionMarker), "live extension module executed").toBe(false);
 			expect(existsSync(packageMarker), "package manager executed").toBe(false);
 			expect(existsSync(sessionDir), "session storage created").toBe(false);
-			return { ...result, projectDir };
+			return { ...result, projectDir, mcpLaunched: existsSync(join(projectDir, "mcp-server-launched")) };
 		} finally {
 			rmSync(root, { recursive: true, force: true });
 		}
@@ -684,6 +693,8 @@ Socket.prototype.connect = unexpectedConnection;`,
 			dynamic: expect.stringContaining(result.projectDir.replace(/\\/g, "/")),
 		});
 		expect(preview.instructions).toContain("Python REPL");
+		expect(preview.instructions).toContain("<name>compact</name>");
+		expect(preview.instructions).toMatch(/^Installed Python skill modules \(pre-imported\): [^\n]*`compact`/m);
 	});
 
 	it("uses the selected directory's instructions, skills, and model override in JSON", () => {
@@ -735,6 +746,66 @@ Socket.prototype.connect = unexpectedConnection;`,
 		});
 		expect(result.status, result.stderr).toBe(0);
 		expect(JSON.parse(result.stdout)).toMatchObject({ model: "fixture-provider/local-default-model" });
+	});
+
+	it("includes Python guidance only for valid enabled local MCP servers without launching them", () => {
+		const result = runCli(["prompt", "--json"], (cwd, agentDir) => {
+			const probe = join(cwd, "mcp-launch-probe.cjs");
+			const marker = join(cwd, "mcp-server-launched");
+			writeFileSync(probe, `require("node:fs").writeFileSync(${JSON.stringify(marker)}, "launched");`);
+			const stdio = { type: "stdio", command: process.execPath, args: [probe] };
+			const settingsPath = join(agentDir, "settings.json");
+			const settings = JSON.parse(readFileSync(settingsPath, "utf8"));
+			writeFileSync(
+				settingsPath,
+				JSON.stringify({
+					...settings,
+					mcpServers: {
+						"preview-local": { ...stdio, enabled: true },
+						"preview-disabled": { ...stdio, enabled: false },
+						"preview-invalid": { ...stdio, command: " " },
+					},
+				}),
+			);
+		});
+		expect(result.status, result.stderr).toBe(0);
+		const preview = JSON.parse(result.stdout);
+		for (const prompt of [preview.instructions, preview.dynamic]) {
+			expect(prompt).toContain('mcp.list_tools("preview-local")');
+			expect(prompt).toContain('mcp.call_tool("preview-local",');
+			expect(prompt).not.toContain("preview-disabled");
+			expect(prompt).not.toContain("preview-invalid");
+		}
+		expect(result.mcpLaunched, "local MCP command executed").toBe(false);
+	});
+
+	it("omits the compact skill listing and Python module guidance when agent compaction is disabled", () => {
+		const result = runCli(["prompt", "--json"], (cwd) => {
+			writeFileSync(
+				join(cwd, ".prime", "agent", "settings.json"),
+				JSON.stringify({ compaction: { agentCallable: false } }),
+			);
+		});
+		expect(result.status, result.stderr).toBe(0);
+		const preview = JSON.parse(result.stdout);
+		expect(preview.instructions).toContain("Python REPL");
+		expect(preview.instructions).toContain("Installed Python skill modules (pre-imported):");
+		expect(preview.instructions).not.toContain("<name>compact</name>");
+		expect(preview.instructions).not.toContain("`compact`");
+	});
+
+	it.each([
+		{ args: [], model: null },
+		{ args: ["--model", "FiXtUrE/family/Exact-Model:high"], model: "FiXtUrE/family/Exact-Model:high" },
+	])("reports $model with an incomplete saved model selector", ({ args, model }) => {
+		const result = runCli(["prompt", "--json", ...args], (cwd) => {
+			writeFileSync(
+				join(cwd, ".prime", "agent", "settings.json"),
+				JSON.stringify({ defaultModel: "unqualified-saved-model" }),
+			);
+		});
+		expect(result.status, result.stderr).toBe(0);
+		expect(JSON.parse(result.stdout)).toMatchObject({ model });
 	});
 
 	it("prints static and dynamic sections with fixture instructions in text mode", () => {
