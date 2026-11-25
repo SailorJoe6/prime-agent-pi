@@ -4,7 +4,7 @@ title: Build and validate the Prime Agent Pi packaging and release pipeline
 status: In Progress
 assignee: []
 created_date: '2026-11-24T00:57:00Z'
-updated_date: '2026-11-25T17:14:00Z'
+updated_date: '2026-11-25T17:25:00Z'
 labels: []
 dependencies: []
 documentation:
@@ -435,6 +435,12 @@ Verify required CI and eight true Pi archives on the same final SHA, then verify
 Published `66c4fbb5b52a33ee72869c09d81ce4cde00610e3` only to `refs/heads/JLanders/prime-agent-papi-61-episode-b35069ea`. The CI gate now recognizes `workflow_dispatch` and `push` with the existing repository/ref predicates; `allowed` and contributor vouch were unchanged. Retained contents-read, no inherited secrets, the Episode catalog PAT exclusions and unchanged release workflow. Documented the validation route. Actionlint 1.7.11, an 80-case event/repo/ref/vouch truth table, `npm run check`, test policy and pre-commit passed. Evidence: `/tmp/papi61-final-ci-8p8mgh81`.
 
 GitHub recorded push `51854347013` at `17:12:48Z`. No matching run or suite was visible through `2026-11-25T17:13:41.572634+00:00`. One normal CI-only manual dispatch returned HTTP 204 at `2026-11-25T17:13:43.841561+00:00`, request `B486:B405A:DBB317:EA9E71:6B071746`. [Run 45662495325](https://github.com/SailorJoe6/prime-agent-pi/actions/runs/45662495325) (suite `123550387482`) was admitted as `workflow_dispatch` on `66c4fbb5b52a33ee72869c09d81ce4cde00610e3`, queued when observed. Do not send another trigger. Follow required legacy CI, Intel diagnostics and all eight Pi jobs; use only same-SHA hosted bytes for the nonpublishing bundle rehearsal and disposable compatibility and lifecycle tests. Main, lifecycle and acceptance unchanged.
+
+### Hosted CI and exact bundle rehearsal passed
+
+[CI 45662495325](https://github.com/SailorJoe6/prime-agent-pi/actions/runs/45662495325), attempt 1, completed `17:23:53Z` on `66c4fbb5b52a33ee72869c09d81ce4cde00610e3`. All 28 jobs passed, including the required aggregate (139382146714), eight legacy builds, and eight distinct Pi targets. Intel legacy diagnostics (139375891964) showed startup, both persistent-cell markers and shell completion, CLI exit and close 0, acknowledged shutdown and successful fixture removal; the earlier timeout did not recur and its cause remains unknown.
+
+All eight hosted artifact ZIP digests match the Actions API. Verified archive and embedded executable hashes, clean source receipts and catalog `01f4d46dd5157ec73f8faf440214088237c81d59`. Installer matches the Git blob at that source SHA; SHA-256 `a275549947442ba8765833335e29fc76033e1dd1e464c3508b4f52efc1f1472e`. Two nonpublishing rehearsals of these exact bytes were identical (report SHA-256 `d372c9c89987c7b6e1d0982dc09d8debf867cd9f4caea0cf6514c4d065268e12`); stable publication denied `missing-or-mismatched-stable-bump`. For each platform: ZIP digest, archive digest and executable digest are recorded in `/tmp/papi61-final-ci-8p8mgh81/verified.json`. ARM64 musl archive `20d3fad7db4338a46af8d938fb3ebafcaf33fdb4708d0a2dcf38a21d01ac67a1`, executable `81fe81f54b204d78f91ae776e6dedc9ebd88b0ee45a6ea1c2bec2360c3da6aec`. Disposable exact-byte lifecycle and compatibility probes are in progress, not yet evidence of readiness. No rerun, release, code, acceptance, or lifecycle change.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
