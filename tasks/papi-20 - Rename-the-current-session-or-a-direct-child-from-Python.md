@@ -4,7 +4,7 @@ title: Rename the current session or a direct child from Python
 status: In Progress
 assignee: []
 created_date: '2026-11-22T22:18:00Z'
-updated_date: '2026-11-25T20:58:00Z'
+updated_date: '2026-11-25T21:00:00Z'
 labels: []
 milestone: m-0
 dependencies: []
@@ -69,4 +69,6 @@ Execute checkpoint: implement the roster action (AC #4) first as an independent 
 Roster slice candidate 5d7098c5518b3237be05ef42207190505501b3b8. Validation: from packages/coding-agent, run ../../node_modules/.bin/tsx ../../node_modules/vitest/dist/cli.js --run test/agents-view-mode.test.ts test/daemon-agent-roster.test.ts test/daemon-supervisor-lazy-subagents.test.ts. Agents view 52/52 and supervisor 18/18 passed. Roster 27/28 passed; the unrelated model-change test (missing getModelAdmissionPolicy on the fixture) also failed with the production gate restored to the base version. The two new child dispatch cases failed before the fix while root passed. npm run check passed, including test policy. Tests prove selected-target dispatch and reuse existing daemon paths, not a full child reopen UAT; leave AC #4 unchecked for review of persistence evidence.
 
 Owner accepted the independently reviewed roster slice at 5d7098c5518b3237be05ef42207190505501b3b8. Advance within the published plan to Python self/direct-child rename with exact identity, no mutation on sibling collisions or unrelated targets, and v0.9.8 compatibility. For AC #4, add focused offline reopen evidence that the renamed child retains its identity and name and that sibling/root are unchanged. No full manual UAT or unrelated fixture repair is requested.
+
+Bounded Python slice: expose and test self rename via the existing session-name path, including daemon naming rules and offline reopen. Keep direct-child Python selection and its no-mutation tests for the next slice; no daemon wire change. Include focused roster reopen evidence for AC #4.
 <!-- SECTION:NOTES:END -->
