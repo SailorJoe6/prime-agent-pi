@@ -173,6 +173,18 @@ candidate commit or a release. The other six targets require matrix evidence:
 Windows Bash and Android Termux source routes are unchanged and were not tested
 in this slice. No publication, feed, update, or rollback behavior was tested.
 
+The legacy Intel macOS extracted-archive Python smoke builds a private
+`cryptography` wheel before the timed test. Upstream does not publish an Intel
+macOS wheel for the pinned version. `scripts/prepare-intel-python-smoke.sh`
+verifies pinned source, toolchain and build-wheel digests, builds static OpenSSL,
+fetches Cargo dependencies against the upstream lock, then builds the wheel
+offline. CI checks the wheel digest before testing. Only the Intel Python test
+receives the local wheel constraint for `uv`.
+The test still installs into a fresh venv with the extracted runtime and skills;
+other dependencies still come from the public index. Neither the wheel nor the
+build tools ship, and the 300/320-second smoke deadlines are unchanged. Update
+the fixture pins and hashes together when the inputs need security maintenance.
+
 ## Tagged GitHub Release manifest and discovery (PAPI-61)
 
 Pi release tags use `pi-vX.Y.Z[.R][-preview.N]`. Omit a zero repair revision;

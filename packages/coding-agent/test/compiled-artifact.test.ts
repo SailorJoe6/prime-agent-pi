@@ -573,6 +573,11 @@ writeFileSync(join(process.cwd(), "hot-runtime.json"), JSON.stringify({ value, e
 
 	it("bootstraps the shipped Python sources and executes persistent cells and shell commands", async () => {
 		expect(uv, "Set PRIME_AGENT_TEST_UV to an absolute uv executable for artifact validation").toBeTruthy();
+		const constraint = process.env.PRIME_AGENT_TEST_UV_CONSTRAINT;
+		if (constraint) {
+			expect(existsSync(constraint), "Expected the prepared Python smoke dependency constraint").toBe(true);
+			environment.UV_CONSTRAINT = constraint;
+		}
 		if (pythonSmokeDiagnostics) pythonSmoke = startPythonSmokeDiagnostics();
 		try {
 			const result = await run(

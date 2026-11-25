@@ -136,6 +136,12 @@ jobs:
           echo "PRIME_AGENT_TEST_ARCHIVE=$RUNNER_TEMP/standalone/prime-agent-$version-${{ matrix.platform }}.tar.gz" >> "$GITHUB_ENV"
           echo "PRIME_AGENT_TEST_UV=$(command -v uv)" >> "$GITHUB_ENV"
 
+      - name: Prepare a verified wheel for the Intel Python smoke
+        if: inputs.public_version == '' && matrix.platform == 'darwin-x64'
+        working-directory: source
+        timeout-minutes: 8
+        run: bash scripts/prepare-intel-python-smoke.sh "$RUNNER_TEMP/intel-python-smoke"
+
       - name: Remove the build paths from the test machine
         if: inputs.public_version == ''
         run: mv "$GITHUB_WORKSPACE/source" "$RUNNER_TEMP/standalone-source"
@@ -147,8 +153,13 @@ jobs:
         if: ${{ inputs.public_version == '' && !contains(matrix.platform, 'musl') }}
         working-directory: ${{ runner.temp }}/standalone-source/packages/coding-agent
         env:
+          PRIME_AGENT_TEST_UV_CONSTRAINT: ${{ matrix.platform == 'darwin-x64' && format('{0}/intel-python-smoke/constraints.txt', runner.temp) || '' }}
           PRIME_AGENT_PYTHON_SMOKE_DIAGNOSTICS: ${{ inputs.python_smoke_diagnostics && matrix.platform == 'darwin-x64' && '1' || '' }}
-        run: npx tsx ../../node_modules/vitest/dist/cli.js --run test/release-signatures.test.ts test/compiled-artifact.test.ts test/native-installer.test.ts test/native-probe-timeout.test.ts
+        run: |
+          if [[ -n "$PRIME_AGENT_TEST_UV_CONSTRAINT" ]]; then
+            shasum -a 256 -c "${PRIME_AGENT_TEST_UV_CONSTRAINT%/*}/wheel.sha256"
+          fi
+          npx tsx ../../node_modules/vitest/dist/cli.js --run test/release-signatures.test.ts test/compiled-artifact.test.ts test/native-installer.test.ts test/native-probe-timeout.test.ts
 
       # Real musl execution evidence: Alpine has no glibc and no JavaScript runtime.
       # Bun's musl executables link against libstdc++, which Alpine does not preinstall.
