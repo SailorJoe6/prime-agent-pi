@@ -4,7 +4,7 @@ title: Rename the current session or a direct child from Python
 status: In Progress
 assignee: []
 created_date: '2026-11-22T22:18:00Z'
-updated_date: '2026-11-25T21:00:00Z'
+updated_date: '2026-11-25T21:04:00Z'
 labels: []
 milestone: m-0
 dependencies: []
@@ -22,11 +22,18 @@ documentation:
     https://github.com/SailorJoe6/prime-agent-pi/blob/dfba53a40c277c8341930024b014ffbdaf7e1e68/docs/upstream-feature-inventory.md#python-shell-and-durable-session-control
   - >-
     https://github.com/SailorJoe6/prime-agent-pi/blob/5d7098c5518b3237be05ef42207190505501b3b8/docs/upstream-feature-inventory.md#commands-installation-and-terminal-controls
+  - >-
+    https://github.com/SailorJoe6/prime-agent-pi/blob/b74b97ec95e0974412b2b775ebf92584254b41c7/docs/upstream-feature-inventory.md#python-shell-and-durable-session-control
 modified_files:
   - packages/coding-agent/src/modes/agents-view/agents-view-mode.ts
   - packages/coding-agent/test/agents-view-mode.test.ts
   - docs/upstream-feature-inventory.md
   - packages/coding-agent/.changes/papi-20-session-rename.md
+  - packages/coding-agent/src/core/agent-session.ts
+  - packages/coding-agent/test/agent-session-recursion.test.ts
+  - packages/coding-agent/test/rlm-ledger.test.ts
+  - prime-agent-runtime/src/rlm/__init__.py
+  - prime-agent-runtime/test/test_subagent_registry.py
 type: feature
 ordinal: 20000
 ---
@@ -39,10 +46,10 @@ v0.10.0 Python self/direct-child rename, runtime + daemon session registry. CLI 
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Self rename persists across reopen.
+- [x] #1 Self rename persists across reopen.
 - [ ] #2 Rename direct child by handle/ID updates roster with same identity.
 - [ ] #3 Unrelated target or sibling-name collision changes neither.
-- [ ] #4 From the roster, rename the selected live or saved child. Its name persists under the same identity; its sibling and the existing root rename action are unaffected.
+- [x] #4 From the roster, rename the selected live or saved child. Its name persists under the same identity; its sibling and the existing root rename action are unaffected.
 <!-- AC:END -->
 
 ## Implementation Plan
@@ -71,4 +78,12 @@ Roster slice candidate 5d7098c5518b3237be05ef42207190505501b3b8. Validation: fro
 Owner accepted the independently reviewed roster slice at 5d7098c5518b3237be05ef42207190505501b3b8. Advance within the published plan to Python self/direct-child rename with exact identity, no mutation on sibling collisions or unrelated targets, and v0.9.8 compatibility. For AC #4, add focused offline reopen evidence that the renamed child retains its identity and name and that sibling/root are unchanged. No full manual UAT or unrelated fixture repair is requested.
 
 Bounded Python slice: expose and test self rename via the existing session-name path, including daemon naming rules and offline reopen. Keep direct-child Python selection and its no-mutation tests for the next slice; no daemon wire change. Include focused roster reopen evidence for AC #4.
+
+Python self-rename slice b74b97ec95e0974412b2b775ebf92584254b41c7: same durable ID/name on reopen; inline child exact sibling collision rejects without changing either name; case-distinct name succeeds. The host rejects target fields in this self-only slice. AC #4 offline: existing agents-view selected live/saved/root dispatch tests plus rlm-ledger live/saved command tests reopen original child ID and file with new name; root/sibling transcripts stay byte-identical and ledger parent/child identity remains stable. No-write negative control failed both reopen tests. Validation: npm run check passed; from packages/coding-agent run ../../node_modules/.bin/tsx ../../node_modules/vitest/dist/cli.js --run test/rlm-ledger.test.ts test/agents-view-mode.test.ts (82 passed) and test/agent-session-recursion.test.ts (93 passed before second new case, then both PAPI-20 cases passed with -t PAPI-20). From prime-agent-runtime run PYTHONPATH=src ~/.prime/agent/kernel-venv/bin/python -m unittest discover -s test -p test_subagent_registry.py (27 passed). No full manual UAT; previously observed unrelated daemon roster fixture was not changed.
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Implemented Python self rename via await rlm.rename("new-name") and added focused offline live/saved roster reopen proof. Direct-child Python selection and its rejection coverage (AC #2/#3) remain open. No daemon wire changes.
+<!-- SECTION:FINAL_SUMMARY:END -->
