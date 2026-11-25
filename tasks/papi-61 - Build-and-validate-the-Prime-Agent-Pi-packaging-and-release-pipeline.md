@@ -4,7 +4,7 @@ title: Build and validate the Prime Agent Pi packaging and release pipeline
 status: In Progress
 assignee: []
 created_date: '2026-11-24T00:57:00Z'
-updated_date: '2026-11-25T21:28:00Z'
+updated_date: '2026-11-25T21:36:00Z'
 labels: []
 dependencies: []
 documentation:
@@ -592,6 +592,10 @@ Owner accepts the scoped exact ARM64/musl CLI and real PTY lifecycle evidence at
 On the existing Episode, demonstrate the smallest viable fixture-scoped route: a maintained, verified Intel wheel or a bounded reproducible Intel source build from verified inputs. Consider building the wheel before the timed cold install using an already installed or pinned Rust toolchain; preserve TLS/security verification. Keep real uv, fresh HOME and venv, extracted app/runtime, real skill installation and both Python cells, existing assertions and 300/320-second deadlines. No vulnerable downgrade, seeded installed state, retry-to-green, new production dependency or publisher. Keep diagnostic CI read-only and limited to artifacts or tests.
 
 Publish a correction only if the evidence supports it, only on the Episode branch, with the exact standalone `Legacy-Publication: skip` line on the actual final tip. Then run required exact-SHA nonpublishing CI; verify new artifact receipts and affected exact-byte probes as needed. If no viable route, report the concrete missing input and smallest supported alternative. No main push, writer invocation, release, bump, tag, live upgrade, activation, PAPI-62 or parity work.
+
+### Intel build input demonstrated locally
+
+Checksum-verified PyPI cryptography 50.0.2 sdist and build wheels, official x86_64 Rust 1.98.1 (compiler, Cargo and std), and OpenSSL 3.5.9 source. Built static Intel OpenSSL and performed `cargo fetch --locked --target x86_64-apple-darwin` followed by Maturin `--locked --offline` with Intel CPython 3.11.15. Wheel `cryptography-50.0.2-cp311-abi3-macosx_15_0_x86_64.whl` SHA-256 `d733ac4ee5774cb9c1b7aeb728754200472a7ac1e2759ce1ebe6b7ce02faaa38` built in 74.78 s under Rosetta. A separate fresh HOME, managed Python, unseeded venv and cache used the original base arguments with real Intel uv 0.11.7 and a SHA-256 local direct-reference constraint. Base install passed in 3.32 s, followed by x86_64 import of cryptography 50.0.2 reporting OpenSSL 3.5.9. This is not an isolated full-offline install (other dependencies use PyPI), bit-for-bit build claim, or hosted smoke pass. Next: wire only the legacy Intel standalone smoke to a preparation step outside its deadline; keep real extracted-archive test and all assertions. No release writer or CI attempt yet.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
