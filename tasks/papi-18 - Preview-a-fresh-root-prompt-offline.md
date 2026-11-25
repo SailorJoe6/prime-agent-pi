@@ -4,7 +4,7 @@ title: Preview a fresh root prompt offline
 status: In Progress
 assignee: []
 created_date: '2026-11-22T22:18:00Z'
-updated_date: '2026-11-25T18:33:00Z'
+updated_date: '2026-11-25T18:35:00Z'
 labels: []
 milestone: m-0
 dependencies: []
@@ -39,3 +39,9 @@ Expose the effective fresh-root prompt in the public CLI. Keep Pi resource resol
 2. Resolve the fresh-root inputs from Pi's existing local settings and resources: instructions, model-visible skills, custom/append prompts and the default Python tool guidance. Reuse the existing prompt builder; expose enough of its existing assembly to distinguish static instructions from runtime context without copying templates, rearranging live prompt bytes, or claiming a new cache boundary. Honor prompt inputs associated with the requested or locally configured model where Pi actually uses them; identify the model input explicitly, but do not manufacture model-specific prompt rules or require online model resolution. Exclude live extension hooks and session-time changes. Use only local resource discovery: do not execute extension code, install/fetch packages, call a provider, start a worker, or create a saved session.
 3. Render that one result as readable text and machine-readable JSON, with the assembled instructions and a simple static/dynamic breakdown. Document the offline boundary and add a changelog fragment. Test the public CLI with temporary local fixtures: both output forms, cwd and model inputs, help/errors, and no session/worker/provider startup. Reuse existing test seams and run the modified focused tests plus `npm run check`. No persistent preview state, parallel prompt pipeline, task reconciliation, or iterative-plan automation.
 <!-- SECTION:PLAN:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Implementation checkpoint: use the public command dispatch and the existing resource loader with missing-package installation disabled. The prompt builder will retain live instruction order and expose a diagnostic static/dynamic breakdown. Pi does not select a base prompt by model; the preview will report the chosen model input without provider resolution.
+<!-- SECTION:NOTES:END -->
