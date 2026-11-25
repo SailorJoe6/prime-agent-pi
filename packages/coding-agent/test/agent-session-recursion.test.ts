@@ -409,6 +409,49 @@ describe("AgentSession rlm recursion", () => {
 		for (const index of [0, 2, 3]) expect(readFileSync(files[index]!, "utf8")).toBe(snapshots[index]);
 	});
 
+	it.each(["before", "after"] as const)("PAPI-20: collect resolves the former name %s reuse", async (reuse) => {
+		const root = createSession();
+		const spawn = hostHandler(root, "rlm.run");
+		const rename = hostHandler(root, "rlm.rename");
+		const collectHandler = hostHandler(root, "rlm.collect");
+		const collect = (target: string) => collectHandler({ targets: [target], timeout_ms: 10_000 });
+		const original = await spawn({ prompt: "original", kwargs: { name: "worker" } });
+		const childId = original.rlm_child_id;
+		if (typeof childId !== "string") throw new Error("Missing child ID from spawn");
+		await collect(childId);
+		const durableId = root.getRlmChildSession(childId)!.sessionId;
+		await rename({ name: "renamed-worker", session_id: childId });
+		const originalResult = {
+			results: [
+				{
+					rlm_child_id: childId,
+					session_name: "renamed-worker",
+					settled: true,
+					answer_preview: "child answer: original",
+				},
+			],
+		};
+		if (reuse === "before") {
+			await expect(collect("worker")).rejects.toThrow(/No direct RLM child matches/);
+		} else {
+			const replacement = await spawn({ prompt: "replacement", kwargs: { name: "worker" } });
+			expect(replacement.rlm_child_id).not.toBe(childId);
+			await expect(collect("worker")).resolves.toMatchObject({
+				results: [
+					{
+						rlm_child_id: replacement.rlm_child_id,
+						session_name: "worker",
+						settled: true,
+						answer_preview: "child answer: replacement",
+					},
+				],
+			});
+		}
+		for (const target of ["renamed-worker", childId, durableId]) {
+			await expect(collect(target)).resolves.toMatchObject(originalResult);
+		}
+	});
+
 	it("PAPI-20: inline child self-rename rejects a sibling's exact name", async () => {
 		const root = createSession();
 		const first = await root.runRlmChild("first", { name: "first" });

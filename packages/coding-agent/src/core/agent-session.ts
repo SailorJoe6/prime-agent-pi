@@ -11801,11 +11801,13 @@ export class AgentSession {
 
 	private _rlmChildRunMatchesTarget(run: RlmChildRun, target: string): boolean {
 		const session = run.session ?? this._rlmChildSessions.get(run.id)?.session;
+		// A resident child's current name supersedes its spawn name unless a delete
+		// receipt already made that run collectable under the old selectors.
 		return (
 			run.id === target ||
-			run.sessionName === target ||
 			session?.sessionId === target ||
-			session?.sessionName === target
+			session?.sessionName === target ||
+			((!session || run.detachedDeletion !== undefined) && run.sessionName === target)
 		);
 	}
 

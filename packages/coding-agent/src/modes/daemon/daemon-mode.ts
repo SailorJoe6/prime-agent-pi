@@ -200,6 +200,7 @@ import {
 	scheduledJobRegistrations,
 	sessionDisplayLabels,
 	summaryForActiveSession,
+	summaryForInactiveSession,
 } from "./daemon-session-list.js";
 import { DaemonSessionSummarizer } from "./daemon-session-summarizer.js";
 import {
@@ -6022,6 +6023,22 @@ export class AgentDaemon {
 		return this.setSavedSessionName(sessionPath, normalizedName, {
 			parent,
 			info: passive.info,
+			onRenamed: () => {
+				if (!this.options.worker) return;
+				const base = {
+					...summaryForInactiveSession(passive.info),
+					sessionFile: canonicalSessionPath(sessionPath),
+					runtimeKind: "subagent" as const,
+					rlmChildId: passive.entry.childId,
+					rlmDepth: passive.info.rlmDepth ?? passive.entry.rlmDepth,
+					parentSessionId: passive.entry.parentSessionId,
+					parentSessionPath: parentPath,
+				};
+				const agentId = rosterAgentIdForSummary(base);
+				const cached = this.rosterReporter.lastComposed.get(agentId);
+				const summary = cached?.summary.sessionId === passive.info.id ? cached.summary : base;
+				this.flushRoster({ agentId, summary: { ...summary, sessionName: normalizedName } });
+			},
 			assertWritable: () => {
 				assertParent();
 				const key = resolve(sessionPath);
@@ -6039,7 +6056,7 @@ export class AgentDaemon {
 	private async setSavedSessionName(
 		sessionPath: string,
 		name: string,
-		python?: { parent: ActiveSessionState; info: SessionInfo; assertWritable: () => void },
+		python?: { parent: ActiveSessionState; info: SessionInfo; assertWritable: () => void; onRenamed: () => void },
 	): Promise<void> {
 		const info = python?.info ?? (await readSessionInfo(sessionPath));
 		if (!info) throw new Error(`Session not found: ${sessionPath}`);
@@ -6075,6 +6092,7 @@ export class AgentDaemon {
 						`failed to append RLM ledger rename: ${error instanceof Error ? error.message : String(error)}`,
 					);
 				});
+			python?.onRenamed();
 		});
 	}
 
@@ -7378,7 +7396,7 @@ export class AgentDaemon {
 		}
 	}
 
-	private flushRoster(): void {
+	private flushRoster(savedRename?: WorkerRosterEntry): void {
 		const reporter = this.rosterReporter;
 		const entries = new Map<string, WorkerRosterEntry>();
 		// Summary objects are memoized per session: an unchanged session composes
@@ -7477,6 +7495,22 @@ export class AgentDaemon {
 					}),
 				);
 			}
+		}
+		// A passive rename updates the existing row (or the ledger-seeded row
+		// after worker restart) without opening the child or touching a live row.
+		if (
+			savedRename?.summary.sessionFile &&
+			!this.findActiveSessionByFile(savedRename.summary.sessionFile) &&
+			!reporter.removedAgentIds.has(savedRename.agentId)
+		) {
+			const file = resolve(savedRename.summary.sessionFile);
+			entries.set(
+				savedRename.agentId,
+				passivatedWorkerRosterEntry(savedRename, {
+					hasRegisteredHeartbeat: registrations.heartbeatSessionFiles.has(file),
+					hasRegisteredCronJob: registrations.cronSessionFiles.has(file),
+				}),
+			);
 		}
 		const changed: WorkerRosterEntry[] = [];
 		const nextJson = new Map<string, string>();

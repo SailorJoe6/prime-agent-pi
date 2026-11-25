@@ -43,6 +43,7 @@ import type { AgentRosterEntry } from "../src/modes/daemon/agent-roster.js";
 import { AgentDaemon } from "../src/modes/daemon/daemon-mode.js";
 import type { DaemonCommand, DaemonResponse } from "../src/modes/daemon/daemon-protocol.js";
 import { DaemonSupervisor } from "../src/modes/daemon/daemon-supervisor.js";
+import type { DaemonWorkerRosterOutbound } from "../src/modes/daemon/daemon-worker-protocol.js";
 import {
 	RLM_LEDGER_MAX_BYTES,
 	RLM_LEDGER_MAX_RECORDS,
@@ -1107,6 +1108,7 @@ interface SupervisorLedgerInternals {
 	rlmLedgerSiblings(sessionPath: string): Promise<Array<{ name?: string; rlmDepth: number; path: string }>>;
 	assertSupervisorSavedSessionNameAvailable(sessionPath: string, name: string): Promise<void>;
 	seedRosterLedger(): Promise<void>;
+	applyWorkerRosterDelta(worker: object, delta: Extract<DaemonWorkerRosterOutbound, { type: "roster_delta" }>): void;
 	applyWorkerRosterSnapshot(
 		worker: object,
 		delta: { type: "roster_delta"; snapshot: true; entries: AgentRosterEntry[] },
@@ -1119,6 +1121,44 @@ interface SupervisorLedgerInternals {
 	};
 	workers: Map<string, object>;
 	catalog: object;
+}
+
+async function connectSavedRenameRoster(
+	daemon: AgentDaemon,
+	directory: string,
+	sessionsDir: string,
+	parentFile: string,
+) {
+	const supervisor = new DaemonSupervisor(join(directory, "supervisor.sock"), {
+		defaultSessionConfig: { agentDir: directory, cwd: directory, sessionDir: sessionsDir },
+		descriptorDir: join(directory, "workers"),
+	}) as unknown as SupervisorLedgerInternals;
+	const parentInfo = await sessionManagerModule.readSessionInfo(parentFile);
+	Object.assign(supervisor.catalog, { list: vi.fn(async () => [parentInfo]) });
+	const worker = { descriptor: { workerId: "rename-worker", rootActiveSessionId: "unused", sessionFile: parentFile } };
+	supervisor.workers.set(worker.descriptor.workerId, worker);
+	await supervisor.seedRosterLedger();
+	const rows = async () => {
+		const response = await supervisor.handleCommand({}, { type: "roster_subscribe" });
+		if (!response?.success) throw new Error("Roster subscription failed");
+		return (response.data as { roster: AgentRosterEntry[] }).roster;
+	};
+	const before = await rows();
+	// Keep the real roster writer and supervisor consumer, with the transport bridged in process.
+	Object.assign(daemon, {
+		options: { ...(daemon as unknown as { options: object }).options, worker: { authenticationToken: "fixture" } },
+		hasAuthenticatedSupervisorClient: () => true,
+		broadcastRosterFrame: (delta: Extract<DaemonWorkerRosterOutbound, { type: "roster_delta" }>) => {
+			supervisor.applyWorkerRosterDelta(worker, delta);
+			return true;
+		},
+	});
+	return {
+		before,
+		rows,
+		renameSibling: (sessionPath: string, name: string) =>
+			supervisor.handleCommand({}, { type: "rename_saved_session", sessionPath, name }),
+	};
 }
 
 describe("passive descendants in the saved catalog", () => {
@@ -1423,7 +1463,7 @@ describe("rlm spawn ledger supervisor wiring", () => {
 			const tempDir = mkdtempSync(join(tmpdir(), "prime-rlm-ledger-python-rename-"));
 			try {
 				const { parent, parentFile: rootFile } = makeRoots(tempDir);
-				const { internals } = makeDaemonFixture(tempDir);
+				const { daemon, internals, sessionsDir } = makeDaemonFixture(tempDir);
 				const rootState = await internals.createRuntime({ type: "create", sessionPath: rootFile });
 				let parentState = rootState;
 				if (kind === "nested saved") {
@@ -1505,6 +1545,8 @@ describe("rlm spawn ledger supervisor wiring", () => {
 					if (!rootRename) throw new Error("Missing root child rename controller");
 					await expect(rootRename(child, "grandchild-rename")).rejects.toThrow("Unknown direct RLM child");
 				}
+				const publicRoster =
+					kind === "saved" ? await connectSavedRenameRoster(daemon, tempDir, sessionsDir, rootFile) : undefined;
 				const childBefore = readFileSync(childFile, "utf8");
 				const untouchedBefore = [parentFile, sibling.file].map((path) => readFileSync(path, "utf8"));
 				await expect(rename({ ...child, rlm_child_id: siblingId }, "new-name")).rejects.toThrow(
@@ -1514,6 +1556,24 @@ describe("rlm spawn ledger supervisor wiring", () => {
 				expect(readFileSync(childFile, "utf8")).toBe(childBefore);
 				await rename(child, "new-name");
 				const renamedBytes = readFileSync(childFile, "utf8");
+				if (kind === "saved") {
+					if (!publicRoster) throw new Error("Missing public roster");
+					const after = await publicRoster.rows();
+					const before = publicRoster.before.find((row) => row.summary.sessionId === sessionId);
+					if (!before) throw new Error("Missing original passive row");
+					expect(after.filter((row) => row.summary.sessionId === sessionId)).toEqual([
+						expect.objectContaining({
+							agentId: before.agentId,
+							summary: expect.objectContaining({
+								sessionId,
+								sessionFile: canonicalSessionPath(childFile),
+								sessionName: "new-name",
+							}),
+						}),
+					]);
+					await expect(publicRoster.renameSibling(sibling.file, "new-name")).rejects.toThrow("already exists");
+					expect(await publicRoster.rows()).toEqual(after);
+				}
 				await rename(child, " new-name ");
 				expect(readFileSync(childFile, "utf8")).toBe(renamedBytes);
 
