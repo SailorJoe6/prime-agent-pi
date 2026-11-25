@@ -1,7 +1,7 @@
 ---
 id: PAPI-18
 title: Preview a fresh root prompt offline
-status: Ready for Merge
+status: Done
 assignee: []
 created_date: '2026-11-22T22:18:00Z'
 updated_date: '2026-11-25T19:54:00Z'
