@@ -1,10 +1,10 @@
 ---
 id: PAPI-6
 title: Retry the same model on an explicitly permitted provider
-status: Ready for Merge
+status: Done
 assignee: []
 created_date: '2026-11-22T22:03:00Z'
-updated_date: '2026-11-25T14:06:00Z'
+updated_date: '2026-11-25T15:14:00Z'
 labels: []
 milestone: m-0
 dependencies: []
