@@ -1,10 +1,10 @@
 ---
 id: PAPI-20
 title: Rename the current session or a direct child from Python
-status: In Design
+status: In Planning
 assignee: []
 created_date: '2026-11-22T22:18:00Z'
-updated_date: '2026-11-24T00:57:00Z'
+updated_date: '2026-11-25T19:59:00Z'
 labels: []
 milestone: m-0
 dependencies: []
@@ -37,3 +37,15 @@ v0.10.0 Python self/direct-child rename, runtime + daemon session registry. CLI 
 - [ ] #3 Unrelated target or sibling-name collision changes neither.
 - [ ] #4 From the roster, rename the selected live or saved child. Its name persists under the same identity; its sibling and the existing root rename action are unaffected.
 <!-- AC:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+Use released upstream v0.10.0 (763094e1b6a7c17450ee8399b06cda1853847ca5, including 022c90b9f2d79543447aac05c839462b0d64acbd) as the behavior reference, not the Rust implementation.
+
+1. Add async `rlm.rename(new_name, *, session_id=None) -> str` to the Python module and REPL object. Omitted target means self; accept an existing spawn handle, subagent row, or exact session ID for a direct child, not a display name. Reuse existing selector conventions without changing other callers. In the host, resolve against the calling session's existing child registry, apply spawn naming rules and sibling uniqueness, and reject out-of-scope targets or collisions before changing either session. Persist through the existing session-name path and keep live registry/roster metadata consistent. Preserve routing and durable IDs, paths, child handles and legacy records. Use the existing transcript notice path where applicable for upstream behavior.
+2. Extend the existing configurable roster rename action to a selected renameable child. Reuse its live active-ID and saved-file paths and refresh flow; update only the selected session and keep the root action unchanged. Do not route user actions through Python. If an existing daemon path cannot carry the scoped operation, add only the needed optional capability with the project's schema/maps and mixed-version checks. An older daemon should still start, attach and use existing supported actions.
+3. Add focused offline coverage for Python self rename and reopen, direct-child handle/ID selection and roster update, rejection of unrelated targets and sibling collisions without mutation, and selected live/saved child rename with unchanged sibling, root behavior and identity. Use existing fixtures and regression suites. Run the affected Python and TypeScript tests, required checks, and project test-policy verification. Document Python use and add the user-facing changelog fragment.
+
+Reuse the existing persistence, registry and roster controls. No new name store, migration, parallel roster, or generalized reconciliation, plan iteration, or task-decision machinery.
+<!-- SECTION:PLAN:END -->
