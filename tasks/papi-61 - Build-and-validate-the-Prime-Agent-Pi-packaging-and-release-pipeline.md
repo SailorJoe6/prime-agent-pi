@@ -4,7 +4,7 @@ title: Build and validate the Prime Agent Pi packaging and release pipeline
 status: In Progress
 assignee: []
 created_date: '2026-11-24T00:57:00Z'
-updated_date: '2026-11-25T21:15:00Z'
+updated_date: '2026-11-25T21:17:00Z'
 labels: []
 dependencies: []
 documentation:
@@ -553,6 +553,19 @@ Exactly one [artifact-only CI run 45700177091](https://github.com/SailorJoe6/pri
 ### Landing blocked: required Intel standalone smoke failed on integrated candidate
 
 [Artifact-only CI 45700177091](https://github.com/SailorJoe6/prime-agent-pi/actions/runs/45700177091) attempt 1 on `9903edf3202428e02aface2211eae073257f63ad` (published main parent `60b6cf70dc7b207f6ec6c98ae599a876a6a7b2fb`) finished with 26 passes and two failures. [Intel legacy standalone 139508013882](https://github.com/SailorJoe6/prime-agent-pi/actions/runs/45700177091/job/139508013882) reached session startup and completed Python installation and venv creation. At its unchanged 300-second deadline `uv` had started base dependency installation but not completed it, bootstrap metadata was missing, and neither Python cell ran. The harness killed the CLI; owned daemon shutdown was acknowledged, but fixture removal returned false, with a separate ENOTEMPTY cleanup failure. This identifies the last observed stage, not the root cause. [Required aggregate 139514031082](https://github.com/SailorJoe6/prime-agent-pi/actions/runs/45700177091/job/139514031082) failed with `STANDALONE_RESULT: failure`. All eight Pi build jobs succeeded and uploaded artifacts; that does not satisfy the required legacy gate. Exact API evidence and failed job logs are under `/var/folders/4_/twy0wz3s1mq650wnqzn1b8rr0000gq/T/papi61-integrated-0wsx1fix`. Owner has a concrete blocker: clear and pass mandatory Intel cold-bootstrap smoke and aggregate with assertions and deadlines intact before recommending landing. No rerun, weaker gate, main mutation or release.
+
+### Verified Pi archives from failed integration CI (partial evidence only)
+
+[Run 45700177091](https://github.com/SailorJoe6/prime-agent-pi/actions/runs/45700177091) attempt 1 on `9903edf3202428e02aface2211eae073257f63ad` uploaded eight Pi archives. Verified exact hosted ZIP size and API SHA-256, contents, archive/executable hashes, clean source receipts, catalog `01f4d46dd5157ec73f8faf440214088237c81d59`, and exact committed installer SHA-256 `a275549947442ba8765833335e29fc76033e1dd1e464c3508b4f52efc1f1472e`. Two byte-identical nonpublishing bundle rehearsals SHA-256 `30c63d61561640196c1070b2a35330d36832bc00507f0e672c14f0b54a2deb1c` denied stable (`missing-or-mismatched-stable-bump`). Evidence and commands under `/var/folders/4_/twy0wz3s1mq650wnqzn1b8rr0000gq/T/papi61-integrated-0wsx1fix`. No hosted-byte lifecycle or compatibility probe was started after the required Intel/aggregate failure; earlier probes apply only to their own bytes. These archive results do not clear the mandatory failure or authorize landing. No rerun, live change, or release.
+
+- `darwin-arm64`: Actions artifact `15063081241`, ZIP `sha256:b6aa2aed5f4f914669d7e79ab0265fa678dba23597d889dfed2970b1e7257766`, archive `9af8be47d092806626a76517a1fb1736b873ffc6286de5279fba1de54ad3d139`, executable `60e91f82d75e9196648a2d00b271a518085f3cb427ff116b6ba0106106218b80`.
+- `darwin-x64`: Actions artifact `15061979848`, ZIP `sha256:789db7e744d1e542a3647ac09fe2cc74b5b01611cb987e2b6f3567e070f532d3`, archive `60ca15e32afb79d2298f9bb307f466652a35af42dd5304626eef70d512344904`, executable `67072981d3755bbc4267104bba83abf1fb849b66af9dcb2d1fe89ba3c1cbf516`.
+- `linux-arm64`: Actions artifact `15063226128`, ZIP `sha256:0cb4d1af1126cc2978ec459e1377994cc43a3874bfea2bf569f8983eeb3f5d1f`, archive `5d5deb953abe248816d8f4157b47421817ea82cad635d092b82123b9ebe7f2a7`, executable `1f0a890e45563c8db3d934973059d042331957815e8d9fd3b9585e5b88d66293`.
+- `linux-arm64-musl`: Actions artifact `15062746875`, ZIP `sha256:873f4f065dde502660fc9453ca8e1d68fa8ecda58c49421637a1fd6735265a7c`, archive `a1ccd1f779223020877f66282c0e50678983791708bf0dada2315d0ddb11f430`, executable `8060035a6bf2baf4e6f98d0e27249592f389dba483adfb1695dcf23e2fa38dc1`.
+- `linux-x64`: Actions artifact `15063515405`, ZIP `sha256:c1e265d1b1699ae9670a9ef9ce8938362d109cebc8ad21518bdde9e066309ce2`, archive `42ac130744ecac55a1b1f004cfef2da16fb90da69648a520128f00e0502e6813`, executable `12b025402c8e6ba43f1c930b1fcac1b0e5b8c6abd5065e772f7f21345d34a69f`.
+- `linux-x64-baseline`: Actions artifact `15063266109`, ZIP `sha256:c9e37cee125251345c30e37b0557a3bb1609ed52da93d2338c075d41b070330a`, archive `6b6bc19ee88ab6736ebd1ec390b449f24b2fdc03788f010ebabbc076a8e33146`, executable `e420f0ed40c89751afc8785fac73dd2c8188a1a335e6b46ef4357fff5e5047d1`.
+- `linux-x64-musl`: Actions artifact `15063805295`, ZIP `sha256:d26d137858a28ada5ed781f879d23844a38315e603df4b4d3f1a91408b7941dc`, archive `17e344a61aa38100895272b47cfefeb267b3a9fc5cdcfeefb31ba454cf78ca5e`, executable `65eaffaa5d79b551813076b3116331ceaef890e2fabfb3a443d6ff8c1e204c2f`.
+- `linux-x64-musl-baseline`: Actions artifact `15061589979`, ZIP `sha256:e1b4c10e36aac366841123aa2caf8163c7ea03d97f54b8723042c91747e185f3`, archive `a8d508da1de320011cc89d4fa54a04785ae0d8bc60c1183e6b50bf3c2ed84cc4`, executable `474b2e8add87600a5e7514e2bdc6d3e7d4d2cd04fdb348b924bf1c59a098c919`.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
