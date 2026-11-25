@@ -4,7 +4,7 @@ title: Build and validate the Prime Agent Pi packaging and release pipeline
 status: In Progress
 assignee: []
 created_date: '2026-11-24T00:57:00Z'
-updated_date: '2026-11-25T15:59:00Z'
+updated_date: '2026-11-25T16:09:00Z'
 labels: []
 dependencies: []
 documentation:
@@ -341,6 +341,18 @@ Evidence at `537af2b9976e58a54ee15b09b3fe60cbf63d475c` is accepted as scoped evi
 2. Reconcile standalone workflow `402840615` HTTP 500 against direct ref and exact-SHA run observations; use a supported fresh artifact-only dispatch only once evidence establishes no admitted match, or report the precise external blocker. Never duplicate an admitted run. Prioritize the eight-target real Pi matrix and real-assets nonpublishing rehearsal on the final SHA if a repair changes it. Use actual verified hosted integrated bytes for affected disposable compatibility/lifecycle probes, including benign post-update slash input and orderly exit if supported. Keep CI, artifact evidence, and fixture limitations distinct.
 
 Keep doing feasible independent work while a track waits. Report exact source, artifact identities, and passing and failing evidence separately when the checks complete or only concrete blockers remain. No changes to main, release, public bump, tag, live activation, concurrent host Prime Agent, parity work, or PAPI-62.
+
+### Integrated validation recovery: confirmed blockers
+
+Episode source remains `19f2ac2c0ca6a68114060025964f2e736b17db1d`; published main remains `c87cd0598acaae6ee806a77a8b31f1ca3f845bdb`. No code or tests changed in this slice. [CI 45649295307](https://github.com/SailorJoe6/prime-agent-pi/actions/runs/45649295307) concluded failure. Shard 2 job `139329092342` contains the two inherited semantic-edge failures. The exact main and Episode each ran the unmodified 23-test file in disposable offline Linux ARM64 Docker: 21 passed and the same 2 failed. Both selected cases passed on unmodified `c507a7a9f01c020833231bea8255e62359a3398e`, parent of the failover change `16122e2c5fede57c59f7841000d2889dab8abd21`.
+
+**Confirmed production cause, not a fixture defect.** The failover image observer wraps the marked semantic stream in an unmarked function, so side questions and inherited child streams cannot unwrap the parent recorder. Per-call synthetic traces at the provider boundary show the side request carries both provenance headers and enters the root ledger. The actual child request carries the root recorder's ID instead of the different ID committed in the child ledger. The subsequent fourth call is the root's child-exit follow-up, not another child call. A disposable composition change kept the provenance wrapper outermost and ran the per-session image observer inside that wrapper, outside its exposed raw inner stream. With original assertions intact, the file passed 23/23. This is diagnostic proof, not a landed fix or green CI. Separate proposal: fix that composition and run the existing semantic-edge and PAPI-6 retry/image coverage plus required checks. Do not change the fixtures or waive CI.
+
+**Separate Intel Mac CI failure.** Standalone `darwin-x64` job `139329092549` timed out in the offline daemon/Python artifact smoke and logged `ENOTEMPTY` during cleanup. The other seven CI standalone jobs passed. No cause or relationship to the session regression established; diagnose separately on an appropriate runner. Those smoke jobs are not the true Pi matrix.
+
+**Hosted artifact build still blocked.** Direct Episode ref matched the exact SHA, workflow `402840615` was active, and exact-SHA workflow lookups showed zero runs. The one authorized fresh artifact-only API dispatch on the same branch, with fixture version `0.10.2.4` and exact catalog `01f4d46dd5157ec73f8faf440214088237c81d59`, returned empty HTTP 500 (request ID `BB5E:202AEF:C4A90A:D2CC21:6B070738`, 16:05:12 UTC). Reconciled afterward: exact ref unchanged, zero matching runs at final observation, and repo-wide exact-SHA observation contained only the failed CI. No further dispatch. Prior successful Pi run `45646823696` used the identical workflow blob on this branch at a different SHA; no artifact or compatibility evidence transfers. Default main declares only `workflow_call`, but this does not establish the cause of HTTP 500. Obtain an admitted artifact-only run after resolving the external dispatch issue; verify the exact final eight archives and installer before nonpublishing rehearsal and hosted-byte lifecycle and compatibility probes. No matching hosted bytes, rehearsal, post-update slash or orderly exit verified in this slice.
+
+Raw evidence: `/tmp/papi61-reconcile-g3gwcgj4` (`semantic/report.md`, reproduced logs, disposable patches, history, GitHub dispatch response, exact-SHA observations, Intel CI log and artifact-verification procedure). No release, public bump, tag, activation, merge, lifecycle or acceptance change.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
