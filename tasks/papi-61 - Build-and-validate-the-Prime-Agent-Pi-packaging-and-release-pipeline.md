@@ -4,7 +4,7 @@ title: Build and validate the Prime Agent Pi packaging and release pipeline
 status: In Progress
 assignee: []
 created_date: '2026-11-24T00:57:00Z'
-updated_date: '2026-11-25T17:56:00Z'
+updated_date: '2026-11-25T17:59:00Z'
 labels: []
 dependencies: []
 documentation:
@@ -479,6 +479,26 @@ Read-only merge audit: inherited `.github/workflows/build-binaries.yml` (active 
 ### Final candidate: exact hosted CI and bundle passed
 
 [CI 45667067518](https://github.com/SailorJoe6/prime-agent-pi/actions/runs/45667067518) attempt 1 passed all 28 jobs on `150ee9eb5fe0184ff913fc7733b7938cb592a7a7`. Required aggregate `139400851321`, eight legacy and eight separate Pi builds passed. Intel legacy `139392064377` diagnostics show Python startup, both persistent cells, shell, exit and close 0, acknowledged teardown and fixture removal. Historical timeout did not recur; cause unknown. All eight API ZIP digests, archive/executable hashes, clean source receipts and pinned catalog `01f4d46dd5157ec73f8faf440214088237c81d59` verified. Exact installer SHA-256 `a275549947442ba8765833335e29fc76033e1dd1e464c3508b4f52efc1f1472e`. Two nonpublishing rehearsals produced identical report SHA-256 `dae88c072c281b39729e4d5724a5ef3b1db5749dca91604f9e5c66b9d094cae4`; stable denied `missing-or-mismatched-stable-bump`. Marked preview allowance and stable policy gates were exercised only in fixture tests. Per-target receipts, logs and commands under `/tmp/papi61-landing-a7f4ojq6`. New offline lifecycle/compatibility checks running on the verified ARM64 musl bytes (`646f72ce53bf58e31163eb5bc22e3df732c9fd6e1255137f2e63651d83a08b3b`). Inherited beta writer still blocks a nonpublishing merge; not invoked.
+
+### Final candidate validation passed; nonpublishing merge still blocked
+
+Exact Episode HEAD `150ee9eb5fe0184ff913fc7733b7938cb592a7a7`: [CI 45667067518](https://github.com/SailorJoe6/prime-agent-pi/actions/runs/45667067518) attempt 1 passed all 28 jobs, including required aggregate, legacy Intel Python diagnostics and all eight true Pi builds. Verified clean source and catalog `01f4d46dd5157ec73f8faf440214088237c81d59` throughout the artifact inventory below. Exact commit installer SHA-256 `a275549947442ba8765833335e29fc76033e1dd1e464c3508b4f52efc1f1472e`; two identical nonpublishing rehearsal reports SHA-256 `dae88c072c281b39729e4d5724a5ef3b1db5749dca91604f9e5c66b9d094cae4`. Stable denied because no explicit bump was provided; separate policy fixtures verify marked preview allowance and stable gates. Neither is a publication or an approval of this fixture version.
+
+Exact hosted ARM64 musl passed offline CLI and TUI install → update (`0.10.2.1` → `0.10.2.4`) → rollback after feed stopped. CLI verified executable hashes, extensions, session export and byte-identical synthetic state. One TUI PTY verified unchanged state on decline, accepted preview opt-in using stable fallback, reopened the same saved session after update and rollback, and `/quit` exited 0. Foreground PID survived re-execs; daemon/worker remained immediately after exit, so no graceful daemon shutdown claim. Both containers removed. Evidence and reproduction under `/tmp/papi61-landing-a7f4ojq6/lifecycle/run-01/RESULT.md`.
+
+Same verified executable passed core Python (default ipython-only, two cells in one fresh kernel), headless Orca 1.4.247 (real PTY, exact durable session and worktree, synthetic extension command), and Prime Claw read-only template review (expected patch, unchanged state). Eight bundled Python skill installs warned offline (`pythonSkills=[]`). No proof of bundled skill installation, Desktop/pairing/routing/recovery, supported-target qualification, upstream parity, live rollout, actual prerelease lifecycle or lifecycle on other targets. Compatibility logs and digest checks under `/tmp/papi61-landing-a7f4ojq6/compat/RESULT.md` and `SHA256SUMS`.
+
+Hosted inventory (digests SHA-256):
+- `darwin-arm64`: artifact `15047332862`, ZIP `sha256:42451ec3e7dbba81f3a6c78595846020c1d80361de33b40c96c8b6139e8768ab`, archive `d5f55eec777a7a75c77c7433d5e89ac4a81896b5ee4885f029b6af6bda73adde`, executable `88b2137addb31a3cc591f81dea2a5f88f95c3a053dbdb55364835e47690e086b`.
+- `darwin-x64`: artifact `15047762634`, ZIP `sha256:8d0cc814678c667555f48d65a1e3821d5635615e3d0cd86daf86222bdeb73d9f`, archive `4f622f3ef88768da02fe8ee66ae9e017cc20ccb3785bce60d40dc1d623118038`, executable `51f9305e4a1dfdd4aea3b2f09cbd097fef80a4130edbfb7c9fd213080589cd22`.
+- `linux-arm64`: artifact `15048520720`, ZIP `sha256:4f3ae76d6b928a430dc57389ad708a71530b4935f762f0ba5288f7cc06804669`, archive `95adecc044d1ce8a081e98b13addd41612287cc48f7d0a9dbdbedd02cb4cd02c`, executable `167e3203cedec49a610ee0788e89e12e3969f62dcae73996ad77b1f114b2bbfb`.
+- `linux-arm64-musl`: artifact `15048391276`, ZIP `sha256:a1a2efb2e96d1ec61ca8ea23291998e7b49ab1f978bb66338c577fecc5715ee7`, archive `646f72ce53bf58e31163eb5bc22e3df732c9fd6e1255137f2e63651d83a08b3b`, executable `e49cf26f8985a4f40335247e93a2419308a19b307491fec3ac23a12942702f45`.
+- `linux-x64`: artifact `15047807216`, ZIP `sha256:711d2a6d0ad2381bc2bcdbc50e3ab84a732ae217d488a8550de1119f379e1aa1`, archive `39849b53035b556e8258a54b740b89faa92b282304d93a53fa8354a4f0ae6e6d`, executable `b94f9483472c66119a1660306b7c1640f909e770fe5d75d30d34a08868ffb9fb`.
+- `linux-x64-baseline`: artifact `15047418013`, ZIP `sha256:e7298457fba6e26eaee98658b0ea38b13e19688bb3252d817969d0802114f7ff`, archive `4a211e75748b6c67abde209ce0f48775f0a695ed1ffed9e2e16738a0472889e7`, executable `16d2b2ed97ae0e04e246d38d6195244f53f8e81c3185a41800ab55038bc35f8d`.
+- `linux-x64-musl`: artifact `15048351186`, ZIP `sha256:4b69b8ac72d10c80eb39a1db1d300325c87653211f5e3c09526d0adcae725ed0`, archive `5a0cb042b1bd37680a02d06792e81957853fe8fda4b4bda03cf63f6794ceea28`, executable `c2b3cac07f39eca248aa029cc624b1373000a5ccd5ceeda3036e66f46c7464ed`.
+- `linux-x64-musl-baseline`: artifact `15047162761`, ZIP `sha256:9f90c65aafaf25100f424013bc31eb489540e39e4c46e64935eafeda3db318ff`, archive `4cb8c316014f4942c598138765da964d2a74073f00db8ca5bf621bc7436e9157`, executable `6e8bb7fdf56c4dda81cb5c91b53a460038dbfb8e7e4c645557b4b37a154c7836`.
+
+The active inherited `.github/workflows/build-binaries.yml` can still publish a legacy R2/GitHub beta after a push to main without a version bump. Owner must verify effective writer isolation or separately authorize a correction before a nonpublishing merge. Nothing was merged, released, tagged, installed live or activated; no writer was invoked. PAPI-61 remains In Progress (0/5); no ownership, lifecycle or acceptance mutation.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
