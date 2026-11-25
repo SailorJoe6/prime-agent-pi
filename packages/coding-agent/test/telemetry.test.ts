@@ -10,11 +10,14 @@ import {
 	symlinkSync,
 	writeFileSync,
 } from "node:fs";
+import * as os from "node:os";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { AssistantMessage } from "@earendil-works/pi-ai";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import * as config from "../src/config.js";
 import type { AgentSession, AgentSessionEvent } from "../src/core/agent-session.js";
+import * as platformMetadata from "../src/core/platform-fidelity.js";
 import { SettingsManager } from "../src/core/settings-manager.js";
 import {
 	captureAgentCommandUsed,
@@ -209,6 +212,30 @@ describe("telemetry identity and transport", () => {
 	});
 });
 
+vi.mock("node:os", async (importOriginal) => {
+	const actual = await importOriginal<typeof os>();
+	return { ...actual, platform: vi.fn(actual.platform), arch: vi.fn(actual.arch) };
+});
+
+const commandHostFixture = {
+	os_family: "linux",
+	architecture: "x64",
+	install_method: "pnpm",
+	libc: "musl",
+	libc_version: "fixture-libc",
+	cpu_baseline: "no_avx2",
+	os_release: "fixture-kernel",
+	os_product_version: "fixture-os",
+} as const;
+
+function stubCommandHostMetadata(): void {
+	const { os_family, architecture, install_method, ...fidelity } = commandHostFixture;
+	vi.mocked(os.platform).mockReturnValue(os_family);
+	vi.mocked(os.arch).mockReturnValue(architecture);
+	vi.spyOn(config, "detectInstallMethod").mockReturnValue(install_method);
+	vi.spyOn(platformMetadata, "platformFidelity").mockReturnValue(fidelity);
+}
+
 describe("PAPI-8 local telemetry mirror", () => {
 	let agentDir: string;
 	let path: string;
@@ -231,6 +258,9 @@ describe("PAPI-8 local telemetry mirror", () => {
 	});
 
 	afterEach(() => {
+		vi.mocked(os.platform).mockReset();
+		vi.mocked(os.arch).mockReset();
+		vi.restoreAllMocks();
 		vi.unstubAllGlobals();
 		rmSync(agentDir, { recursive: true, force: true });
 	});
@@ -247,6 +277,7 @@ describe("PAPI-8 local telemetry mirror", () => {
 	}
 
 	it("mirrors the built-in command event without changing the transport payload", async () => {
+		stubCommandHostMetadata();
 		vi.stubGlobal("fetch", fetchFixture);
 		await captureAgentCommandUsed({
 			agentDir,
@@ -260,6 +291,7 @@ describe("PAPI-8 local telemetry mirror", () => {
 		const { name, timestamp, properties } = batches[0].events[0];
 		expect(name).toBe("agent command used");
 		expect(timestamp).toBe("2026-07-23T00:00:00.000Z");
+		expect(properties).toMatchObject(commandHostFixture);
 		expect(readLines(path)).toEqual([{ name, timestamp, distinct_id: batches[0].installation_id, properties }]);
 	});
 
@@ -309,21 +341,35 @@ describe("PAPI-8 local telemetry mirror", () => {
 		expect(existsSync(path)).toBe(false);
 		expect(batches).toHaveLength(1); // The mirror does not change existing remote queue semantics.
 
+		stubCommandHostMetadata();
 		vi.stubGlobal("fetch", fetchFixture);
 		const settingsManager = SettingsManager.inMemory({ telemetry: { localMirror: true } });
-		await captureAgentCommandUsed({ agentDir, settingsManager, commandName: "model" });
+		const commandFixture = {
+			agentDir,
+			commandName: "model",
+			now: () => Date.UTC(2026, 6, 23),
+			randomId: uuidGenerator(),
+		};
+		await captureAgentCommandUsed({ ...commandFixture, settingsManager });
 		expect(batches).toHaveLength(1);
 		expect(existsSync(path)).toBe(false);
 
 		vi.stubEnv("PRIME_AGENT_TELEMETRY", "");
-		await captureAgentCommandUsed({ agentDir, settingsManager, commandName: "model" });
+		await captureAgentCommandUsed({ ...commandFixture, settingsManager });
 		const retained = readFileSync(path, "utf8");
+		expect(readLines(path)).toEqual([
+			expect.objectContaining({ properties: expect.objectContaining(commandHostFixture) }),
+		]);
 		await captureAgentCommandUsed({
-			agentDir,
+			...commandFixture,
 			settingsManager: SettingsManager.inMemory({ telemetry: { localMirror: false } }),
-			commandName: "model",
 		});
 		expect(batches).toHaveLength(3);
+		for (const batch of batches.slice(1)) {
+			expect(batch.events).toEqual([
+				expect.objectContaining({ properties: expect.objectContaining(commandHostFixture) }),
+			]);
+		}
 		expect(readFileSync(path, "utf8")).toBe(retained);
 	});
 
