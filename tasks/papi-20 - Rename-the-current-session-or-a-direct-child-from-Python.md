@@ -1,10 +1,10 @@
 ---
 id: PAPI-20
 title: Rename the current session or a direct child from Python
-status: In Progress
+status: Blocked
 assignee: []
 created_date: '2026-11-22T22:18:00Z'
-updated_date: '2026-11-25T20:02:00Z'
+updated_date: '2026-11-25T20:04:00Z'
 labels: []
 milestone: m-0
 dependencies: []
@@ -49,3 +49,9 @@ Use released upstream v0.10.0 (763094e1b6a7c17450ee8399b06cda1853847ca5, includi
 
 Reuse the existing persistence, registry and roster controls. No new name store, migration, parallel roster, or generalized reconciliation, plan iteration, or task-decision machinery.
 <!-- SECTION:PLAN:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Implementation paused: the isolated Orca Episode started on Anthropic while the owning session was on OpenAI Codex. The owner stopped the exact Episode; its saved session and worktree remain, and code stayed at the starting commit. Unblock by verifying a supported same-Episode continuation on OpenAI Codex without replaying the initial assignment or creating replacement resources.
+<!-- SECTION:NOTES:END -->
