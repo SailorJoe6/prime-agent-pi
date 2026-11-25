@@ -4,7 +4,7 @@ title: Build and validate the Prime Agent Pi packaging and release pipeline
 status: In Progress
 assignee: []
 created_date: '2026-11-24T00:57:00Z'
-updated_date: '2026-11-25T21:26:00Z'
+updated_date: '2026-11-25T21:28:00Z'
 labels: []
 dependencies: []
 documentation:
@@ -584,6 +584,14 @@ PyPI 50.0.2 has no Intel-compatible macOS wheel; the newest listed non-yanked In
 ### Independent exact-byte ARM64/musl lifecycle passed; Intel still blocks landing
 
 [Run 45700177091](https://github.com/SailorJoe6/prime-agent-pi/actions/runs/45700177091), attempt 1, exact Episode `9903edf3202428e02aface2211eae073257f63ad`, artifact `15062746875`: verified ZIP `sha256:873f4f065dde502660fc9453ca8e1d68fa8ecda58c49421637a1fd6735265a7c`, archive `a1ccd1f779223020877f66282c0e50678983791708bf0dada2315d0ddb11f430`, executable `8060035a6bf2baf4e6f98d0e27249592f389dba483adfb1695dcf23e2fa38dc1`, and installer `a275549947442ba8765833335e29fc76033e1dd1e464c3508b4f52efc1f1472e`. Both CLI and real PTY passed in disposable Alpine 3.21.10 ARM64/musl containers (pinned cached image, `--pull never --network none`, synthetic loopback feed). CLI passed `.1 → .4 → .1` with offline rollback, session export, extension probe, and unchanged synthetic state. PTY passed preview decline without changes, stable fallback after accepting preview selection, offline rollback, same session and transcript prefix, ordered restores and `/quit` exit 0. Immediate post-UI daemon/worker presence leaves graceful daemon shutdown unproven. Both containers were removed. Evidence `/tmp/papi61-offline-45700177091-eubn03p3`. No other platform, live feed, actual preview asset, or publication claim. This does not clear Intel `139508013882` or aggregate `139514031082`. No CI retry or code change.
+
+### Owner continuation: demonstrate a maintained Intel cryptography build input
+
+Owner accepts the scoped exact ARM64/musl CLI and real PTY lifecycle evidence at `409ae6a362f5d93ea10676a76f36891fd862ae49` for `9903edf3202428e02aface2211eae073257f63ad`; no graceful daemon shutdown claim. The local x86_64 probe selected `cryptography 50.0.2` from source and failed as Maturin tried to acquire Rust; this does not establish the cause of the hosted timeout.
+
+On the existing Episode, demonstrate the smallest viable fixture-scoped route: a maintained, verified Intel wheel or a bounded reproducible Intel source build from verified inputs. Consider building the wheel before the timed cold install using an already installed or pinned Rust toolchain; preserve TLS/security verification. Keep real uv, fresh HOME and venv, extracted app/runtime, real skill installation and both Python cells, existing assertions and 300/320-second deadlines. No vulnerable downgrade, seeded installed state, retry-to-green, new production dependency or publisher. Keep diagnostic CI read-only and limited to artifacts or tests.
+
+Publish a correction only if the evidence supports it, only on the Episode branch, with the exact standalone `Legacy-Publication: skip` line on the actual final tip. Then run required exact-SHA nonpublishing CI; verify new artifact receipts and affected exact-byte probes as needed. If no viable route, report the concrete missing input and smallest supported alternative. No main push, writer invocation, release, bump, tag, live upgrade, activation, PAPI-62 or parity work.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
