@@ -4,7 +4,7 @@ title: Rename the current session or a direct child from Python
 status: In Progress
 assignee: []
 created_date: '2026-11-22T22:18:00Z'
-updated_date: '2026-11-25T21:04:00Z'
+updated_date: '2026-11-25T21:08:00Z'
 labels: []
 milestone: m-0
 dependencies: []
@@ -80,6 +80,8 @@ Owner accepted the independently reviewed roster slice at 5d7098c5518b3237be05ef
 Bounded Python slice: expose and test self rename via the existing session-name path, including daemon naming rules and offline reopen. Keep direct-child Python selection and its no-mutation tests for the next slice; no daemon wire change. Include focused roster reopen evidence for AC #4.
 
 Python self-rename slice b74b97ec95e0974412b2b775ebf92584254b41c7: same durable ID/name on reopen; inline child exact sibling collision rejects without changing either name; case-distinct name succeeds. The host rejects target fields in this self-only slice. AC #4 offline: existing agents-view selected live/saved/root dispatch tests plus rlm-ledger live/saved command tests reopen original child ID and file with new name; root/sibling transcripts stay byte-identical and ledger parent/child identity remains stable. No-write negative control failed both reopen tests. Validation: npm run check passed; from packages/coding-agent run ../../node_modules/.bin/tsx ../../node_modules/vitest/dist/cli.js --run test/rlm-ledger.test.ts test/agents-view-mode.test.ts (82 passed) and test/agent-session-recursion.test.ts (93 passed before second new case, then both PAPI-20 cases passed with -t PAPI-20). From prime-agent-runtime run PYTHONPATH=src ~/.prime/agent/kernel-venv/bin/python -m unittest discover -s test -p test_subagent_registry.py (27 passed). No full manual UAT; previously observed unrelated daemon roster fixture was not changed.
+
+Independent review accepted self-rename and AC #4 offline reopen evidence at b74b97ec95e0974412b2b775ebf92584254b41c7. Next candidate: complete Python direct-child rename (AC #2/#3) with exact identity and no mutation on unrelated targets or sibling collision. Address the two accepted gaps within that scope: make missing rename support and recovery visible through existing Python runtime readiness diagnostics without replacing user overrides or breaking v0.9.8 workflows; use existing transcript mechanisms for a visible persisted notice on actual Python renames of already named daemon-backed sessions (not first naming or no-ops), matching released v0.10.0 behavior. Keep roster/root behavior and existing stores. Verify focused positive and negative paths and required checks. Publish exact separate task/code history for full-task review; no merge, activation, or release.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
