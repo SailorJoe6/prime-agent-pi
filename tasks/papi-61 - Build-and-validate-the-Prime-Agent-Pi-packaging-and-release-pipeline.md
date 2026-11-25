@@ -4,7 +4,7 @@ title: Build and validate the Prime Agent Pi packaging and release pipeline
 status: In Progress
 assignee: []
 created_date: '2026-11-24T00:57:00Z'
-updated_date: '2026-11-25T17:06:00Z'
+updated_date: '2026-11-25T17:14:00Z'
 labels: []
 dependencies: []
 documentation:
@@ -429,6 +429,12 @@ The owner accepts manual CI [45659747468](https://github.com/SailorJoe6/prime-ag
 Extend the existing exact-repo and exact-Episode-ref validation gate in CI to `workflow_dispatch` alongside `push`. Preserve normal main/PR behavior, contributor checks, contents-read, no inherited secrets, no Episode catalog PAT and no release writes or triggers. Verify workflow truth table and lint before publishing to the existing Episode branch only. Use the resulting exact-SHA push CI if admitted; otherwise, after reconciliation, use one documented normal manual CI dispatch on that exact ref. No duplicates or retry-to-green.
 
 Verify required CI and eight true Pi archives on the same final SHA, then verify receipts and installer, rehearse the exact hosted bundle without publishing, and finish affected disposable lifecycle and compatibility probes on those bytes, including benign post-upgrade interaction and orderly exit where supported. Continue past intermediate success; report actual readiness or a material blocker with exact evidence and coverage limits. No main changes, version bump, tag, live activation, second host Prime instance, parity, or PAPI-62 expansion. Acceptance and lifecycle remain unchanged.
+
+### Exact-SHA Episode validation admitted
+
+Published `66c4fbb5b52a33ee72869c09d81ce4cde00610e3` only to `refs/heads/JLanders/prime-agent-papi-61-episode-b35069ea`. The CI gate now recognizes `workflow_dispatch` and `push` with the existing repository/ref predicates; `allowed` and contributor vouch were unchanged. Retained contents-read, no inherited secrets, the Episode catalog PAT exclusions and unchanged release workflow. Documented the validation route. Actionlint 1.7.11, an 80-case event/repo/ref/vouch truth table, `npm run check`, test policy and pre-commit passed. Evidence: `/tmp/papi61-final-ci-8p8mgh81`.
+
+GitHub recorded push `51854347013` at `17:12:48Z`. No matching run or suite was visible through `2026-11-25T17:13:41.572634+00:00`. One normal CI-only manual dispatch returned HTTP 204 at `2026-11-25T17:13:43.841561+00:00`, request `B486:B405A:DBB317:EA9E71:6B071746`. [Run 45662495325](https://github.com/SailorJoe6/prime-agent-pi/actions/runs/45662495325) (suite `123550387482`) was admitted as `workflow_dispatch` on `66c4fbb5b52a33ee72869c09d81ce4cde00610e3`, queued when observed. Do not send another trigger. Follow required legacy CI, Intel diagnostics and all eight Pi jobs; use only same-SHA hosted bytes for the nonpublishing bundle rehearsal and disposable compatibility and lifecycle tests. Main, lifecycle and acceptance unchanged.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
