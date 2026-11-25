@@ -4,7 +4,7 @@ title: Build and validate the Prime Agent Pi packaging and release pipeline
 status: In Progress
 assignee: []
 created_date: '2026-11-24T00:57:00Z'
-updated_date: '2026-11-25T15:16:00Z'
+updated_date: '2026-11-25T15:22:00Z'
 labels: []
 dependencies: []
 documentation:
@@ -243,6 +243,27 @@ Owner accepted the roster fixture correction at `3cd00e7125547a6c65db57d80215646
 Read the release engineering docs and map the exact CI artifacts to packaged archives and checksum receipts. Keep CI smoke bytes distinct from full Pi release bytes and use real catalog inputs. Prioritize the next feasible disposable Docker install, update, rollback and compatibility smoke using verified packages and preserved synthetic user state. Separately determine a safe isolated path for exact Orca compatibility, using an approved disposable environment where feasible. Never launch a concurrent Prime Agent instance or daemon on Joe’s Mac, even with isolated paths, or touch the live runtime. Report what was proven and what remains open without transferring evidence between different bytes.
 
 Preserve the Windows README clarification on current main. Keep PAPI-62 and parity out of scope. Publish only scoped Episode changes and native PAPI-61 evidence on existing review refs and stop for owner review. No stable or preview publication, tag, version bump, integration-branch merge, or live activation.
+
+### Accepted candidate: nonpublishing package validation
+
+[Hosted CI 45526096799](https://github.com/SailorJoe6/prime-agent-pi/actions/runs/45526096799) is green at `3cd00e7125547a6c65db57d802156468549e7841`: eight standalone jobs and `build-check-test` passed; no rerun. Downloaded all eight `standalone-<target>` ZIPs. Each ZIP matched its Actions SHA-256; each `prime-agent-0.9.8-<target>.tar.gz` matched both `SHA256SUMS` and `binaries.json`, and each extracted executable matched `executableSha256`. These are standalone smoke bytes, with legacy `install.sh` and no `pi-release.json`, not Pi release packages or the historical frozen artifacts.
+
+| Target | Actions artifact ID | Archive SHA-256 |
+| --- | --- | --- |
+| darwin-arm64 | 14983375293 | `1a2f6dcff1854b6c3a006f77a209573db9a3533507bfef966d1be96dee6052bb` |
+| darwin-x64 | 14982224002 | `4a569416c3fbb2f251cc057523a3204dd21ae84e8d7950d90fe47b33d6e36dc4` |
+| linux-arm64 | 14983016053 | `9950e1d4909582bea1a735f89fe4f778d2ba5bc2ffd4cb12e5ac3fb210e3423e` |
+| linux-arm64-musl | 14981839517 | `58a9b24d5a9c9f7492bb6f854e521f838fb058f1e30ea7bb2385e5ef24853bbc` |
+| linux-x64 | 14981334588 | `e5ea98e021c9fc2c5e886f8b3e8bdd1b32c48ab816fa732e0d6964f000291c58` |
+| linux-x64-baseline | 14981944394 | `8e3182857d4f828437cfc7392148507e5fc3006a3559b4b706a311f125c80135` |
+| linux-x64-musl | 14982422181 | `235c0ad8be3a3e96096663e2595e26c5aa11b0577a8a448271d91620a8955154` |
+| linux-x64-musl-baseline | 14982926069 | `4d4cd817b11a2e8c7717e75be881b03bea54e8fecb9d65259816720d33eeccf0` |
+
+Built only `linux-arm64-musl` in Pi archive mode from clean `3cd00e7125547a6c65db57d802156468549e7841` using Node 22.23.5, Bun 1.4.0 and real catalog `01f4d46dd5157ec73f8faf440214088237c81d59`. Used `node --import tsx scripts/build-pi-native-archive.mjs linux-arm64-musl CATALOG OUTPUT 0.10.2.4`; this version is a local fixture, not a bump or a release. Verified archive `a1edf03a6a3e3f580cb5f2857470dc4b8bbfa84c3d357f980729bf278418a8b8`, executable `c8cd991065d955bab886ef9673f6b821ca03b3414defa8284d604855b66a2677` and exact tagged installer bytes `a275549947442ba8765833335e29fc76033e1dd1e464c3508b4f52efc1f1472e`. Verified previous `0.10.2.1` archive `4d7f32bf488b160c021f2a66f70213ccd454908ed4424727b77981f0880d0c7e` and executable `a44a94406bbc47e95cd74b54ceafb5d3d29841a8e64fcf87a56ffc68993cf7fb` at source `a8b6aa3338f1863121aafd9ef895e0e8b737c419`.
+
+Disposable Docker `alpine@sha256:bc21487101ae47172509130ee1092cc273a831968d64b617776d1f69c81e42ab` (`--rm --init --pull never --network none --platform linux/arm64`, read-only fixture, fresh synthetic home): tagged baseline install → CLI update to `0.10.2.4` → CLI rollback after stopping the loopback HTTPS feed all passed; container absent after exit. First attempt installed baseline but reused a fixture router limited to versions `.1/.2`; corrected the router to `.1/.4`, not product code. Fixture feed advertised placeholder metadata for the seven unserved targets; no full Pi inventory was tested. At all three stages runtime version/help, executable and installed archive receipt, existing session export and ID, extension load and tool/command registration through the public AI import passed. Seeded session, settings, synthetic auth, extension and skill were byte-identical at all stages. No real provider traffic. Exact build/feed receipts, artifact map (including ZIP and executable hashes), and both Docker logs retained in local scratch `papi61-accepted-055s3d22`.
+
+Orca route identified, not run: historical headless image is absent; local `sha256:1822bbcb9182c2d1e564935fe5b09fe6c3e796eeda2db096bef771094ab6c248` has Linux ARM64 Orca 1.4.247 in its image history. In a separate offline disposable fixture, override startup, verify packaged Orca/Node/Orcad and musl identities, and launch only the verified candidate using `orca-ide` with synthetic repo/profile and no pairing, host mounts or sockets. Verify real PTY, expected cwd, exact candidate banner, writable terminal and durable session header, then dispose. This would not prove Mac Orca 1.4.269/Desktop, assignment routing or recovery. Interactive lifecycle and packaged Python on these candidate bytes were not run. No change to the code ref, Windows README, parity, runtime, versions, tags, releases or acceptance criteria.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
@@ -253,4 +274,6 @@ The exact Pi 0.10.2.3 Linux ARM64 musl candidate passed Prime Claw Tier 1 discov
 The npm native bridge fixture now includes its Pi release module dependencies. All 42 focused tests passed locally on Node 22.23.5; repository checks passed. Hosted confirmation and the two separate shard 2/3 failures remain open. No production or release change.
 
 The daemon roster model-change test now supplies isolated settings for its synthetic model. The exact hosted failure reproduced locally before the change; all 28 roster tests passed at each of three shuffle seeds after it. Hosted CI was not rerun on the candidate.
+
+Exact accepted SHA hosted CI and eight standalone smoke artifact chains verified. Separate Pi Linux ARM64 musl fixture passed install, CLI update and offline rollback with byte-identical synthetic user state. An offline headless Orca route was identified but not run; full Pi matrix and exact Orca compatibility remain open.
 <!-- SECTION:FINAL_SUMMARY:END -->
