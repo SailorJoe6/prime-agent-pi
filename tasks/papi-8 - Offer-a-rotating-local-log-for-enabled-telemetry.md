@@ -4,7 +4,7 @@ title: Offer a rotating local log for enabled telemetry
 status: In Progress
 assignee: []
 created_date: '2026-11-22T22:04:00Z'
-updated_date: '2026-11-25T01:28:00Z'
+updated_date: '2026-11-25T01:37:00Z'
 labels: []
 milestone: m-0
 dependencies: []
@@ -60,6 +60,10 @@ Implemented the planned global-only boolean setting and wired all three built-in
 AC 1: captured built-in command transport and compared its synthetic event to exactly one local record with the same timestamp, properties and installation ID. AC 2: exact-limit and crossing-batch fixtures verified readable current and backup records, backup replacement, no empty-batch writes, and 0600 on macOS. AC 3: mirror-off retained the prior log and kept captured remote delivery; effective master opt-out suppressed new command capture and queued local writes. A forced rotation failure did not prevent transport.
 
 Validation (Node v25.6.0): from packages/coding-agent, `npx tsx ../../node_modules/vitest/dist/cli.js --run test/telemetry.test.ts test/settings-manager.test.ts` passed 63/63, also with `--sequence.shuffle --sequence.seed=11` and `--sequence.shuffle --sequence.seed=29`. Root `npm run check:test-policy` and `npm run check` passed. In disposable copies the settings tests detected a combined truthiness/precedence mutant; each of seven separate delivery mutants (record key, two cap comparisons, live opt-out, mirror choice, rotation error handling, and backup mode) failed a PAPI-8 test. No live telemetry used. Windows ACL behavior was not exercised.
+
+Owner-approved review follow-up: only packages/coding-agent/test/telemetry.test.ts changed. Both built-in command fixtures now stub platform, architecture, platform fidelity, and install method, use deterministic timestamps and IDs, and verify synthetic host properties in the JSONL and captured transport. Command capture, the JSONL writer, and transport assertions remain active; no real host metadata from these two fixtures or outbound telemetry. No production changes.
+
+On Node v25.6.0, from packages/coding-agent, `npx tsx ../../node_modules/vitest/dist/cli.js --run test/telemetry.test.ts` passed 13/13, also with `--sequence.shuffle --sequence.seed=11` and `--sequence.shuffle --sequence.seed=29`. Root `npm run check:test-policy`, `npm run check`, and `git diff --check` passed. In a disposable copy, replacing the synthetic OS release in the event with a different fixture value failed both revised tests at the transport and JSONL assertions respectively; the other three PAPI-8 cases passed. Removed the disposable copy.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
