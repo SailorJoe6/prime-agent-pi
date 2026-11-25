@@ -4,7 +4,7 @@ title: Build and validate the Prime Agent Pi packaging and release pipeline
 status: In Progress
 assignee: []
 created_date: '2026-11-24T00:57:00Z'
-updated_date: '2026-11-25T21:19:00Z'
+updated_date: '2026-11-25T21:25:00Z'
 labels: []
 dependencies: []
 documentation:
@@ -574,6 +574,12 @@ Owner accepted the partial package evidence at `52dbb7b4aa213ad0835ffdcdc3ae8b1e
 Start with bounded, sanitized stage/dependency evidence. Prefer the smallest deterministic fixture correction supported by evidence. A pinned, verified Intel-compatible local dependency source scoped to this test is an option only if justified; keep real uv, a fresh HOME and venv, the real extracted runtime and skill installation, existing assertions, and 300/320-second deadlines. Distinguish cold local installation from public package acquisition. Change teardown only where evidence warrants it: use observed exit/quiescence of fixture-owned resources, preserve the original failure, and avoid broad process kills or polling as synchronization. No retry-to-green or relaxed/skipped gate. Continue independent exact-byte probes where useful; partial evidence does not clear the required failure.
 
 Preserve Pi-only updates, current main ancestry, the exact standalone `Legacy-Publication: skip` line on the actual final tip, and writer isolation. After a justified fix, use required exact-SHA nonpublishing CI and package checks; report exact readiness evidence or a concrete unresolved blocker. No main push, writer, release, version bump, tag, live install, activation, parity, or PAPI-62 work.
+
+### Intel blocker narrowed: current Intel resolution selects a native cryptography source build
+
+[Hosted failure 139508013882](https://github.com/SailorJoe6/prime-agent-pi/actions/runs/45700177091/job/139508013882) is still uncorrected. Its sanitized labels do not identify the package or exact cause; separate `ENOTEMPTY` is not causal evidence. On Apple Silicon under Rosetta, a bounded dependency-only probe used SHA-256 verified Intel `uv 0.11.7`, x86_64 CPython 3.11.15, a fresh HOME/cache/venv, real base install args, and Python sources extracted from the verified `9903edf3202428e02aface2211eae073257f63ad` Pi Intel archive (archive SHA-256 `60ca15e32afb79d2298f9bb307f466652a35af42dd5304626eef70d512344904`). Python and venv creation passed. The open resolver selected `cryptography==50.0.2` as an sdist, entered the Maturin build and tried to acquire an Intel Rust toolchain. It failed locally at TLS certificate verification in 9.65 s of base install, not at the hosted deadline; the hosted resolver outcome, specific stall and teardown causality remain unproved. Sanitized receipt: `/var/folders/4_/twy0wz3s1mq650wnqzn1b8rr0000gq/T/papi61-intel-evidence-crofhlji/sanitized-summary.json`.
+
+PyPI 50.0.2 has no Intel-compatible macOS wheel; the newest listed non-yanked Intel CPython 3.11 wheel is 48.0.1 and is affected by GHSA-m2h6-j472-rp4c, GHSA-jwv3-5hgf-82ww and GHSA-g6cj-pr64-35w5. Do not pin that wheel or allow a wheel-only resolver to silently backtrack to it. The shipped runtime lock does not constrain the smoke's pip install and does not cover the full closure. No justified drop-in wheel or validated deterministic current-version build input is available from the bounded investigation. To unblock, demonstrate a maintained, checksum-verified Intel wheel (or a bounded, reproducible Intel source build for a maintained version), scoped to the fixture; then pass exact-SHA Intel and aggregate with the existing real runtime and skill install, both cells, and 300/320-second deadlines. Distinguish cold installation from public acquisition. No repo code change, no speculative teardown fix, no CI retry or release.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
