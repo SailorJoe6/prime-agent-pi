@@ -4,7 +4,7 @@ title: Rename the current session or a direct child from Python
 status: In Progress
 assignee: []
 created_date: '2026-11-22T22:18:00Z'
-updated_date: '2026-11-25T21:19:00Z'
+updated_date: '2026-11-25T21:25:00Z'
 labels: []
 milestone: m-0
 dependencies: []
@@ -94,6 +94,8 @@ Independent review accepted self-rename and AC #4 offline reopen evidence at b74
 Full-task candidate 5199fde647258e8a13fcf8a04ad16e0086903bfb: Python module and REPL rename self or an exact direct child by handle, registry row or ID. Display names, unrelated or nested targets outside the caller's direct scope, and sibling conflicts are rejected without transcript changes. Resident and saved daemon targets keep durable ID/path and update roster/ledger; saved children are not hydrated. Actual Python renames of an already named daemon session persist a visible notice in the renamed transcript. No first-name/no-op notice and no wire or store change. The existing kernel diagnostics warn on missing direct-child rename and give recovery instructions without replacing a configured interpreter or blocking otherwise supported Python workflows.
 
 Offline validation: npm run check and git diff --check passed. From packages/coding-agent, run ../../node_modules/.bin/tsx ../../node_modules/vitest/dist/cli.js --run with test/agent-session-recursion.test.ts (95 passed), test/rlm-ledger.test.ts (34), test/agents-view-mode.test.ts and test/daemon-supervisor-lazy-subagents.test.ts (70 combined), test/kernel-bootstrap-runtime-ready.test.ts and test/kernel-bootstrap.test.ts (30 combined). PAPI-20 ledger and runtime focused tests each passed with --sequence.shuffle --sequence.seed=41 and =73. From prime-agent-runtime run PYTHONPATH=src ~/.prime/agent/kernel-venv/bin/python -m unittest discover -s test -p test_subagent_registry.py (28 passed). Before implementation selector tests failed on missing Python/host dispatch; removing warning and transcript notice writers failed all six targeted tests, then restored code passed all six. No manual UAT, unrelated roster fixture repair, merge, activation or release.
+
+Independent review of 5199fde647258e8a13fcf8a04ad16e0086903bfb accepted self/roster reopen, scope checks, stale-runtime guidance and transcript notices. Revision pending: (1) after Python rename of a passivated direct child, keep the supervisor public roster and sibling collision view current without a new store; prove stable identity and no mutation on rejection. (2) after reusing the former name, Python collect by current name must select the replacement without losing collection of the original run by stable ID/handle. Existing candidate evidence above is historical, not proof that these regressions are resolved. At handoff the prior readiness child still showed active model work with four queued items and no confirmed finish; the Episode code worktree was clean. Account for that exact descendant before code edits. Revalidate offline and publish separate exact code/task revisions. No merge, release, activation or unrelated cleanup.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
