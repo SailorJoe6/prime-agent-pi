@@ -1,10 +1,10 @@
 ---
 id: PAPI-20
 title: Rename the current session or a direct child from Python
-status: Blocked
+status: In Planning
 assignee: []
 created_date: '2026-11-22T22:18:00Z'
-updated_date: '2026-11-25T20:11:00Z'
+updated_date: '2026-11-25T20:12:00Z'
 labels: []
 milestone: m-0
 dependencies: []
@@ -54,10 +54,6 @@ Reuse the existing persistence, registry and roster controls. No new name store,
 
 <!-- SECTION:NOTES:BEGIN -->
 Implementation paused: the isolated Orca Episode started on Anthropic while the owning session was on OpenAI Codex. The owner stopped the exact Episode; its saved session and worktree remain, and code stayed at the starting commit. Unblock by verifying a supported same-Episode continuation on OpenAI Codex without replaying the initial assignment or creating replacement resources.
+
+Initial Episode retired without code changes. Replacement authorized. Prime Claw launched Prime Agent, which used the last-selected model. If the replacement starts on the wrong model, pause it in place for the operator to switch.
 <!-- SECTION:NOTES:END -->
-
-## Final Summary
-
-<!-- SECTION:FINAL_SUMMARY:BEGIN -->
-Prime Claw abandonment: task PAPI-20; pushed Episode head 60b6cf70dc7b207f6ec6c98ae599a876a6a7b2fb; code was not merged.
-<!-- SECTION:FINAL_SUMMARY:END -->
