@@ -4,7 +4,7 @@ title: Retry the same model on an explicitly permitted provider
 status: In Progress
 assignee: []
 created_date: '2026-11-22T22:03:00Z'
-updated_date: '2026-11-25T14:00:00Z'
+updated_date: '2026-11-25T14:02:00Z'
 labels: []
 milestone: m-0
 dependencies: []
@@ -62,10 +62,12 @@ Review revision: use request input for same-model compatibility; cover image-bea
 Slice 1 implemented global opt-in exact route matching, per-provider retry budget, turn-scoped restore and existing backup precedence. Released v0.10.0 tag resolves to 763094e1b6a7c17450ee8399b06cda1853847ca5 (provider_failover.rs; 8 total retry decisions). Retry suite seed 61 passed all 61 tests. Disabling route resolution made the new faux request-order test fail as expected. npm run check passed. Supplementary image-model-override suite passed 13/14; existing “refuses an unusable imageModel” also failed with the two unmodified production files at base caa95ae869730cc94f13821d973e523bdadd98d8 using the same generated catalog. Remaining before claiming full validation: focused multi-alternate/ceiling, deterministic failure, cancellation and capped quota wait cases.
 
 Slice 2 completed the recorded focused offline validation with four additional faux-provider regressions: configured provider order and exactly eight decisions (nine requests, no third alternate); deterministic invalid request stops on the first alternate; cancelling an alternate retry wait makes no further request; an over-cap quota reset parks instead of switching and the wake runs on the original route. Terminal failure and cancellation also return subsequent prompts to the original route. Deliberately raising the ceiling, routing permanent failures, omitting cancel restoration, or bypassing quota parking caused the corresponding tests to fail; all temporary mutations were reverted. Run from packages/coding-agent: npx tsx ../../node_modules/vitest/dist/cli.js --run test/suite/agent-session-retry-events.test.ts --sequence.shuffle --sequence.seed=806 (also 608); both passed 65/65. npm run check passed. No runtime edits were needed in this slice; the unchanged-base image override failure remains outside scope.
+
+Review revision implemented the three accepted v0.10.0 parity fixes: use image content in the actual provider request for alternate compatibility; preserve structured Retry-After precedence and parse a quota reset from error text only when the header is absent; stop opt-in retry on a structured 404 with the specific unsupported-tool-use marker. Ordinary routing 404s and legacy/default retry behavior remain unchanged. Five added faux cases plus the tightened structured-header parking case passed: 70/70 with each of shuffle seeds 806 and 608 (from packages/coding-agent: npx tsx ../../node_modules/vitest/dist/cli.js --run test/suite/agent-session-retry-events.test.ts --sequence.shuffle --sequence.seed=806; repeat at 608). The text route, both terminal 404 cases and text quota fallback failed before the fixes; the image-history and header-priority cases caught deliberate breakage, then mutations were reverted. npm run check passed. No live provider calls; known baseline image-model test failure remains out of scope.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
 
 <!-- SECTION:FINAL_SUMMARY:BEGIN -->
-Implemented explicit same-model, post-budget provider failover with an eight-decision ceiling and turn-scoped restoration. Legacy providerBackupModel retains immediate precedence; fresh-session and child discovery are unchanged. Focused offline validation is complete and the candidate awaits independent review. No live-provider tests were performed.
+Implemented explicit same-model, post-budget provider failover with an eight-decision ceiling and original-route restoration. The review revision preserves image-bearing requests, structured Retry-After priority and quota parking, and rejects the specific tool-capability 404 without changing ordinary routing 404 or legacy backup behavior. Candidate awaits independent review.
 <!-- SECTION:FINAL_SUMMARY:END -->
