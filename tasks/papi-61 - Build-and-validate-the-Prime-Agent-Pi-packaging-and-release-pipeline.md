@@ -4,7 +4,7 @@ title: Build and validate the Prime Agent Pi packaging and release pipeline
 status: In Progress
 assignee: []
 created_date: '2026-11-24T00:57:00Z'
-updated_date: '2026-11-25T15:44:00Z'
+updated_date: '2026-11-25T15:46:00Z'
 labels: []
 dependencies: []
 documentation:
@@ -314,6 +314,12 @@ Artifact-only [run 45646823696](https://github.com/SailorJoe6/prime-agent-pi/act
 **Integration path, not executed.** Direct current `main` `c87cd0598acaae6ee806a77a8b31f1ca3f845bdb`. `git merge-tree --write-tree --name-only c87cd0598acaae6ee806a77a8b31f1ca3f845bdb 3cd00e7125547a6c65db57d802156468549e7841` clean, tree `812c2a6f502f5c4da2c301538e11cf9bf5b5d8b9`; no commit, ref, or worktree switch. Preview retains the Windows Git Bash/WSL README paragraph, the failover docs/settings, and the unchanged main failover implementation and retry-events suite. With owner approval, prepare an isolated review candidate on fresh main, retain its startup templates/Windows README/failover and the Pi update options where command registry and settings overlap. Review both parent diffs; run check, test policy, focused failover/retry/settings and Pi updater/installer/public-command tests, then hosted CI and the real-catalog artifact-only matrix on the new SHA. Rehearse the new manifest and repeat affected disposable checks on changed artifact bytes; reuse exact-byte evidence only where hashes match. Do not merge or publish a release from this slice.
 
 Local evidence retained under `papi61-current-d68hcetn`: workflow.json, verified.json, both rehearsal reports, integration diff, and Python/Prime Claw/interactive fixture scripts and logs. No code, acceptance, task lifecycle or ownership change; stable publication, combined-tree execution and out-of-scope compatibility claims remain open.
+
+### Accepted matrix and compatibility evidence; integrate on existing Episode branch
+
+Owner accepted scoped evidence at `0487c38202c4b53c8b2da9645901d04ea1db39e9`: eight true Pi archives, two real-assets nonpublishing rehearsals, and compatibility on only the retained exact local Linux ARM64 musl bytes. Do not rerun unchanged evidence or attribute it to different hosted bytes.
+
+Next execute: fetch and verify current published main, then merge that exact main commit into this existing Episode branch only, without rewriting history or changing main. Review both parent diffs and preserve Windows README/setup, provider failover, startup templates, and Pi update paths. Run required repository checks, focused overlapping tests, hosted CI and the artifact-only eight-target real-catalog matrix for the exact integrated SHA. If successful, use the actual hosted archive for applicable affected lifecycle and compatibility probes in disposable environments, with faux/local inputs and no provider credentials. Verify benign post-update slash interaction and orderly exit if supported; distinguish harness limits from product defects. Reuse earlier evidence only when bytes match. Finish feasible checks before returning; report concrete material defects or external blockers separately from completed evidence. Publish scoped code and task evidence only on existing review refs. No main merge, release, public bump, tag, live activation, concurrent host Prime Agent, PAPI-62 or feature-parity expansion.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
