@@ -116,10 +116,16 @@ smoke logs Python stages without changing its assertions or deadlines. Check the
 branch tip and existing runs before dispatch, then verify the SHA GitHub admitted.
 The version input labels artifacts only; it does not bump or publish a release.
 
-The inherited `build-binaries.yml` writer is separate. A push to main can still
-publish legacy beta artifacts and update its moving prerelease if configured,
-even with no version bump. That is not a Pi preview. Verify that the inherited
-writer cannot publish before a nonpublishing merge.
+The inherited `build-binaries.yml` writer is separate. An unmarked push to main
+can publish a legacy beta even without a version bump; that is not a Pi preview.
+For a deliberately nonpublishing landing, put the case-sensitive line
+`Legacy-Publication: skip` (no indentation or trailing spaces) in the actual
+pushed head commit message. Fast-forward main to the reviewed SHA; do not squash,
+rebase, or create a merge commit and assume the marker transfers. A marker on an
+intermediate commit does not count. For that main push, the release workflow
+skips release-context resolution and all dependent jobs, before either R2 or
+GitHub publication can be selected. Ordinary CI still runs; PR validation and
+explicit tag and manual release behavior are unchanged.
 
 Before rehearsing, check that `build-check-test` passed, all eight `pi-native-*`
 artifacts came from that run, and each receipt names that SHA and catalog pin.

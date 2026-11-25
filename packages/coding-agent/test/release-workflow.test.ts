@@ -9,6 +9,7 @@ import { NATIVE_PLATFORMS } from "../src/utils/native-installation.js";
 interface Step {
 	name?: string;
 	id?: string;
+	env?: Record<string, string>;
 	run?: string;
 	uses?: string;
 	if?: string;
@@ -59,6 +60,64 @@ function requiresSuccess(job: Job): void {
 }
 
 describe("release workflow signature gates", () => {
+	it("PAPI-61 gates only main pushes before release context and leaves ordinary CI separate", () => {
+		const trust = release.jobs.trust!;
+		const optOut = step(trust, "Check main push publication opt-out");
+		expect(optOut.if).toBe("github.event_name == 'push' && github.ref == 'refs/heads/main'");
+		expect(optOut.env).toEqual({
+			HEAD_COMMIT_SHA: `\${{ github.event.head_commit.id }}`,
+			HEAD_COMMIT_MESSAGE: `\${{ github.event.head_commit.message }}`,
+		});
+		expect(optOut.run).not.toContain("${{");
+		expect(trust.outputs?.legacy_publication).toBe(`\${{ steps.legacy-publication.outputs.allowed }}`);
+		const context = release.jobs["release-context"]!;
+		expect(context.needs).toBe("trust");
+		expect(context.if).toBe(
+			"needs.trust.outputs.allowed == 'true' && (github.event_name != 'push' || github.ref != 'refs/heads/main' || needs.trust.outputs.legacy_publication == 'true')",
+		);
+		expect(release.on).toMatchObject({ push: { branches: ["main"], tags: ["v*"] } });
+		expect(release.on).toHaveProperty("workflow_dispatch.inputs.release_tag");
+		const ci: Workflow = parse(readFileSync(join(repository, ".github/workflows/ci.yml"), "utf8"));
+		expect(ci.on).toMatchObject({ push: { branches: ["main"] } });
+		expect(JSON.stringify(ci)).not.toMatch(/legacy.publication|head_commit/);
+	});
+
+	// test-policy: allow conditional-or-disabled-test -- exercises the Ubuntu workflow's Bash step directly
+	it.skipIf(process.platform === "win32")("PAPI-61 matches the exact pushed head message line as data", () => {
+		const optOut = step(release.jobs.trust!, "Check main push publication opt-out");
+		const directory = mkdtempSync(join(tmpdir(), "prime-release-opt-out-"));
+		try {
+			for (const [message, sha, expected] of [
+				["Normal commit", "tip", "allowed=true\n"],
+				["Subject\n\nLegacy-Publication: skip\n\nOther: value", "tip", "allowed=false\n"],
+				["Legacy-Publication: skip", "tip", "allowed=false\n"],
+				["Not Legacy-Publication: skip", "tip", "allowed=true\n"],
+				[" Legacy-Publication: skip", "tip", "allowed=true\n"],
+				["Legacy-Publication: skip ", "tip", "allowed=true\n"],
+				["legacy-publication: skip", "tip", "allowed=true\n"],
+				["Legacy-Publication: skip", "", ""],
+				["Legacy-Publication: skip", "previous-commit", ""],
+			] as const) {
+				const output = join(directory, "output");
+				writeFileSync(output, "");
+				const result = spawnSync("bash", ["-e", "-o", "pipefail", "-c", optOut.run!], {
+					encoding: "utf8",
+					env: {
+						...process.env,
+						GITHUB_SHA: "tip",
+						HEAD_COMMIT_SHA: sha,
+						HEAD_COMMIT_MESSAGE: message,
+						GITHUB_OUTPUT: output,
+					},
+				});
+				expect(result.status, `${message}: ${result.stderr}`).toBe(expected ? 0 : 1);
+				expect(readFileSync(output, "utf8")).toBe(expected);
+			}
+		} finally {
+			rmSync(directory, { recursive: true, force: true });
+		}
+	});
+
 	it("requires successful build and both native final validation jobs before publication", () => {
 		const validation = release.jobs["validate-macos"]!;
 		expect(validation.needs).toEqual(expect.arrayContaining(["release-context", "build"]));
