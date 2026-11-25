@@ -4,7 +4,7 @@ title: Build and validate the Prime Agent Pi packaging and release pipeline
 status: In Progress
 assignee: []
 created_date: '2026-11-24T00:57:00Z'
-updated_date: '2026-11-25T16:50:00Z'
+updated_date: '2026-11-25T16:54:00Z'
 labels: []
 dependencies: []
 documentation:
@@ -403,6 +403,12 @@ Reconcile the exact Episode ref, runs and check suites again immediately before 
 Immediately before the one authorized fresh event, the exact original `62bfa7982b0fc630e8537e31a947f8c9dac8067e` had zero visible Actions runs and zero check suites and remained the direct Episode ref. Published `569852b22545237fb52cda19649fa41dcf33a77c` by one normal non-force push to `refs/heads/JLanders/prime-agent-papi-61-episode-b35069ea`. The commit changed no files; its tree is `4904ed9db8ab3dfaaff9c9837240acebec82dfbf`, identical to the reviewed parent. Pre-commit checks passed. The direct remote ref now points to the new commit, main remains `c87cd0598acaae6ee806a77a8b31f1ca3f845bdb`, and GitHub repository activity recorded the push at `2026-11-25T16:49:08Z`.
 
 Through `2026-11-25T16:50:34.978408+00:00`, the exact-SHA Actions runs and commit check suites APIs returned zero for both commits. This is an observation, not proof of historical non-admission or a cause. No second recovery trigger, dispatch, permission change, history rewrite, or release operation. Required hosted CI, Intel diagnosis, the eight Pi artifacts, bundle rehearsal, and dependent lifecycle probes remain unverified. Resume only when an exact supported nonpublishing run is visible or the owner clears the event-processing blocker. Evidence: `/tmp/papi61-recovery-885zau8v`.
+
+### Owner continuation after formal GitHub incident resolution
+
+The owner accepts recovery evidence `619afb56ac74fcb5251592cc384d126a8bae48be` for continued validation, not merge. GitHub formally resolved the Actions incident at 16:52:16 UTC, after both pushes. Independent read-only review found an exact case-matching branch trigger, no skip marker, an active workflow, Actions enabled, and no visible runs or check suites at either exact SHA. The internal cause remains unknown.
+
+For unchanged Episode head `569852b22545237fb52cda19649fa41dcf33a77c`, reconcile direct ref, exact CI runs and check suites again. If CI is already present, follow it; otherwise use one documented normal manual CI workflow dispatch on the exact branch (`402840609`) after formal resolution. This is one fresh admission probe, not a job rerun. Capture the HTTP outcome, sanitized request ID and actual admitted SHA. No further empty push, standalone dispatch, or release workflow. Follow any admitted CI to results. Manual CI as currently configured does not enable the push-only Pi matrix or Intel diagnostics. If admission works, evaluate the smallest supported change to reach those exact nonpublishing jobs through the working CI trigger without changing trust or permissions or enabling release writes. Obtain final exact-SHA results before bundle verification. If no run is admitted, stop triggering and return a support-ready report with sanitized request and push activity IDs. No main changes, release, bump, tag, activation, parity, PAPI-62, or acceptance/lifecycle changes.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
