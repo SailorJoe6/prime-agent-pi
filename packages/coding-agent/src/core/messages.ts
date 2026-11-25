@@ -331,6 +331,17 @@ export interface CustomMessage<T = unknown> {
 	timestamp: number;
 }
 
+export function createPythonRenameNotice(previousName: string | undefined, name: string): CustomMessage | undefined {
+	if (!previousName || previousName === name) return undefined;
+	return {
+		role: "custom",
+		customType: "session-rename",
+		content: `Session renamed from ${JSON.stringify(previousName)} to ${JSON.stringify(name)}.`,
+		display: true,
+		timestamp: Date.now(),
+	};
+}
+
 export interface HeartbeatPromptDetails {
 	jobId: string;
 	schedule: string;

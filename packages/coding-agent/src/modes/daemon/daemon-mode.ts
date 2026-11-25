@@ -90,6 +90,7 @@ import {
 	resolveHeartbeatStreamingBehavior,
 	shouldDeferHeartbeatCronJob,
 } from "../../core/cron-jobs.js";
+import { createPythonRenameNotice } from "../../core/messages.js";
 import { ORPHAN_PROCESS_JOURNAL_ENV } from "../../core/orphan-process-journal.js";
 import { PromptAdmissionCancelledError, waitForPromptAdmission } from "../../core/prompt-admission.js";
 import { providerRetryPolicy } from "../../core/provider-retry.js";
@@ -97,6 +98,7 @@ import type {
 	CreateRlmRootSessionOptions,
 	CreateRlmSubagentRuntimeOptions,
 	RlmCreateSessionResult,
+	RlmSubagentRegistryEntry,
 	SubagentRuntimeHost,
 } from "../../core/rlm-runtime.js";
 import {
@@ -107,6 +109,7 @@ import {
 import { deleteSessionArtifacts, deleteSessionFile } from "../../core/session-file-actions.js";
 import { acquireSessionLease, canonicalSessionPath, type SessionLease } from "../../core/session-lease.js";
 import {
+	appendCustomMessageToExistingFile,
 	getSessionArtifactPathForFile,
 	readSessionInfo,
 	resolveSessionRlmDepth,
@@ -3375,6 +3378,8 @@ export class AgentDaemon {
 			family: () => this.createAgentFamily(requireCurrentState()),
 			assertSessionNameAvailable: (input) => this.assertFamilySessionNameAvailable(input),
 			setSessionName: (name) => this.setStateSessionNameViaSupervisor(requireCurrentState(), name),
+			renameSessionFromPython: (name) => this.renameStateSessionFromPython(requireCurrentState(), name),
+			renameDirectRlmChild: (child, name) => this.renameDirectRlmChild(requireCurrentState(), child, name),
 			sendAgentMessage: (input) =>
 				this.sendAgentSessionMessage({
 					targetSelector: input.target,
@@ -4376,39 +4381,7 @@ export class AgentDaemon {
 				}
 				if (state) {
 					await this.setStateSessionNameForCommand(state, name);
-				} else {
-					const info = await readSessionInfo(command.sessionPath);
-					if (!info) throw new Error(`Session not found: ${command.sessionPath}`);
-					const depth = info.rlmDepth ?? 0;
-					await this.withSessionNameReservation(
-						{
-							name,
-							depth,
-							...(depth > 0 && info.parentSessionPath ? { parentSessionPath: info.parentSessionPath } : {}),
-						},
-						async () => {
-							await this.assertFamilySessionNameAvailable(
-								{
-									name,
-									depth,
-									...(depth > 0 && info.parentSessionPath
-										? { parentSessionPath: info.parentSessionPath }
-										: {}),
-									ignoreSessionId: info.id,
-								},
-								undefined,
-								true,
-							);
-							SessionManager.open(command.sessionPath).appendSessionInfo(name);
-							await this.rlmSpawnLedger()
-								.appendRenameByChildPath(command.sessionPath, name)
-								.catch((error) => {
-									this.log(
-										`failed to append RLM ledger rename: ${error instanceof Error ? error.message : String(error)}`,
-									);
-								});
-						},
-					);
+					await this.setSavedSessionName(command.sessionPath, name);
 				}
 				return success(command.id, "rename_saved_session");
 			}
@@ -5991,6 +5964,118 @@ export class AgentDaemon {
 		} finally {
 			this.pendingSessionNames.delete(key);
 		}
+	}
+
+	private async renameStateSessionFromPython(state: ActiveSessionState, name: string): Promise<void> {
+		const session = state.runtime.session;
+		const normalizedName = name.trim();
+		const previousName = session.sessionName;
+		if (normalizedName === previousName) return;
+		await this.setStateSessionNameViaSupervisor(state, normalizedName);
+		session.appendPythonRenameNotice(previousName, normalizedName);
+	}
+
+	private async renameDirectRlmChild(
+		parent: ActiveSessionState,
+		child: RlmSubagentRegistryEntry,
+		name: string,
+	): Promise<void> {
+		const normalizedName = name.trim();
+		if (!normalizedName) throw new Error("Session name cannot be empty");
+		const missing = () => new Error(`Unknown direct RLM child: ${child.rlm_child_id}`);
+		const assertParent = () => {
+			if (this.sessions.get(parent.activeSessionId) !== parent || this.closingSessions.has(parent.activeSessionId)) {
+				throw missing();
+			}
+		};
+		const matchesResidentChild = (state: ActiveSessionState) => {
+			const { metadata, session } = state.runtime;
+			return (
+				metadata.kind === "subagent" &&
+				metadata.parentActiveSessionId === parent.activeSessionId &&
+				metadata.parentSessionId === parent.runtime.session.sessionId &&
+				metadata.rlmChildId === child.rlm_child_id &&
+				session.sessionId === child.session_id
+			);
+		};
+		assertParent();
+		const resident = this.listTargetableSessionStates(parent).find(matchesResidentChild);
+		if (resident) {
+			return this.renameStateSessionFromPython(resident, normalizedName);
+		}
+		const parentFile = parent.runtime.session.sessionFile;
+		if (!parentFile) throw missing();
+		const parentPath = canonicalSessionPath(parentFile);
+		const passive = (await this.listPassiveRlmSubagents()).find(
+			({ entry, info }) =>
+				entry.childId === child.rlm_child_id &&
+				info.id === child.session_id &&
+				entry.parentSessionId === parent.runtime.session.sessionId &&
+				entry.parentSessionFile !== undefined &&
+				canonicalSessionPath(entry.parentSessionFile) === parentPath,
+		);
+		assertParent();
+		if (!passive) throw missing();
+		const sessionPath = passive.entry.sessionFile;
+		// Use the saved-session writer, not a runtime open. The exact child may
+		// become resident meanwhile; don't write behind a live session manager.
+		return this.setSavedSessionName(sessionPath, normalizedName, {
+			parent,
+			info: passive.info,
+			assertWritable: () => {
+				assertParent();
+				const key = resolve(sessionPath);
+				if (
+					this.findActiveSessionByFile(sessionPath) ||
+					this.openingSessions.has(key) ||
+					this.reservingSessionOpens.has(key)
+				) {
+					throw new Error(`RLM child is opening: ${child.rlm_child_id}`);
+				}
+			},
+		});
+	}
+
+	private async setSavedSessionName(
+		sessionPath: string,
+		name: string,
+		python?: { parent: ActiveSessionState; info: SessionInfo; assertWritable: () => void },
+	): Promise<void> {
+		const info = python?.info ?? (await readSessionInfo(sessionPath));
+		if (!info) throw new Error(`Session not found: ${sessionPath}`);
+		const depth = info.rlmDepth ?? 0;
+		const parentSessionPath = python?.parent.runtime.session.sessionFile ?? info.parentSessionPath;
+		const reservation = { name, depth, ...(depth > 0 && parentSessionPath ? { parentSessionPath } : {}) };
+		return this.withSessionNameReservation(reservation, async () => {
+			await this.assertFamilySessionNameAvailable(
+				{ ...reservation, ignoreSessionId: info.id },
+				python?.parent,
+				true,
+			);
+			python?.assertWritable();
+			const manager = SessionManager.open(sessionPath);
+			if (python && manager.getSessionId() !== info.id) throw new Error(`Session changed: ${sessionPath}`);
+			const previousName = manager.getSessionName();
+			if (python && previousName === name) return;
+			manager.appendSessionInfo(name);
+			const notice = python ? createPythonRenameNotice(previousName, name) : undefined;
+			if (notice) {
+				appendCustomMessageToExistingFile(
+					sessionPath,
+					notice.customType,
+					notice.content,
+					notice.display,
+					notice.details,
+				);
+			}
+			await this.rlmSpawnLedger()
+				.appendRenameByChildPath(sessionPath, name)
+				.catch((error) => {
+					this.log(
+						`failed to append RLM ledger rename: ${error instanceof Error ? error.message : String(error)}`,
+					);
+				});
+		});
 	}
 
 	private async setStateSessionNameViaSupervisor(state: ActiveSessionState, name: string): Promise<void> {

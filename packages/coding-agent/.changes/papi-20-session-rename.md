@@ -1,2 +1,2 @@
 - Added roster rename for selected live or saved subagents using the existing rename shortcut.
-- Added `await rlm.rename("new-name")` to rename the current Python session without changing its identity.
+- Added `await rlm.rename("new-name")` to rename the current session, or pass `session_id` to rename a direct child by handle or exact ID without changing its identity.

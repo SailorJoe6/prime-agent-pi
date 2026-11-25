@@ -19,6 +19,22 @@ class RlmSubagentRegistryTest(unittest.TestCase):
                 reply.assert_awaited_once_with("rlm.rename", {"name": "  new-name  "})
                 reply.reset_mock()
 
+    def test_rename_selects_a_direct_child_by_handle_row_or_id(self) -> None:
+        handle = rlm_module.RLMSpawnHandle("sub-a1b2c3d4", "child", Path("/tmp/child"), "model")
+        row = rlm_module._subagent_from_payload({
+            "rlm_child_id": handle.rlm_child_id, "session_id": "durable-child",
+            "session_name": handle.name, "session_dir": str(handle.session_dir), "status": "completed",
+        })
+        reply = AsyncMock(return_value={"name": "new-name"})
+        with patch.object(rlm_module, "host_request", reply):
+            for selector, expected in [(handle, handle.rlm_child_id), (row, handle.rlm_child_id), ("durable-child", "durable-child")]:
+                self.assertEqual(asyncio.run(rlm_module.rename("new-name", session_id=selector)), "new-name")
+                reply.assert_awaited_once_with("rlm.rename", {"name": "new-name", "session_id": expected})
+                reply.reset_mock()
+            with self.assertRaises(TypeError):
+                asyncio.run(rlm_module.rlm.rename("new-name", session_id=""))
+            reply.assert_not_awaited()
+
     def test_lists_parent_scoped_subagents_from_host(self) -> None:
         host_request = AsyncMock(
             return_value={

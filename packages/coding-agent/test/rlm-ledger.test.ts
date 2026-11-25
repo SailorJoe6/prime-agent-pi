@@ -32,6 +32,8 @@ vi.mock("node:fs", async (importOriginal) => {
 import { dirname, join } from "node:path";
 import type { Api, Model } from "@earendil-works/pi-ai";
 import { describe, expect, it, vi } from "vitest";
+import type { AgentSessionMessageController } from "../src/core/agent-messages.js";
+import { AgentSession } from "../src/core/agent-session.js";
 import type { CreateAgentSessionRuntimeFactory } from "../src/core/agent-session-runtime.js";
 import type { CreateRlmSubagentRuntimeOptions, SubagentRuntimeHost } from "../src/core/rlm-runtime.js";
 import { canonicalSessionPath } from "../src/core/session-lease.js";
@@ -529,6 +531,7 @@ function makeDaemonFixture(tempDir: string) {
 			options: CreateRlmSubagentRuntimeOptions,
 		): Promise<ActiveSessionState["runtime"]>;
 		createSubagentRuntimeHost(parentState: ActiveSessionState): SubagentRuntimeHost;
+		createAgentMessageController(getState: () => ActiveSessionState): AgentSessionMessageController;
 		recordRlmSubagentDeletion(
 			parentState: ActiveSessionState,
 			childId: string,
@@ -568,6 +571,9 @@ function makeRuntimeSession(
 		getActiveToolNames: vi.fn(() => []),
 		getContextUsage: vi.fn(() => undefined),
 		setSessionName: vi.fn((name: string) => sessionManager.appendSessionInfo(name)),
+		appendPythonRenameNotice: AgentSession.prototype.appendPythonRenameNotice,
+		agent: { state: { messages: [] } },
+		_emit: vi.fn(),
 		dispose: vi.fn(),
 		disposeAsync: vi.fn(async () => {}),
 		abort: vi.fn(async () => {}),
@@ -1406,6 +1412,147 @@ describe("rlm spawn ledger supervisor wiring", () => {
 			await expect(
 				supervisor.assertSupervisorSavedSessionNameAvailable(first.file, "unclaimed"),
 			).resolves.toBeUndefined();
+		} finally {
+			rmSync(tempDir, { recursive: true, force: true });
+		}
+	});
+
+	it.each(["live", "saved", "nested saved"] as const)(
+		"PAPI-20: Python renames only the exact direct %s child without hydrating it",
+		async (kind) => {
+			const tempDir = mkdtempSync(join(tmpdir(), "prime-rlm-ledger-python-rename-"));
+			try {
+				const { parent, parentFile: rootFile } = makeRoots(tempDir);
+				const { internals } = makeDaemonFixture(tempDir);
+				const rootState = await internals.createRuntime({ type: "create", sessionPath: rootFile });
+				let parentState = rootState;
+				if (kind === "nested saved") {
+					const id = "sub-33333333";
+					const rootArtifacts = parent.getSessionArtifactDir();
+					if (!rootArtifacts) throw new Error("Missing root artifacts");
+					const runtime = await internals.createRlmSubagentRuntime(
+						rootState,
+						subagentRuntimeOptions(rootState, { id, sessionDir: join(rootArtifacts, id) }),
+					);
+					const nestedParent = [...internals.sessions.values()].find((state) => state.runtime === runtime);
+					if (!nestedParent) throw new Error("Missing resident nested parent");
+					parentState = nestedParent;
+				}
+				const parentFile = parentState.runtime.session.sessionFile;
+				const parentArtifactDir = parentState.runtime.session.sessionManager.getSessionArtifactDir();
+				if (!parentFile || !parentArtifactDir) throw new Error("Missing parent transcript or artifacts");
+				const depth = (parentState.runtime.session.rlmDepth ?? 0) + 1;
+				const { renameDirectRlmChild: rename, listAgents } = internals.createAgentMessageController(
+					() => parentState,
+				);
+				if (!rename) throw new Error("Missing daemon child rename controller");
+				const childId = "sub-11111111";
+				const sessionDir = join(parentArtifactDir, childId);
+				let sessionId: string;
+				let activeSessionId: string | null = null;
+				let childFile: string;
+				const ledger = internals.rlmSpawnLedger();
+				if (kind === "live") {
+					const runtime = await internals.createRlmSubagentRuntime(
+						parentState,
+						subagentRuntimeOptions(parentState, {
+							id: childId,
+							sessionDir,
+							sessionName: "old-name",
+							rlmDepth: depth,
+						}),
+					);
+					const state = [...internals.sessions.values()].find((candidate) => candidate.runtime === runtime);
+					if (!state || !runtime.session.sessionFile) throw new Error("Missing active child");
+					activeSessionId = state.activeSessionId;
+					sessionId = runtime.session.sessionId;
+					childFile = runtime.session.sessionFile;
+				} else {
+					const child = makeChildSession(tempDir, sessionDir, parentFile, depth, "old-name");
+					sessionId = child.manager.getSessionId();
+					childFile = child.file;
+					await ledger.appendSpawn({ childId, parent: parentFile, child: childFile, depth, name: "old-name" });
+				}
+				const siblingId = "sub-22222222";
+				const sibling = makeChildSession(tempDir, join(parentArtifactDir, siblingId), parentFile, depth, "sibling");
+				await ledger.appendSpawn({
+					childId: siblingId,
+					parent: parentFile,
+					child: sibling.file,
+					depth,
+					name: "sibling",
+				});
+				const child = {
+					rlm_child_id: childId,
+					active_session_id: activeSessionId,
+					session_id: sessionId,
+					session_name: "old-name",
+					session_dir: sessionDir,
+					status: "completed" as const,
+				};
+				const roster = await listAgents();
+				expect(roster.agents).toContainEqual(
+					expect.objectContaining({
+						parentActiveSessionId: parentState.activeSessionId,
+						rlmChildId: childId,
+						sessionId,
+						rlmDepth: depth,
+					}),
+				);
+				const residentsBefore = [...internals.sessions.keys()];
+				if (parentState !== rootState) {
+					const rootRename = internals.createAgentMessageController(() => rootState).renameDirectRlmChild;
+					if (!rootRename) throw new Error("Missing root child rename controller");
+					await expect(rootRename(child, "grandchild-rename")).rejects.toThrow("Unknown direct RLM child");
+				}
+				const childBefore = readFileSync(childFile, "utf8");
+				const untouchedBefore = [parentFile, sibling.file].map((path) => readFileSync(path, "utf8"));
+				await expect(rename({ ...child, rlm_child_id: siblingId }, "new-name")).rejects.toThrow(
+					"Unknown direct RLM child",
+				);
+				await expect(rename(child, "sibling")).rejects.toThrow(`already exists at depth ${depth}`);
+				expect(readFileSync(childFile, "utf8")).toBe(childBefore);
+				await rename(child, "new-name");
+				const renamedBytes = readFileSync(childFile, "utf8");
+				await rename(child, " new-name ");
+				expect(readFileSync(childFile, "utf8")).toBe(renamedBytes);
+
+				const reopened = SessionManager.open(childFile);
+				expect(reopened.getSessionName()).toBe("new-name");
+				expect(reopened.getSessionId()).toBe(sessionId);
+				expect(reopened.getEntries().filter((entry) => entry.type === "custom_message")).toEqual([
+					expect.objectContaining({ customType: "session-rename", display: true }),
+				]);
+				expect([parentFile, sibling.file].map((path) => readFileSync(path, "utf8"))).toEqual(untouchedBefore);
+				expect([...internals.sessions.keys()]).toEqual(residentsBefore);
+				await expect(ledger.edges()).resolves.toEqual(
+					expect.arrayContaining([
+						expect.objectContaining({ childId, name: "new-name" }),
+						expect.objectContaining({ childId: siblingId, name: "sibling" }),
+					]),
+				);
+			} finally {
+				rmSync(tempDir, { recursive: true, force: true });
+			}
+		},
+	);
+
+	it("PAPI-20: only a Python self-rename adds a notice to its transcript", async () => {
+		const tempDir = mkdtempSync(join(tmpdir(), "prime-rlm-ledger-python-self-rename-"));
+		try {
+			const { parentFile } = makeRoots(tempDir);
+			const { internals } = makeDaemonFixture(tempDir);
+			const state = await internals.createRuntime({ type: "create", sessionPath: parentFile });
+			const controller = internals.createAgentMessageController(() => state);
+			if (!controller.renameSessionFromPython) throw new Error("Missing daemon Python rename controller");
+			await controller.setSessionName?.("ordinary");
+			await controller.renameSessionFromPython("from-python");
+			await controller.renameSessionFromPython("from-python");
+			const reopened = SessionManager.open(parentFile);
+			expect(reopened.getSessionName()).toBe("from-python");
+			expect(reopened.getEntries().filter((entry) => entry.type === "custom_message")).toEqual([
+				expect.objectContaining({ customType: "session-rename", content: expect.stringContaining("ordinary") }),
+			]);
 		} finally {
 			rmSync(tempDir, { recursive: true, force: true });
 		}

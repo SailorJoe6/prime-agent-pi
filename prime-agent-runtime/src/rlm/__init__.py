@@ -318,9 +318,18 @@ def _subagent_from_payload(payload: Any, operation: str = "rlm.list_subagents") 
     )
 
 
-async def rename(new_name: str) -> str:
-    """Rename the current session and return its saved name."""
-    payload = await host_request("rlm.rename", {"name": new_name})
+async def rename(
+    new_name: str, *, session_id: str | RLMSpawnHandle | RLMSubagent | None = None,
+) -> str:
+    """Rename self or a direct child selected by handle, row, or exact ID."""
+    request = {"name": new_name}
+    if isinstance(session_id, (RLMSpawnHandle, RLMSubagent)):
+        request["session_id"] = session_id.rlm_child_id
+    elif isinstance(session_id, str) and session_id:
+        request["session_id"] = session_id
+    elif session_id is not None:
+        raise TypeError("rlm.rename session_id must be a spawn handle, subagent row, or non-empty ID")
+    payload = await host_request("rlm.rename", request)
     name = payload.get("name")
     if not isinstance(name, str) or not name:
         raise RuntimeError("rlm.rename returned an invalid name")
@@ -563,8 +572,10 @@ class _RLMNamespace:
     async def find_models(self, query: str = "", limit: int = 8) -> list[RLMModel]:
         return await find_models(query, limit)
 
-    async def rename(self, new_name: str) -> str:
-        return await rename(new_name)
+    async def rename(
+        self, new_name: str, *, session_id: str | RLMSpawnHandle | RLMSubagent | None = None,
+    ) -> str:
+        return await rename(new_name, session_id=session_id)
 
     async def list_subagents(self) -> list[RLMSubagent]:
         return await list_subagents()

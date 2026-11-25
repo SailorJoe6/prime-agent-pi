@@ -4,7 +4,7 @@ import { homedir } from "node:os";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { RUNTIME_READY_CHECK } from "../src/core/kernel/bootstrap.js";
+import { RUNTIME_READY_CHECK, RUNTIME_RENAME_CHECK } from "../src/core/kernel/bootstrap.js";
 
 const here = fileURLToPath(new URL(".", import.meta.url));
 // Resolve from the FILE, not process.cwd(): the vitest worker cwd is the
@@ -36,6 +36,29 @@ const python = resolveKernelPython();
  * missing method in-process.
  */
 describe("kernel bootstrap runtime ready check", () => {
+	it.each([
+		{ scenario: "both entry points support direct-child rename", module: "current", repl: "current", ready: true },
+		{ scenario: "the module has no rename", module: "missing", repl: "current", ready: false },
+		{ scenario: "the REPL object has no rename", module: "current", repl: "missing", ready: false },
+		{ scenario: "the REPL object only supports self rename", module: "current", repl: "self_only", ready: false },
+	])("PAPI-20 checks rename readiness when $scenario", ({ module, repl, ready }) => {
+		const source = `
+import rlm
+from types import SimpleNamespace
+async def current(new_name, *, session_id=None):
+    raise AssertionError("readiness must not call rename")
+async def self_only(new_name):
+    raise AssertionError("readiness must not call rename")
+missing = None
+rlm.rename = ${module}
+rlm.rlm = SimpleNamespace(rename=${repl})
+${RUNTIME_RENAME_CHECK}
+`;
+		const result = spawnSync(python, ["-c", source], { encoding: "utf8", timeout: 30_000 });
+		expect(result.error).toBeUndefined();
+		expect(result.status, result.stderr).toBe(ready ? 0 : 1);
+	});
+
 	it("accepts the current runtime", () => {
 		const result = spawnSync(python as string, ["-c", RUNTIME_READY_CHECK], {
 			encoding: "utf8",

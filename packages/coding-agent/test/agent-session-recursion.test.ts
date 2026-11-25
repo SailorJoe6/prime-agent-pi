@@ -369,6 +369,46 @@ describe("AgentSession rlm recursion", () => {
 		expect(reopened.getSessionName()).toBe("after");
 	});
 
+	it("PAPI-20: parent renames a direct child by handle or durable ID without changing sibling or root", async () => {
+		const root = createSession();
+		root.setSessionName("root");
+		const first = await root.runRlmChild("first", { name: "first" });
+		const second = await root.runRlmChild("second", { name: "second" });
+		await root.collectRlmChildren([], 10_000);
+		const child = root.getRlmChildSession(first.rlm_child_id)!;
+		const sibling = root.getRlmChildSession(second.rlm_child_id)!;
+		const grandchild = await child.runRlmChild("grandchild", { name: "grandchild" });
+		await root.waitForRlmQuiescence();
+		await child.waitForHeadlessIdle();
+		await root.waitForHeadlessIdle();
+		const files = [
+			root.sessionFile!,
+			child.sessionFile!,
+			sibling.sessionFile!,
+			child.getRlmChildSession(grandchild.rlm_child_id)!.sessionFile!,
+		];
+		const snapshots = files.map((file) => readFileSync(file, "utf8"));
+		const rename = hostHandler(root, "rlm.rename");
+		await expect(rename({ name: "denied", session_id: "first" })).rejects.toThrow(/direct child/);
+		await expect(rename({ name: "denied", session_id: grandchild.rlm_child_id })).rejects.toThrow(/direct child/);
+		await expect(rename({ name: "denied", session_id: root.sessionId })).rejects.toThrow(/direct child/);
+		await expect(rename({ name: "second", session_id: first.rlm_child_id })).rejects.toThrow(/unavailable/);
+		expect(files.map((file) => readFileSync(file, "utf8"))).toEqual(snapshots);
+		const id = child.sessionId;
+		await expect(rename({ name: "renamed", session_id: first.rlm_child_id })).resolves.toEqual({ name: "renamed" });
+		await expect(rename({ name: "renamed-again", session_id: id })).resolves.toEqual({ name: "renamed-again" });
+		expect(
+			(await root.listRlmSubagents()).subagents.find((row) => row.rlm_child_id === first.rlm_child_id),
+		).toMatchObject({
+			session_id: id,
+			session_name: "renamed-again",
+		});
+		const reopened = SessionManager.open(child.sessionFile!);
+		expect(reopened.getSessionId()).toBe(id);
+		expect(reopened.getSessionName()).toBe("renamed-again");
+		for (const index of [0, 2, 3]) expect(readFileSync(files[index]!, "utf8")).toBe(snapshots[index]);
+	});
+
 	it("PAPI-20: inline child self-rename rejects a sibling's exact name", async () => {
 		const root = createSession();
 		const first = await root.runRlmChild("first", { name: "first" });

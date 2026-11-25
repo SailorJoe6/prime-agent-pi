@@ -114,6 +114,7 @@ function writeFakePython(
 			cases,
 			denyCases,
 			runtimeCase,
+			'    *"signature.bind"*) exit 0 ;;',
 			"    *) exit 1 ;;",
 			"  esac",
 			"fi",
@@ -149,6 +150,7 @@ function installFakeUv(): string {
 			'    "import rlm") exit 0 ;;',
 			...extraImportCases,
 			'    *"_harness_methods"*) exit 0 ;;',
+			'    *"signature.bind"*) exit 0 ;;',
 			"    *) exit 1 ;;",
 			"  esac",
 			"fi",
@@ -564,6 +566,37 @@ describe("kernel bootstrap", () => {
 		} else {
 			await expect(ensureKernelPython(options)).resolves.toBe(overridePython);
 		}
+	});
+
+	it.each(["override", "managed"])("PAPI-20 diagnoses and recovers rename support with %s Python", async (mode) => {
+		const logPath = installFakeUv();
+		const venv = join(tempDir, "kernel-venv");
+		const python = join(venv, "bin", "python");
+		mkdirSync(join(venv, "bin"), { recursive: true });
+		writeBootstrapVersion(venv);
+		const markerPath = join(venv, ".bootstrap-version");
+		const marker = readFileSync(markerPath, "utf8");
+		const interpreter = mode === "override" ? join(tempDir, "override-python") : python;
+		const config = mode === "override" ? "PRIME_AGENT_KERNEL_PYTHON" : "PRIME_AGENT_KERNEL_VENV";
+		process.env[config] = mode === "override" ? interpreter : venv;
+		writeFakePython(interpreter, ["rlm", ...DEFAULT_RLM_EXTRA_IMPORT_NAMES], ["signature.bind"]);
+		const originalInterpreter = readFileSync(interpreter, "utf8");
+		const progress: string[] = [];
+		const options = { onProgress: (message: string) => progress.push(message) };
+
+		await expect(ensureKernelPython(options)).resolves.toBe(interpreter);
+		expect(progress.join("\n")).toContain("rlm.rename with session_id");
+		expect(progress.join("\n")).toContain(config);
+		expect(progress.join("\n")).toContain(interpreter);
+		expect(readFileSync(interpreter, "utf8")).toBe(originalInterpreter);
+		expect(readFileSync(markerPath, "utf8")).toBe(marker);
+		expect(existsSync(logPath)).toBe(false);
+
+		progress.length = 0;
+		writeFakePython(interpreter, ["rlm", ...DEFAULT_RLM_EXTRA_IMPORT_NAMES]);
+		await expect(ensureKernelPython(options)).resolves.toBe(interpreter);
+		expect(progress).toEqual([]);
+		expect(existsSync(logPath)).toBe(false);
 	});
 
 	it("resolves the venv python under Scripts\\python.exe on win32 (uv layout)", () => {
