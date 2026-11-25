@@ -4,7 +4,7 @@ title: Build and validate the Prime Agent Pi packaging and release pipeline
 status: In Progress
 assignee: []
 created_date: '2026-11-24T00:57:00Z'
-updated_date: '2026-11-25T16:09:00Z'
+updated_date: '2026-11-25T16:10:00Z'
 labels: []
 dependencies: []
 documentation:
@@ -353,6 +353,14 @@ Episode source remains `19f2ac2c0ca6a68114060025964f2e736b17db1d`; published mai
 **Hosted artifact build still blocked.** Direct Episode ref matched the exact SHA, workflow `402840615` was active, and exact-SHA workflow lookups showed zero runs. The one authorized fresh artifact-only API dispatch on the same branch, with fixture version `0.10.2.4` and exact catalog `01f4d46dd5157ec73f8faf440214088237c81d59`, returned empty HTTP 500 (request ID `BB5E:202AEF:C4A90A:D2CC21:6B070738`, 16:05:12 UTC). Reconciled afterward: exact ref unchanged, zero matching runs at final observation, and repo-wide exact-SHA observation contained only the failed CI. No further dispatch. Prior successful Pi run `45646823696` used the identical workflow blob on this branch at a different SHA; no artifact or compatibility evidence transfers. Default main declares only `workflow_call`, but this does not establish the cause of HTTP 500. Obtain an admitted artifact-only run after resolving the external dispatch issue; verify the exact final eight archives and installer before nonpublishing rehearsal and hosted-byte lifecycle and compatibility probes. No matching hosted bytes, rehearsal, post-update slash or orderly exit verified in this slice.
 
 Raw evidence: `/tmp/papi61-reconcile-g3gwcgj4` (`semantic/report.md`, reproduced logs, disposable patches, history, GitHub dispatch response, exact-SHA observations, Intel CI log and artifact-verification procedure). No release, public bump, tag, activation, merge, lifecycle or acceptance change.
+
+### Owner disposition after confirmed blockers
+
+Resume on this Episode from `19f2ac2c0ca6a68114060025964f2e736b17db1d`. The owner accepted the scoped blocker evidence at `394da6b8f2002e3f95e238832334965e187359a4`. The narrowly proven failover/semantic-edge wrapper composition regression is authorized as an integration repair, not a session redesign. Restore the existing behavior and preserve PAPI-6 retry and image handling, the original assertions, and the wire protocol. Use only benign existing synthetic regression coverage; do not reproduce or attempt exploitation of security vulnerabilities. Run existing semantic-edge and failover coverage, including relevant shuffle seeds, and required checks.
+
+In parallel, investigate the separate Intel Mac offline daemon/Python smoke timeout from the recorded logs and on a suitable hosted runner. Only apply a narrowly evidenced fix; do not weaken the smoke check or rerun the failed job to claim green. For the true Pi matrix, do not repeat the twice-failed standalone dispatch. Investigate the trigger and supported CI-driven artifact-only paths; prefer one trustworthy path bound to the final SHA and pinned real catalog with no release writes. Continue unblocked work through exact-SHA CI and, when hosted Pi artifacts are available, verify their identity, rehearse without publishing, and run applicable disposable compatibility checks.
+
+Publish scoped findings and report verified readiness or the concrete remaining blockers. No changes to main, version bump, release, tag, live activation, concurrent host Prime Agent, parity work, or PAPI-62 expansion. Task lifecycle and acceptance remain unchanged.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
