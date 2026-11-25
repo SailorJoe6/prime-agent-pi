@@ -1,10 +1,10 @@
 ---
 id: PAPI-8
 title: Offer a rotating local log for enabled telemetry
-status: In Progress
+status: Ready for Merge
 assignee: []
 created_date: '2026-11-22T22:04:00Z'
-updated_date: '2026-11-25T01:37:00Z'
+updated_date: '2026-11-25T01:39:00Z'
 labels: []
 milestone: m-0
 dependencies: []
