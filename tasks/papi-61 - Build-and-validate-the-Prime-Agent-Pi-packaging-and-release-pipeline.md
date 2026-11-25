@@ -4,7 +4,7 @@ title: Build and validate the Prime Agent Pi packaging and release pipeline
 status: In Progress
 assignee: []
 created_date: '2026-11-24T00:57:00Z'
-updated_date: '2026-11-25T16:27:00Z'
+updated_date: '2026-11-25T16:31:00Z'
 labels: []
 dependencies: []
 documentation:
@@ -64,6 +64,8 @@ modified_files:
   - packages/coding-agent/test/daemon-agent-roster.test.ts
   - packages/coding-agent/src/core/agent-session.ts
   - packages/coding-agent/src/core/semantic-edges.ts
+  - .github/workflows/ci.yml
+  - packages/coding-agent/test/compiled-artifact.test.ts
 type: task
 ordinal: 61000
 ---
@@ -383,6 +385,12 @@ Include narrow Intel Mac Python smoke stage diagnostics to distinguish startup, 
 ### Push validation path prepared (not yet admitted)
 
 Exact Episode push is the only new direct trigger; the release workflow still only matches main, `v*` tags, PRs to main and manual release. No open PR has this exact Episode head in the product repo. Benchmark completion listens for benchmarks, not CI. CI and reusable build are contents-read; the Episode jobs do not pass the catalog PAT or inherit secrets, and checkouts disable credential persistence. The pinned catalog commit is publicly readable (unauthenticated GitHub API returned 200). On the Episode event, the legacy aggregate and a distinct Pi matrix will build the same push SHA; legacy modes elsewhere remain default. Both changed workflows passed actionlint 1.7.11; 14 existing release workflow tests passed locally. Waiting on diagnostic fixture validation before committing/pushing; no hosted validation, dispatch, or release performed at this checkpoint.
+
+### Episode push published; hosted run not observed
+
+Published exact Episode `62bfa7982b0fc630e8537e31a947f8c9dac8067e` by one normal non-force push, verified by direct remote ref and GitHub repository activity (`16:29:27 UTC`). Main remains `c87cd0598acaae6ee806a77a8b31f1ca3f845bdb`. Workflow `402840609` is active; repository Actions settings report enabled and all actions allowed. Exact-SHA repo-wide Actions and check-suite reads showed no run or suite through 2026-11-25T16:31:07.055303+00:00. No failed dispatch was retried and no other trigger was sent. This is observed non-admission, not evidence of the underlying GitHub cause or a failing CI job. Unblock by identifying the event admission issue or obtaining an observed supported non-release run on this exact candidate; do not assume a permissions change is needed.
+
+Both edited workflows passed actionlint 1.7.11, 14 existing release-workflow tests passed, `npm run check` and pre-commit passed. Intel Python diagnostics kept the assertions and 300/320-second deadlines. An inert ARM archive test passed opt-in and unset with separate CLI exit/close and both copied cell markers; no Prime Agent/kernel/daemon ran and it does not prove Intel behavior. Logs: `/tmp/papi61-synthetic-e6194nqi/` and `/tmp/papi61-push-8e40mk94`. Required hosted checks, Intel runtime diagnosis, all eight hosted Pi artifacts, exact-bundle rehearsal and dependent lifecycle checks remain unverified. No release, activation, lifecycle transition, or acceptance change.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
