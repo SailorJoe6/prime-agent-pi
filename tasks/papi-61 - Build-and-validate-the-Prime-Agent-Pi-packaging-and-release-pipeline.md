@@ -4,7 +4,7 @@ title: Build and validate the Prime Agent Pi packaging and release pipeline
 status: In Progress
 assignee: []
 created_date: '2026-11-24T00:57:00Z'
-updated_date: '2026-11-25T15:23:00Z'
+updated_date: '2026-11-25T15:29:00Z'
 labels: []
 dependencies: []
 documentation:
@@ -272,6 +272,14 @@ Owner accepted the bounded nonpublishing checkpoint at `4c196d014e7db730ef98d727
 Prioritize a bounded compatibility pass using the pinned offline Linux headless Orca route and the verified Pi `0.10.2.4` archive (`a1edf03a6a3e3f580cb5f2857470dc4b8bbfa84c3d357f980729bf278418a8b8`). Exercise a supported interaction beyond startup where feasible. Remaining checks include deterministic benign packaged Python tool use, exact-byte Prime Claw compatibility, and disposable interactive lifecycle with an offline or faux provider. Where feasible in parallel, verify the remaining true Pi release archives using real catalog input and exact per-target receipts, and exercise full-manifest rehearsal with real assets, not placeholders. Do not claim Desktop or other version parity from Linux headless results; use a safe disposable VM or runner if Desktop evidence proves necessary. No second Prime Agent on Joe’s Mac and no live runtime access.
 
 Review integration drift against current main without merging and preserve Windows README and failover changes. Keep PAPI-62 and platform parity out of scope. Report exact verified paths and remaining checks or concrete blockers to the owner; publish scoped Episode work and PAPI-61 evidence only. No merge, release, public version bump or live activation.
+
+### Exact Pi package: offline Orca terminal interaction passed
+
+Tested Pi `0.10.2.4` Linux ARM64 musl at source `3cd00e7125547a6c65db57d802156468549e7841`, real catalog `01f4d46dd5157ec73f8faf440214088237c81d59`, archive `a1edf03a6a3e3f580cb5f2857470dc4b8bbfa84c3d357f980729bf278418a8b8`, executable `c8cd991065d955bab886ef9673f6b821ca03b3414defa8284d604855b66a2677`. Rehashed the archive against its native receipt and SHA256SUMS on the host, then verified the archive and extracted executable again in the container. Used the retained packaged Orca 1.4.247 image `sha256:1822bbcb9182c2d1e564935fe5b09fe6c3e796eeda2db096bef771094ab6c248`, verified matching private Node v24.22.1 and checksum, and observed Orcad `0.1.0+6d98aea078af` at runtime. No Electron fallback. The image's original startup was bypassed. Docker flags: `--rm --init --pull never --network none --platform linux/arm64`, only a read-only fixture mount, clean environment, no host socket or published ports. Verified loopback-only and no routes. Orcad reported a wildcard bind inside that isolated namespace; no host ports or remote pairing were exercised. Used unprivileged fixture user, fresh profile, synthetic repo and faux provider that rejects model requests.
+
+Loaded the version-matched `orca-ide` guide; created and verified a ready project setup and worktree at the synthetic base. A standalone nonce from the shell PTY proved actual input execution rather than echo. `orca-ide agent launch --agent prime-agent --surface terminal` then opened exactly one visible, connected, writable TUI with the `0.10.2.4` banner and the expected cwd. `terminal wait --for tui-idle` passed. The durable synthetic session header matched that worktree and had no initial assignment. After startup, `terminal send --text '/papi61-check <nonce>' --enter` invoked a deterministic fixture extension command through the supported TUI; its receipt matched the nonce, cwd and exact same session ID. Both terminals closed successfully, exit code was 0, and the disposable container was absent afterward. First attempt failed before Orca startup because the fixture treated `/sys/class/net/bonding_masters` as an interface directory; corrected the fixture only. Scripts, command and logs retained in `papi61-orca-exact-m8zpvxge`; passing log SHA-256 `e7ca165a41307c01dd21bfed926941b8b689a82c20486c2bae52b148d5e602fa`.
+
+This proves local headless Orca terminal launch and post-startup interaction only. No Desktop or other Orca version parity, assignment routing/recovery, packaged Python, exact-byte Prime Claw, or interactive update/rollback proof. The remaining true Pi matrix and full real-assets manifest rehearsal are still open. Read-only drift review at `main` `c87cd0598acaae6ee806a77a8b31f1ca3f845bdb` found the Windows README and provider failover changes; integration review must preserve them, including overlapping command-registry and settings surfaces. No code change or merge. No CI rerun, release or live runtime change.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
@@ -284,4 +292,6 @@ The npm native bridge fixture now includes its Pi release module dependencies. A
 The daemon roster model-change test now supplies isolated settings for its synthetic model. The exact hosted failure reproduced locally before the change; all 28 roster tests passed at each of three shuffle seeds after it. Hosted CI was not rerun on the candidate.
 
 Exact accepted SHA hosted CI and eight standalone smoke artifact chains verified. Separate Pi Linux ARM64 musl fixture passed install, CLI update and offline rollback with byte-identical synthetic user state. An offline headless Orca route was identified but not run; full Pi matrix and exact Orca compatibility remain open.
+
+Exact Pi 0.10.2.4 Linux ARM64 musl passed the offline Orca 1.4.247 headless terminal route, including a deterministic extension command in the same durable session after startup. Other compatibility and full release-bundle checks remain open.
 <!-- SECTION:FINAL_SUMMARY:END -->
