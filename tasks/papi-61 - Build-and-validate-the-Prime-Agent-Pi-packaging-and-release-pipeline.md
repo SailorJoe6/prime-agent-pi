@@ -4,7 +4,7 @@ title: Build and validate the Prime Agent Pi packaging and release pipeline
 status: In Progress
 assignee: []
 created_date: '2026-11-24T00:57:00Z'
-updated_date: '2026-11-25T16:31:00Z'
+updated_date: '2026-11-25T16:43:00Z'
 labels: []
 dependencies: []
 documentation:
@@ -391,6 +391,12 @@ Exact Episode push is the only new direct trigger; the release workflow still on
 Published exact Episode `62bfa7982b0fc630e8537e31a947f8c9dac8067e` by one normal non-force push, verified by direct remote ref and GitHub repository activity (`16:29:27 UTC`). Main remains `c87cd0598acaae6ee806a77a8b31f1ca3f845bdb`. Workflow `402840609` is active; repository Actions settings report enabled and all actions allowed. Exact-SHA repo-wide Actions and check-suite reads showed no run or suite through 2026-11-25T16:31:07.055303+00:00. No failed dispatch was retried and no other trigger was sent. This is observed non-admission, not evidence of the underlying GitHub cause or a failing CI job. Unblock by identifying the event admission issue or obtaining an observed supported non-release run on this exact candidate; do not assume a permissions change is needed.
 
 Both edited workflows passed actionlint 1.7.11, 14 existing release-workflow tests passed, `npm run check` and pre-commit passed. Intel Python diagnostics kept the assertions and 300/320-second deadlines. An inert ARM archive test passed opt-in and unset with separate CLI exit/close and both copied cell markers; no Prime Agent/kernel/daemon ran and it does not prove Intel behavior. Logs: `/tmp/papi61-synthetic-e6194nqi/` and `/tmp/papi61-push-8e40mk94`. Required hosted checks, Intel runtime diagnosis, all eight hosted Pi artifacts, exact-bundle rehearsal and dependent lifecycle checks remain unverified. No release, activation, lifecycle transition, or acceptance change.
+
+### Owner continuation after GitHub service recovery
+
+The owner accepted the scoped validation workflow at `62bfa7982b0fc630e8537e31a947f8c9dac8067e` and diagnostic evidence at `83ec8f0ec861f15e8daa00d689dc5c99aa089e86` for continued validation, not merge. GitHub Status reported mitigation of Actions/Packages/PR/Webhooks degradation and Actions operational. The empty exact-SHA reads do not prove historical non-admission or attribute the result to that incident.
+
+Reconcile the exact Episode ref, runs and check suites again immediately before any new event. Use the original run if it appears; do not create a duplicate. Otherwise use one fresh normal push to this exact Episode branch, without retrying dispatch, changing permissions, or rewriting history. Prefer a small correction only if independently justified; if only a fresh event is needed, a clearly labeled empty validation commit with the same verified tree is acceptable under project rules. Bind evidence to the actual run SHA. Monitor admitted legacy CI and eight Pi builds, capture Intel diagnostics if needed, verify and rehearse the hosted bundle without publishing, and finish dependent disposable probes as feasible. If the fresh push yields no observed run, stop further triggers and report exact evidence. No main changes, release, version bump, tag, activation, parity, PAPI-62, or lifecycle/acceptance change.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
