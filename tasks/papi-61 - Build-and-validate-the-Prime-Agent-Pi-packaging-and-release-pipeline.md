@@ -4,7 +4,7 @@ title: Build and validate the Prime Agent Pi packaging and release pipeline
 status: In Progress
 assignee: []
 created_date: '2026-11-24T00:57:00Z'
-updated_date: '2026-11-25T01:26:00Z'
+updated_date: '2026-11-25T15:16:00Z'
 labels: []
 dependencies: []
 documentation:
@@ -235,6 +235,14 @@ Verified [hosted CI 45499601945](https://github.com/SailorJoe6/prime-agent-pi/ac
 Local baseline on macOS ARM64, Node 22.23.5: from `packages/coding-agent`, `npx --no-install tsx ../../node_modules/vitest/dist/cli.js --run test/daemon-agent-roster.test.ts -t 'flushes cron and model changes that have no session-event carrier'` reproduced that exception. The existing `set_model` path calls `assertAllowedDaemonModel(session.settingsManager, model)` and this simulated session had no settings manager.
 
 Candidate `3cd00e7125547a6c65db57d802156468549e7841` adds `SettingsManager.inMemory({ allowedModels: ["prov/m2"] })` only to that test fixture. The real admission check still runs. Production code, model policy and all assertions are unchanged. On the same local runtime, `npx --no-install tsx ../../node_modules/vitest/dist/cli.js --run test/daemon-agent-roster.test.ts --sequence.shuffle --sequence.seed=<seed>` passed all 28 tests at each of seeds 61, 62 and 63. `npm run check`, `npm run check:test-policy`, and `git diff --check` passed. No hosted CI was dispatched for the new commit; the hosted result above applies only to the bridge commit. No release, runtime activation or acceptance change.
+
+### Accepted roster correction and bounded nonpublishing validation
+
+Owner accepted the roster fixture correction at `3cd00e7125547a6c65db57d802156468549e7841` and reported [hosted CI run 45526096799](https://github.com/SailorJoe6/prime-agent-pi/actions/runs/45526096799) green on that exact SHA, including all eight standalone jobs and the aggregate gate, with eight downloadable Actions artifacts. Verify existing evidence; do not rerun completed CI on unchanged bytes.
+
+Read the release engineering docs and map the exact CI artifacts to packaged archives and checksum receipts. Keep CI smoke bytes distinct from full Pi release bytes and use real catalog inputs. Prioritize the next feasible disposable Docker install, update, rollback and compatibility smoke using verified packages and preserved synthetic user state. Separately determine a safe isolated path for exact Orca compatibility, using an approved disposable environment where feasible. Never launch a concurrent Prime Agent instance or daemon on Joe’s Mac, even with isolated paths, or touch the live runtime. Report what was proven and what remains open without transferring evidence between different bytes.
+
+Preserve the Windows README clarification on current main. Keep PAPI-62 and parity out of scope. Publish only scoped Episode changes and native PAPI-61 evidence on existing review refs and stop for owner review. No stable or preview publication, tag, version bump, integration-branch merge, or live activation.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
