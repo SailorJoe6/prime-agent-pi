@@ -4,7 +4,7 @@ title: Build and validate the Prime Agent Pi packaging and release pipeline
 status: In Progress
 assignee: []
 created_date: '2026-11-24T00:57:00Z'
-updated_date: '2026-11-25T15:46:00Z'
+updated_date: '2026-11-25T15:57:00Z'
 labels: []
 dependencies: []
 documentation:
@@ -320,6 +320,18 @@ Local evidence retained under `papi61-current-d68hcetn`: workflow.json, verified
 Owner accepted scoped evidence at `0487c38202c4b53c8b2da9645901d04ea1db39e9`: eight true Pi archives, two real-assets nonpublishing rehearsals, and compatibility on only the retained exact local Linux ARM64 musl bytes. Do not rerun unchanged evidence or attribute it to different hosted bytes.
 
 Next execute: fetch and verify current published main, then merge that exact main commit into this existing Episode branch only, without rewriting history or changing main. Review both parent diffs and preserve Windows README/setup, provider failover, startup templates, and Pi update paths. Run required repository checks, focused overlapping tests, hosted CI and the artifact-only eight-target real-catalog matrix for the exact integrated SHA. If successful, use the actual hosted archive for applicable affected lifecycle and compatibility probes in disposable environments, with faux/local inputs and no provider credentials. Verify benign post-update slash interaction and orderly exit if supported; distinguish harness limits from product defects. Reuse earlier evidence only when bytes match. Finish feasible checks before returning; report concrete material defects or external blockers separately from completed evidence. Publish scoped code and task evidence only on existing review refs. No main merge, release, public bump, tag, live activation, concurrent host Prime Agent, PAPI-62 or feature-parity expansion.
+
+### Integrated Episode candidate: validation blocked
+
+Published `19f2ac2c0ca6a68114060025964f2e736b17db1d` on `refs/heads/JLanders/prime-agent-papi-61-episode-b35069ea` with Episode first parent `3cd00e7125547a6c65db57d802156468549e7841` and freshly fetched/directly verified published main second parent `c87cd0598acaae6ee806a77a8b31f1ca3f845bdb`; `main` unchanged. Merged without rewriting history; clean tree `812c2a6f502f5c4da2c301538e11cf9bf5b5d8b9`. Review of both parent diffs confirmed six overlapping files retain both sets of behavior, with non-overlapping changes preserved byte-for-byte. Windows Bash/WSL instructions, provider failover, startup templates, and Pi CLI/TUI/installer paths remain. No extra integration edits. Both parent diffs passed whitespace checks.
+
+Passed `npm run check` under Node 22.23.5, including clean pre-commit recheck; exact-main `TEST_POLICY_BASE=c87cd0598acaae6ee806a77a8b31f1ca3f845bdb npm run check:test-policy` passed in Docker. Focused 303/303 source tests and offline Linux ARM64 Docker 284 passed / one existing real-archive probe skipped (no `PRIME_AGENT_TEST_ARCHIVE`), shuffle seed 61. Docker focus covered failover retry events, factory and public CLI, package command routing, daemon self-update and installer. No host Prime Agent instance or daemon was launched.
+
+**Required CI is red.** [CI 45649295307](https://github.com/SailorJoe6/prime-agent-pi/actions/runs/45649295307), shard 2 job `139329092342`, failed `test/agent-session-semantic-edges.test.ts`: side-question request ID leaked into the subsequent header assertion (line 312), and spawned-child request ID was absent from the captured headers (line 352). Fresh offline Docker comparison ran this file on the exact integrated tree and on exact published main: same two failures, 21/23 passed on each. This is a pre-existing CI blocker, not an integration-only failure; no product root cause claimed and no tests changed or retried to green. Build/check and process smoke passed; the CI aggregate and Intel Mac standalone smoke had not completed at capture. CI's standalone smoke is not the required true Pi matrix.
+
+**External artifact blocker.** The separate `standalone-binaries.yml` dispatch for `JLanders/prime-agent-papi-61-episode-b35069ea`, `public_version=0.10.2.4`, `catalog_sha=01f4d46dd5157ec73f8faf440214088237c81d59` returned HTTP 500 (workflow ID `402840615`). Direct Actions API and run list showed no matching dispatched run for `19f2ac2c0ca6a68114060025964f2e736b17db1d`; no duplicate dispatch attempted. No integrated Pi bundle to verify or rehearse, so affected hosted-byte compatibility/lifecycle, benign post-update slash and orderly exit remain unverified. Pre-integration byte evidence does not carry over.
+
+Unblock: resolve the already-red main session checks separately, run required CI for the resulting exact Episode candidate, and obtain a successful standalone Pi dispatch with the pinned real catalog. Verify the eight receipts/archives and real installer before rehearsal and disposable hosted-byte probes. Evidence: `/tmp/papi61-integration-pxz8rdat` (CI snapshot, failed shard, both-parent review, focused source and Docker provenance/results, and both baseline comparison logs). No release, version bump, tag, live activation, merge into main, acceptance, or lifecycle change.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
@@ -336,4 +348,6 @@ Exact accepted SHA hosted CI and eight standalone smoke artifact chains verified
 Exact Pi 0.10.2.4 Linux ARM64 musl passed the offline Orca 1.4.247 headless terminal route, including a deterministic extension command in the same durable session after startup. Other compatibility and full release-bundle checks remain open.
 
 All eight true Pi 0.10.2.4 archives validated; both complete real-assets rehearsals denied stable without a bump. Exact retained Linux ARM64 musl passed core Python, Prime Claw read-only template review, and interactive decline/update/offline rollback with saved state. Current-main integration preview clean; integrated revalidation remains open.
+
+Published main integrated on the existing Episode branch only. Repository checks, parent review and 587 focused tests passed. Two hosted session assertions also fail on exact published main; the separate Pi artifact dispatch returned HTTP 500 with no matching run. Integrated artifact/lifecycle validation remains open.
 <!-- SECTION:FINAL_SUMMARY:END -->
