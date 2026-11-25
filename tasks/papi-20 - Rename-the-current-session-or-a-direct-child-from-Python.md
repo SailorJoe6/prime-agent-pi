@@ -1,10 +1,10 @@
 ---
 id: PAPI-20
 title: Rename the current session or a direct child from Python
-status: In Progress
+status: Blocked
 assignee: []
 created_date: '2026-11-22T22:18:00Z'
-updated_date: '2026-11-25T21:27:00Z'
+updated_date: '2026-11-25T21:29:00Z'
 labels: []
 milestone: m-0
 dependencies: []
@@ -98,6 +98,8 @@ Offline validation: npm run check and git diff --check passed. From packages/cod
 Independent review of 5199fde647258e8a13fcf8a04ad16e0086903bfb accepted self/roster reopen, scope checks, stale-runtime guidance and transcript notices. Revision pending: (1) after Python rename of a passivated direct child, keep the supervisor public roster and sibling collision view current without a new store; prove stable identity and no mutation on rejection. (2) after reusing the former name, Python collect by current name must select the replacement without losing collection of the original run by stable ID/handle. Existing candidate evidence above is historical, not proof that these regressions are resolved. At handoff the prior readiness child still showed active model work with four queued items and no confirmed finish; the Episode code worktree was clean. Account for that exact descendant before code edits. Revalidate offline and publish separate exact code/task revisions. No merge, release, activation or unrelated cleanup.
 
 Canonical execute verified the same Episode and exact observation 8c55c757, synchronized native Backlog, and stopped before code edits. The prior readiness child 01a2148b-70b9-75f9-96cb-2c8386b39c26 still reported running/model streaming and four queued items. Its latest visible output was an earlier repository check that can write formatting in the shared worktree; native nonblocking collect returned running/unsettled, with no completion reply. The clean code worktree and published code 5199fde647258e8a13fcf8a04ad16e0086903bfb do not account for queued or future writes. Unblock when the exact child is observed settled and its outstanding actions/effects are accounted for, or the owning Conversation verifies a supported resolution for that child. Both accepted review fixes remain pending; no lifecycle change.
+
+Owner accepted the shared-worktree blocker reported at 70a7d535b193611181c1c2e1a0c52dd1ac4471bd. The Episode stopped before revision edits. Exact readiness child 01a2148b-70b9-75f9-96cb-2c8386b39c26 still reports working; the Episode reports four queued items and an earlier check that wrote formatting. Unblock after the child settles or an authorized targeted cancellation, with its queue and worktree effects accounted for. Preserve the current Episode and saved sessions. Both review fixes remain pending.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
