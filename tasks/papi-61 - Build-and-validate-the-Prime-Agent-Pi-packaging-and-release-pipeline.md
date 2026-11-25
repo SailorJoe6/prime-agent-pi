@@ -4,7 +4,7 @@ title: Build and validate the Prime Agent Pi packaging and release pipeline
 status: In Progress
 assignee: []
 created_date: '2026-11-24T00:57:00Z'
-updated_date: '2026-11-25T16:19:00Z'
+updated_date: '2026-11-25T16:21:00Z'
 labels: []
 dependencies: []
 documentation:
@@ -373,6 +373,12 @@ Published Episode `b375361bd13dbe749662abc8f3f2cb383f070c4b` (parent `19f2ac2c0c
 **Intel Mac smoke remains unresolved.** Historical job `139329092549`: the daemon control passed; the Python artifact subprocess reached its 300-second limit. Existing logs do not distinguish bootstrap, cell execution or shutdown, and do not connect `ENOTEMPTY` to the original timeout. No runtime or smoke changes. Next useful hosted evidence: macos-15-intel stage markers, CLI exit versus close, and separate owned cleanup diagnostics on a new exact candidate, preserving assertions and deadlines. A filtered diagnostic is not the required gate. See `/tmp/papi61-repair-huq__l53/intel.md`.
 
 **True Pi matrix still missing.** The existing CI call only runs legacy standalone: `workflow_call` exposes `build_ref`, not Pi build inputs. A proposed off-main artifact-only CI path would pass optional Pi identity and pinned catalog `01f4d46dd5157ec73f8faf440214088237c81d59` to the reusable workflow without changing legacy defaults or granting release writes. It still needs an admitted trigger and receipt verification for the exact final source SHA. No workflow edits or run on that path in this slice. See `/tmp/papi61-repair-huq__l53/artifact.md`. Hosted bundle rehearsal, real-archive installer and packaged compatibility/lifecycle remain unverified. No release, tag, version bump, main change, live activation, acceptance or lifecycle change.
+
+### Owner disposition: recover hosted validation without dispatch
+
+The owner accepts the narrowly scoped session repair `b375361bd13dbe749662abc8f3f2cb383f070c4b` and its evidence at `98e8b62caade2798129b96c4ac011b3fe86ec954` for continued validation, not merge. Do not retry either failed dispatch endpoint. On the existing Episode branch only, implement the smallest supported same-repository event-driven CI path (prefer a normal push scoped to this exact branch). Pass optional Pi identity and the pinned real catalog `01f4d46dd5157ec73f8faf440214088237c81d59` to the reusable artifact-only build; preserve legacy defaults, contributor checks, secrets boundaries and normal main/PR behavior. Review actual workflows before the push for release triggers, credential exposure and trust-control regressions. No release writes.
+
+Include narrow Intel Mac Python smoke stage diagnostics to distinguish startup, execution, exit/close and cleanup. Do not change assertions or deadlines. Run required CI and eight true Pi builds for the same exact candidate SHA; monitor any admitted run without claiming it passed. Independently verify and rehearse the actual bundle without publishing, then run affected disposable compatibility and lifecycle checks. Continue work where possible and report concrete external access or event admission blockers. Publish scoped changes and evidence through the existing Episode refs only. No main changes, release/tag/version bump, live activation, second host Prime instance, parity or PAPI-62; keep lifecycle and acceptance unchanged.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
