@@ -4,7 +4,7 @@ title: Build and validate the Prime Agent Pi packaging and release pipeline
 status: In Progress
 assignee: []
 created_date: '2026-11-24T00:57:00Z'
-updated_date: '2026-11-25T21:49:00Z'
+updated_date: '2026-11-25T22:05:00Z'
 labels: []
 dependencies: []
 documentation:
@@ -600,6 +600,10 @@ Checksum-verified PyPI cryptography 50.0.2 sdist and build wheels, official x86_
 ### Published Intel fixture correction; exact-SHA CI pending
 
 Episode `754fcebacac241d56aa5824aeddfa2ae23922d2e` adds only the Intel legacy standalone test wheel preparation, SHA-256 verification, scoped smoke constraint and documentation; published fast-forward from `9903edf3202428e02aface2211eae073257f63ad` with exact standalone `Legacy-Publication: skip`. Main still `60b6cf70dc7b207f6ec6c98ae599a876a6a7b2fb`; caller/release writer unchanged. Preparation script reproduced the Intel wheel (second wheel SHA-256 `a0047b3262e0598124c99ae83e778b2ff5c88a5f471746a85cb16fe6feaab2b1`; not bit-identical across different build directories). Tampered wheel rejected by the pre-test checksum. Repository checks, pre-commit, actionlint (known inherited concurrency syntax exception), and all eight compiled archive tests passed using complete hosted Intel artifact 15051260955 with original sidecars. Python smoke ~20 s, nine skills, both cells and fixture removal. Expanded local run: 140 passed, 2 skipped, 1 failed in unchanged native-probe-timeout rollback case (missing PID receipt); no local retry. Required hosted jobs on the exact new tip are still outstanding. No writer or release.
+
+### Exact hosted Intel gate passed
+
+[Artifact-only CI 45707847912](https://github.com/SailorJoe6/prime-agent-pi/actions/runs/45707847912) attempt 1, suite 123671881925, exact Episode `754fcebacac241d56aa5824aeddfa2ae23922d2e` passed all 28 jobs. Required aggregate `139539530798` and legacy Intel `139534363503` passed; Intel prebuilt and verified wheel SHA-256 `619ebc7800f1da3316a426fbcd0c049ee5ecab0bf3cc6de12bb5cd55a52396b0`. The real extracted archive Python smoke completed in about 16 s with all nine skills, both cells, exit/close 0 and fixture removal. No rerun. The Pi Intel job skipped legacy prep as intended. This does not establish the historical timeout's exact cause. Exact new artifact verification and offline rehearsal remain in progress.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
