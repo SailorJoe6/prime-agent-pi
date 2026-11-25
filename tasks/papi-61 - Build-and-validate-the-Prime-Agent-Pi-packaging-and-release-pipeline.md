@@ -4,7 +4,7 @@ title: Build and validate the Prime Agent Pi packaging and release pipeline
 status: In Progress
 assignee: []
 created_date: '2026-11-24T00:57:00Z'
-updated_date: '2026-11-25T18:27:00Z'
+updated_date: '2026-11-25T18:29:00Z'
 labels: []
 dependencies: []
 documentation:
@@ -517,6 +517,26 @@ One artifact-only CI dispatch with `0.10.2.4` and catalog `01f4d46dd5157ec73f8fa
 ### Exact opt-out candidate: hosted CI and bundle verified
 
 [CI 45672381837](https://github.com/SailorJoe6/prime-agent-pi/actions/runs/45672381837) attempt 1 passed all 28 jobs on `0c30da6db1e8589d7f858e79cfc3c00a6ddcaa33` at 18:24:56 UTC, including aggregate `139419685127`, all eight legacy builds and eight Pi builds. Intel legacy `139410891272` recorded startup, two persistent cells (second after shell), exit and close 0, acknowledged shutdown and fixture removal. The prior timeout did not recur; its cause is unproven. Verified all eight API ZIP digests, archive/executable hashes, clean source and public catalog `01f4d46dd5157ec73f8faf440214088237c81d59`. Exact installer SHA-256 `a275549947442ba8765833335e29fc76033e1dd1e464c3508b4f52efc1f1472e`. Two identical nonpublishing rehearsal reports SHA-256 `fce7267b15e5786c5fb3672d83d54c3fe2d912148124d12bb0a5b542c890d938` denied stable (`missing-or-mismatched-stable-bump`). Results and per-target receipts in `/tmp/papi61-ff-p0i9n0xr`. Fresh disposable lifecycle and compatibility probes are running on the exact hosted ARM64 musl bytes (artifact `15050681391`, archive `c190b127358f4e8b0d2d606a12e934e148bd3cd1d9f4f5ad8855893d15b072b8`). No writer or release invoked; final readiness pending probe results.
+
+### Exact nonpublishing fast-forward validated; ready for owner review
+
+The published Episode tip `0c30da6db1e8589d7f858e79cfc3c00a6ddcaa33` is an exact fast-forward from published `main` `c87cd0598acaae6ee806a77a8b31f1ca3f845bdb`. Its actual pushed-head message carries the standalone line `Legacy-Publication: skip`. Committed `build-binaries.yml` (`593954389d52a1c9248f032f29744afe084dde0462869f304c6d9236d4f38f25`) evaluates it before release context on `refs/heads/main` push only. Skipped release context excludes all downstream R2 and GitHub release writers even with credentials. Ordinary CI is unchanged, explicit tag/manual and PR behavior are preserved, and the writer audit found no other matching publication path. Offline matrix: 13 passed and one mutant rejected; no live main push tested. Readiness applies to this exact fast-forward only, not a rewritten or new head, separate tag/manual event, or previously queued work; recheck main before any owner-authorized landing.
+
+[Artifact-only CI 45672381837](https://github.com/SailorJoe6/prime-agent-pi/actions/runs/45672381837) attempt 1 passed all 28 jobs on that tip. Aggregate `139419685127` and separate legacy Intel `139410891272` (instrumented Python cells, shell, exit/close 0, acknowledged owned shutdown and fixture removal) passed. Verified all eight hosted ZIP/archive/executable chains, clean source receipts and catalog `01f4d46dd5157ec73f8faf440214088237c81d59`, and exact installer SHA-256 `a275549947442ba8765833335e29fc76033e1dd1e464c3508b4f52efc1f1472e`. Two identical nonpublishing bundle reports SHA-256 `fce7267b15e5786c5fb3672d83d54c3fe2d912148124d12bb0a5b542c890d938` denied stable (`missing-or-mismatched-stable-bump`). Separate policy tests cover preview allowance and stable gates in fixtures only.
+
+On exact hosted ARM64 musl artifact `15050681391`, Alpine 3.21.10 offline CLI and real PTY install `0.10.2.1` → update `0.10.2.4` → rollback after stopping the fixture feed passed. Preserved synthetic user data, same TUI session UUID/path and transcript prefix, preview decline no-op, stable fallback, `/quit` exit 0. Daemon/worker were still present immediately after UI exit; no graceful daemon shutdown claim. Core Python (two persistent cells in one kernel), headless Orca 1.4.247 (real PTY and same durable session), and one read-only Prime Claw template review (expected patch, unchanged asset/index/status/inventory) passed on those same verified bytes. Evidence and commands in `/tmp/papi61-ff-p0i9n0xr`, including `lifecycle/run-01/RESULT.md`, `compat/RESULT.md` and both verified evidence checksum manifests. This does not prove other-platform lifecycle, bundled Python skill installation/online bootstrap, Orca Desktop/routing/recovery, Prime Claw target qualification, real prerelease/live feeds, parity or publication.
+
+Hosted inventory (SHA-256):
+- `darwin-arm64`: artifact `15050491823`, ZIP `sha256:d4a27e1f12e1396d9e461b7c16e26fca03f3d241fb2ef03733523ad83f22ca94`, archive `6c730552fb5a73a116acca1dd9438d453464ce13646a44a1d1a664c76069ce57`, executable `fd6f183a8d0d736dc2924900b6194bb8c0c340bf1b534d7aae4254fd005f73fa`.
+- `darwin-x64`: artifact `15051080636`, ZIP `sha256:8a7f898475dc4053593c5ed5b2cc8dfe0bbf5d9d58035bba174bde6c2e15833c`, archive `d68648bc3ef9264764497014ea568d74a9f4497f77178bfc947dfebdab2dc21a`, executable `ca542f5d539348a8bdd859ca6c8acfe753c2bf45e8727f279269d4d722909401`.
+- `linux-arm64`: artifact `15050841128`, ZIP `sha256:a0abd19057320980b872515a5490735f072ec18b436ba6185cf7b99cc85e662d`, archive `05aa766abfb1e022288ca68022d53d7540ba0b5f1d16b7844fe0d283b40dedc7`, executable `df1090a5c047740f090d58f77aeaab12d3e4f459f716ebf5d5c19e6b678047ab`.
+- `linux-arm64-musl`: artifact `15050681391`, ZIP `sha256:d11d28d0655afb2fbeeae97c201efe539301c9a6bacd5f55ade088e168e5c27c`, archive `c190b127358f4e8b0d2d606a12e934e148bd3cd1d9f4f5ad8855893d15b072b8`, executable `f4dfc876265a382f68f3ffe9f16276eb4cfb8b7e771762cb0a11d3e5e36e23bc`.
+- `linux-x64`: artifact `15049088943`, ZIP `sha256:d6456cd89734d96228c7bebe518b56a2ec16177a7f86bbb04110cb212fe1e1dc`, archive `5b9aa71f6808ffa2e8d621a853ce253d987bd0247c61117f3bacd69254b8d1e3`, executable `0fd2305673f14613e16d7b84839b1b3190c1cab11b4424ee77fe783b35d990d4`.
+- `linux-x64-baseline`: artifact `15051130437`, ZIP `sha256:869176566c3ca253e7efcbce43906172619989516441c78f68db2eb8e388a800`, archive `140af97e5f9b6d5e21d2ed128445f24268c71281c0f00b958c459d2d0fe695c6`, executable `450d17ebef4a205fec42cd3c73b00b23de62baa3ef08877d1d6e01dc6007c46e`.
+- `linux-x64-musl`: artifact `15049409364`, ZIP `sha256:263d231081285faa0881260dc5cf123d13be4ce959e3cd968742c16e83916485`, archive `41cfa9f360daef3d44c2461d15fe7f71bd771763cfbfec825cafc85d1e256519`, executable `1d468a2e1153af18582725ac439392bafa7ec06a9808ecc1013bd07078f416f4`.
+- `linux-x64-musl-baseline`: artifact `15049668597`, ZIP `sha256:c7ac8ab997ae2be7ed2e1f7cec45fe1615cb5c7d6edb50c28da1e4c3bb301f0f`, archive `a56786686449bfb2a8e0b8829c8287d3e695b24ea3879a503a28789565a29ecd`, executable `90999710eaf4922c9fb975ae81a91a00173a4e10bfc8fff2f85612cb876557b0`.
+
+Nothing was merged, released, tagged, version-bumped or activated. No writer was invoked. Task remains In Progress (0/5); owner controls lifecycle and landing.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
