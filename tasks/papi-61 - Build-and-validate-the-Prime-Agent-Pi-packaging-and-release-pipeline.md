@@ -1,10 +1,10 @@
 ---
 id: PAPI-61
 title: Build and validate the Prime Agent Pi packaging and release pipeline
-status: Ready for Merge
+status: In Progress
 assignee: []
 created_date: '2026-11-24T00:57:00Z'
-updated_date: '2026-11-25T18:31:00Z'
+updated_date: '2026-11-25T20:49:00Z'
 labels: []
 dependencies: []
 documentation:
