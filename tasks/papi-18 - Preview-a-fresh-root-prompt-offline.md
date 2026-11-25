@@ -4,7 +4,7 @@ title: Preview a fresh root prompt offline
 status: In Progress
 assignee: []
 created_date: '2026-11-22T22:18:00Z'
-updated_date: '2026-11-25T18:35:00Z'
+updated_date: '2026-11-25T19:38:00Z'
 labels: []
 milestone: m-0
 dependencies: []
@@ -13,9 +13,24 @@ references:
     https://github.com/PrimeIntellect-ai/prime-agent/blob/763094e1b6a7c17450ee8399b06cda1853847ca5/crates/pa-cli/src/prompt_command.rs
   - >-
     https://github.com/SailorJoe6/prime-agent-pi/blob/6cd28f90e2391441850485c94b3ff099f579ef7a/packages/coding-agent/src/cli/command-registry.ts
+  - >-
+    https://github.com/PrimeIntellect-ai/prime-agent/blob/033eea1705c5ae953fe7cd7a5e7c45317e0dfe/crates/pa-cli/src/prompt_command.rs
 documentation:
   - >-
     https://github.com/SailorJoe6/prime-agent-pi/blob/dfba53a40c277c8341930024b014ffbdaf7e1e68/docs/upstream-feature-inventory.md#commands-installation-and-terminal-controls
+  - docs/prompt-preview.md
+modified_files:
+  - packages/coding-agent/src/cli/command-registry.ts
+  - packages/coding-agent/src/cli/public-command.ts
+  - packages/coding-agent/src/core/package-manager.ts
+  - packages/coding-agent/src/core/prompts/index.ts
+  - packages/coding-agent/src/core/prompts/rlm.ts
+  - packages/coding-agent/src/core/resource-loader.ts
+  - packages/coding-agent/src/core/system-prompt.ts
+  - packages/coding-agent/test/public-command.test.ts
+  - docs/prompt-preview.md
+  - packages/coding-agent/.changes/papi-18-prompt-preview.md
+  - packages/coding-agent/src/cli/prompt-command.ts
 type: feature
 ordinal: 18000
 ---
@@ -28,8 +43,8 @@ Expose the effective fresh-root prompt in the public CLI. Keep Pi resource resol
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Text and JSON identify instructions and static versus dynamic content for a fixture directory.
-- [ ] #2 Changing cwd or model reflects its prompt inputs without a provider call, worker or saved session.
+- [x] #1 Text and JSON identify instructions and static versus dynamic content for a fixture directory.
+- [x] #2 Changing cwd or model reflects its prompt inputs without a provider call, worker or saved session.
 <!-- AC:END -->
 
 ## Implementation Plan
@@ -44,4 +59,12 @@ Expose the effective fresh-root prompt in the public CLI. Keep Pi resource resol
 
 <!-- SECTION:NOTES:BEGIN -->
 Implementation checkpoint: use the public command dispatch and the existing resource loader with missing-package installation disabled. The prompt builder will retain live instruction order and expose a diagnostic static/dynamic breakdown. Pi does not select a base prompt by model; the preview will report the chosen model input without provider resolution.
+
+Validation: npm run check passed. From packages/coding-agent: npx tsx ../../node_modules/vitest/dist/cli.js --run test/public-command.test.ts --sequence.shuffle --sequence.seed=18 (also seed 19), both green. Process fixtures exercise text and JSON, cwd selection, model override and default, CLI help/errors, with guards for extension execution, package installation, provider/daemon connections and session storage. Deliberate model and text-output mutation triggered four expected failures; exact source restored and validated again. Compared current and pre-change full prompt bytes in six builder variants. Upstream stable reference checked: v0.10.5, 033eea1705c5ae953fe7cd7a5e7c45317e0dfe.
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Added offline prime-agent prompt with text/JSON instructions and a static/dynamic breakdown. Reuses local resources and Python guidance, with model selector metadata and no live extension or session effects.
+<!-- SECTION:FINAL_SUMMARY:END -->
