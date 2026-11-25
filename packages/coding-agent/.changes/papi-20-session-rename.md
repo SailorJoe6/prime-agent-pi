@@ -1,1 +1,2 @@
 - Added roster rename for selected live or saved subagents using the existing rename shortcut.
+- Added `await rlm.rename("new-name")` to rename the current Python session without changing its identity.

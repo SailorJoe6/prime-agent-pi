@@ -522,6 +522,7 @@ function makeDaemonFixture(tempDir: string) {
 	});
 	const internals = daemon as unknown as {
 		sessions: Map<string, ActiveSessionState>;
+		handleCommand(client: object, command: DaemonCommand): Promise<DaemonResponse | undefined>;
 		createRuntime(command: Extract<DaemonCommand, { type: "create" }>): Promise<ActiveSessionState>;
 		createRlmSubagentRuntime(
 			parentState: ActiveSessionState,
@@ -545,6 +546,9 @@ function makeRuntimeSession(
 	return {
 		sessionManager,
 		messages: [],
+		state: { pendingToolCalls: new Set() },
+		hasRunningRlmChildren: () => false,
+		getSessionActionSnapshot: () => ({ queuedCount: 0 }),
 		extensionRunner: { hasHandlers: vi.fn(() => false), emit: vi.fn(async () => {}) },
 		sessionFile: sessionManager.getSessionFile(),
 		sessionId: sessionManager.getSessionId(),
@@ -1407,41 +1411,95 @@ describe("rlm spawn ledger supervisor wiring", () => {
 		}
 	});
 
-	it("appends a ledger rename for an offline saved-session rename", async () => {
-		const tempDir = mkdtempSync(join(tmpdir(), "prime-rlm-ledger-supervisor-rename-"));
-		try {
-			const sessionsDir = join(tempDir, "sessions");
-			const parentManager = SessionManager.create(tempDir, sessionsDir);
-			parentManager.newSession();
-			parentManager.appendSessionInfo("parent");
-			parentManager.flushNow();
-			const parentFile = parentManager.getSessionFile();
-			const parentArtifactDir = parentManager.getSessionArtifactDir();
-			if (!parentFile || !parentArtifactDir) throw new Error("Missing parent session paths");
-			const child = makeChildSession(tempDir, join(parentArtifactDir, "sub-11111111"), parentFile, 1, "old-name");
-			const supervisor = new DaemonSupervisor(join(tempDir, "daemon.sock"), {
-				defaultSessionConfig: { agentDir: tempDir, cwd: tempDir, sessionDir: sessionsDir },
-				descriptorDir: join(tempDir, "workers"),
-			}) as unknown as SupervisorLedgerInternals;
-			const rename = vi.fn(async () => {});
-			Object.assign(supervisor.catalog, { rename });
-			const ledger = supervisor.rlmSpawnLedger();
-			await ledger.appendSpawn({
-				childId: "sub-11111111",
-				parent: parentFile,
-				child: child.file,
-				depth: 1,
-				name: "old-name",
-			});
+	it.each(["live", "saved"] as const)(
+		"PAPI-20: reopens a renamed %s roster child with the same identity",
+		async (kind) => {
+			const tempDir = mkdtempSync(join(tmpdir(), "prime-rlm-ledger-roster-rename-"));
+			try {
+				const { sessionsDir, parent, parentFile } = makeRoots(tempDir);
+				const parentArtifactDir = parent.getSessionArtifactDir();
+				if (!parentArtifactDir) throw new Error("Missing parent artifact directory");
+				const childId = "sub-11111111";
+				const siblingId = "sub-22222222";
+				const sibling = makeChildSession(tempDir, join(parentArtifactDir, siblingId), parentFile, 1, "sibling");
+				const ledger = new RlmSpawnLedger(tempDir, sessionsDir);
+				await ledger.appendSpawn({
+					childId: siblingId,
+					parent: parentFile,
+					child: sibling.file,
+					depth: 1,
+					name: "sibling",
+				});
 
-			await supervisor.handleCommand(
-				{},
-				{ type: "rename_saved_session", sessionPath: child.file, name: "new-name" },
-			);
-			expect(rename).toHaveBeenCalledWith(child.file, "new-name");
-			await expect(ledger.edges()).resolves.toEqual([expect.objectContaining({ name: "new-name" })]);
-		} finally {
-			rmSync(tempDir, { recursive: true, force: true });
-		}
-	});
+				const childDir = join(parentArtifactDir, childId);
+				let file: string;
+				let sessionId: string;
+				let rename: () => Promise<DaemonResponse | undefined>;
+				// These are the live and saved commands selected by the Agents view dispatch tests.
+				if (kind === "live") {
+					const { internals } = makeDaemonFixture(tempDir);
+					const parentState = await internals.createRuntime({ type: "create", sessionPath: parentFile });
+					const runtime = await internals.createRlmSubagentRuntime(
+						parentState,
+						subagentRuntimeOptions(parentState, { id: childId, sessionDir: childDir, sessionName: "old-name" }),
+					);
+					const state = [...internals.sessions.values()].find((candidate) => candidate.runtime === runtime);
+					if (!state || !runtime.session.sessionFile) throw new Error("Missing live child session");
+					file = runtime.session.sessionFile;
+					sessionId = runtime.session.sessionId;
+					rename = () =>
+						internals.handleCommand(
+							{},
+							{ type: "rename", activeSessionId: state.activeSessionId, name: "new-name" },
+						);
+				} else {
+					const child = makeChildSession(tempDir, childDir, parentFile, 1, "old-name");
+					file = child.file;
+					sessionId = child.manager.getSessionId();
+					await ledger.appendSpawn({ childId, parent: parentFile, child: file, depth: 1, name: "old-name" });
+					const supervisor = new DaemonSupervisor(join(tempDir, "daemon.sock"), {
+						defaultSessionConfig: { agentDir: tempDir, cwd: tempDir, sessionDir: sessionsDir },
+						descriptorDir: join(tempDir, "workers"),
+					}) as unknown as SupervisorLedgerInternals;
+					// Use the catalog's real disk writer in-process; the IPC transport is not under test.
+					Object.assign(supervisor.catalog, {
+						rename: async (path: string, name: string) =>
+							sessionManagerModule.appendSessionInfoToExistingFile(path, name),
+					});
+					rename = () =>
+						supervisor.handleCommand({}, { type: "rename_saved_session", sessionPath: file, name: "new-name" });
+				}
+				expect(SessionManager.open(file).getSessionName()).toBe("old-name");
+				const before = [parentFile, sibling.file].map((path) => readFileSync(path, "utf8"));
+
+				await expect(rename()).resolves.toMatchObject({ success: true });
+
+				const reopened = SessionManager.open(file);
+				expect(reopened.getSessionName()).toBe("new-name");
+				expect(reopened.getSessionId()).toBe(sessionId);
+				expect([parentFile, sibling.file].map((path) => readFileSync(path, "utf8"))).toEqual(before);
+				const replayed = new RlmSpawnLedger(tempDir, sessionsDir);
+				const edges = await replayed.edges();
+				expect(edges).toHaveLength(2);
+				expect(edges).toEqual(
+					expect.arrayContaining([
+						expect.objectContaining({
+							childId,
+							child: canonicalSessionPath(file),
+							parent: canonicalSessionPath(parentFile),
+							name: "new-name",
+						}),
+						expect.objectContaining({
+							childId: siblingId,
+							child: canonicalSessionPath(sibling.file),
+							parent: canonicalSessionPath(parentFile),
+							name: "sibling",
+						}),
+					]),
+				);
+			} finally {
+				rmSync(tempDir, { recursive: true, force: true });
+			}
+		},
+	);
 });

@@ -1708,6 +1708,7 @@ export class AgentSession {
 	private readonly _semanticEdges: SemanticEdgeRecorder;
 	private _rlmParentNodeId?: string;
 	private _rlmParentAgent?: string;
+	private _renameInlineRlmSelf?: (name: string) => Promise<void>;
 	private _repliedToParentSinceTask: boolean | undefined;
 	private _parentReplyCount = 0;
 	private _subagentRuntimeHost?: SubagentRuntimeHost;
@@ -11013,6 +11014,25 @@ export class AgentSession {
 				this._withdrawAsyncBashCompletionNotice(details);
 			}),
 			"rlm.find_models": createRlmFindModelsHostHandler((query, limit) => this.findRlmModels(query, limit)),
+			"rlm.rename": async (payload) => {
+				if ("target" in payload || "session_id" in payload) {
+					throw new Error("rlm.rename does not support a target yet");
+				}
+				const name = normalizeRequestedRlmSubagentSessionName(payload.name, "rlm.rename");
+				if (name === undefined) throw new Error("rlm.rename requires a name");
+				assertDirectAgentMessageTarget(name);
+				const controller = this._agentMessageController;
+				if (controller?.setSessionName) {
+					await controller.setSessionName(name);
+				} else if (this._renameInlineRlmSelf) {
+					await this._renameInlineRlmSelf(name);
+				} else if (this._rlmDepth > 0) {
+					throw new Error("rlm.rename requires the current child's naming authority");
+				} else {
+					this.setSessionName(name);
+				}
+				return { name };
+			},
 			"rlm.list_subagents": createRlmListSubagentsHostHandler(() => this.listRlmSubagents()),
 			"rlm.collect": createRlmCollectHostHandler((targets, timeoutMs) =>
 				this.collectRlmChildren(targets, timeoutMs),
@@ -11374,6 +11394,18 @@ export class AgentSession {
 				throw error;
 			}
 		}
+		child._renameInlineRlmSelf = async (name) => {
+			if (child.sessionName === name) return;
+			const pending = this._pendingRlmSubagentSessionNames;
+			if (pending.has(name)) throw new Error(formatAgentSessionNameUnavailable(name, options.rlmDepth));
+			pending.add(name);
+			try {
+				await this._assertRlmSubagentSessionNameAvailable(name, true);
+				child.setSessionName(name);
+			} finally {
+				pending.delete(name);
+			}
+		};
 		options.onSessionPublished?.(child);
 
 		return { session: child };

@@ -11,6 +11,14 @@ rlm_module = importlib.import_module("rlm")
 
 
 class RlmSubagentRegistryTest(unittest.TestCase):
+    def test_renames_self_from_module_and_repl_object(self) -> None:
+        reply = AsyncMock(return_value={"name": "new-name"})
+        with patch.object(rlm_module, "host_request", reply):
+            for rename in (rlm_module.rename, rlm_module.rlm.rename):
+                self.assertEqual(asyncio.run(rename("  new-name  ")), "new-name")
+                reply.assert_awaited_once_with("rlm.rename", {"name": "  new-name  "})
+                reply.reset_mock()
+
     def test_lists_parent_scoped_subagents_from_host(self) -> None:
         host_request = AsyncMock(
             return_value={

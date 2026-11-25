@@ -318,6 +318,15 @@ def _subagent_from_payload(payload: Any, operation: str = "rlm.list_subagents") 
     )
 
 
+async def rename(new_name: str) -> str:
+    """Rename the current session and return its saved name."""
+    payload = await host_request("rlm.rename", {"name": new_name})
+    name = payload.get("name")
+    if not isinstance(name, str) or not name:
+        raise RuntimeError("rlm.rename returned an invalid name")
+    return name
+
+
 async def list_subagents() -> list[RLMSubagent]:
     """List direct RLM children retained by the current parent session."""
     payload = await host_request("rlm.list_subagents")
@@ -554,6 +563,9 @@ class _RLMNamespace:
     async def find_models(self, query: str = "", limit: int = 8) -> list[RLMModel]:
         return await find_models(query, limit)
 
+    async def rename(self, new_name: str) -> str:
+        return await rename(new_name)
+
     async def list_subagents(self) -> list[RLMSubagent]:
         return await list_subagents()
 
@@ -604,6 +616,7 @@ __all__ = [
     "RefinementEvent",
     "bash",
     "delete_subagent",
+    "rename",
     "emit",
     "find_models",
     "get_harness_state",

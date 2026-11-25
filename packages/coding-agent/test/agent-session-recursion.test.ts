@@ -354,6 +354,36 @@ describe("AgentSession rlm recursion", () => {
 		return handler;
 	}
 
+	it("PAPI-20: reopens the same session under its Python self-rename name", async () => {
+		const root = createSession();
+		root.sessionManager.appendMessage(assistantMessage("persisted"));
+		root.setSessionName("before");
+		const id = root.sessionId;
+		const file = root.sessionFile!;
+		const rename = hostHandler(root, "rlm.rename");
+		await expect(rename({ name: "ignored", target: "unrelated" })).rejects.toThrow(/target/);
+		expect(SessionManager.open(file).getSessionName()).toBe("before");
+		await expect(rename({ name: "  after  " })).resolves.toEqual({ name: "after" });
+		const reopened = SessionManager.open(file);
+		expect(reopened.getSessionId()).toBe(id);
+		expect(reopened.getSessionName()).toBe("after");
+	});
+
+	it("PAPI-20: inline child self-rename rejects a sibling's exact name", async () => {
+		const root = createSession();
+		const first = await root.runRlmChild("first", { name: "first" });
+		await root.runRlmChild("second", { name: "second" });
+		await root.collectRlmChildren([], 10_000);
+		const child = root.getRlmChildSession(first.rlm_child_id)!;
+		const rename = hostHandler(child, "rlm.rename");
+		await expect(rename({ name: "second" })).rejects.toThrow(/unavailable/);
+		const roster = async () => (await root.listRlmSubagents()).subagents.map((row) => row.session_name).sort();
+		expect(await roster()).toEqual(["first", "second"]);
+		await expect(rename({ name: "Second" })).resolves.toEqual({ name: "Second" });
+		expect(await roster()).toEqual(["Second", "second"]);
+		expect(SessionManager.open(child.sessionFile!).getSessionName()).toBe("Second");
+	});
+
 	/** Root whose child turns block until released; gatedPrompts limits which prompts wait. */
 	function createGatedRoot(
 		options: Parameters<typeof createSession>[0] = {},
