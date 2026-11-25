@@ -4,7 +4,7 @@ title: Build and validate the Prime Agent Pi packaging and release pipeline
 status: In Progress
 assignee: []
 created_date: '2026-11-24T00:57:00Z'
-updated_date: '2026-11-25T17:32:00Z'
+updated_date: '2026-11-25T17:39:00Z'
 labels: []
 dependencies: []
 documentation:
@@ -467,6 +467,14 @@ Exact installer SHA-256 `a275549947442ba8765833335e29fc76033e1dd1e464c3508b4f52e
 The owner accepts exact hosted validation on `66c4fbb5b52a33ee72869c09d81ce4cde00610e3` at `0777b7284701db3a0bc65ce147a2b674d74dc54e` as evidence only for that SHA and those hosted bytes. The hardcoded Episode branch and fixture version/catalog in general CI must not land. On the same Episode branch, remove the temporary branch-specific push/dispatch routing and fixed fixture defaults. Retain a small, explicitly invoked artifact-only validation route, preferably optional validated version and pinned public catalog inputs on existing manual CI. Ordinary main and PR behavior, contributor trust, read-only permissions, artifact-mode secret isolation, smoke assertions and timeouts must remain intact.
 
 Read-only review the inherited release entrypoints for publication risk if merged; report the risk without enabling or invoking a writer or expanding release scope. On the actual final candidate SHA, verify hosted required CI and all eight Pi archives, rehearse the exact hosted bundle without publishing, and rerun relevant disposable lifecycle and compatibility probes using those final hosted bytes. Show preview and stable policy decisions using nonpublishing fixtures. Capture final intent, exact evidence and coverage limits here and in durable docs where useful. Publish only to the existing Episode/task refs; report complete merge-readiness evidence or a concrete blocker. No main merge, version bump, tag, publication, live installation or activation, PAPI-62, parity, or lifecycle/acceptance change.
+
+### Landing CI candidate published; exact hosted CI admitted; inherited writer blocks a nonpublishing merge
+
+Episode-only routing and fixed version/catalog defaults removed at `150ee9eb5fe0184ff913fc7733b7938cb592a7a7`. Manual CI with an explicit validated `public_version` and public `catalog_sha` runs required legacy and eight Pi jobs on the exact SHA without the catalog PAT. Ordinary push/PR/blank dispatch retains legacy checks. Contents-read, explicit secrets only, original contributor vouch and smoke requirements preserved. Actionlint, 14 input cases, 81 release workflow/policy tests, npm checks and pre-commit passed (`/tmp/papi61-landing-a7f4ojq6`). Policy fixture tests exercise marked previews and stable gating without running a writer.
+
+No exact run or suite was visible after publishing. One explicit **CI** dispatch (not Release Prime Agent) using version `0.10.2.4` and catalog `01f4d46dd5157ec73f8faf440214088237c81d59` returned HTTP 204, request `F60E:BF78B:DF325A:EE7409:6B071D52`. [Run 45667067518](https://github.com/SailorJoe6/prime-agent-pi/actions/runs/45667067518), suite `123562674487`, queued on `150ee9eb5fe0184ff913fc7733b7938cb592a7a7`. No reruns or other triggers authorized. Exact hosted verification and disposable checks remain pending; old validation is not transferred.
+
+Read-only merge audit: inherited `.github/workflows/build-binaries.yml` (active workflow 402840607, unchanged from main) selects legacy beta for a main push even without a bump. If configured and its own checks pass, it can write R2 artifacts and update the moving GitHub beta tag/prerelease; it is not the Pi policy path. Version is unchanged and `v0.9.8` exists, so production is not selected by the normal unchanged-version case; a missing tag, version change or other inherited triggers follow separate paths. No npm publication is invoked by main CI. Effective R2 configuration/permissions were not verified and absence of prior runs is not an effective guard. Nonpublishing merge is blocked until the owner verifies effective isolation or authorizes a separate correction. No writer changed, enabled or invoked, and main and lifecycle unchanged.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
