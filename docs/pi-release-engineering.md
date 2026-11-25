@@ -102,16 +102,24 @@ The reusable call defaults to the legacy archive path when `public_version` is
 omitted. Pi mode does not invoke an installer or release writer, or upload to
 npm or R2.
 
-For PAPI-61 validation on the existing Episode branch in `SailorJoe6/prime-agent-pi`,
-a push or manual CI dispatch enables both the required legacy checks and the
-separate eight-target `pi-native` job. Prefer the push run. If no matching
-run is visible after checking the branch tip, Actions runs and check suites,
-use one manual dispatch of `CI` on that branch and verify the admitted SHA.
-Both jobs use the run SHA. The Pi job uses test identity `0.10.2.4` and public
-catalog commit `01f4d46dd5157ec73f8faf440214088237c81d59`. Neither job receives
-the catalog PAT on this route. The legacy Intel Mac smoke logs Python stages
-without changing its assertions or deadlines. Keep this Episode gate out of
-product main; do not dispatch the release workflow.
+For nonpublishing validation, manually run the **CI** workflow on the exact
+candidate branch with both `public_version` (three or four numeric components)
+and `catalog_sha` (a full lowercase SHA for the public catalog). Do not dispatch
+**Build Binaries** for validation. With both inputs blank, manual CI runs the
+ordinary checks; pushes to main and PRs targeting main do not build Pi artifacts.
+A partial or invalid input pair fails validation before the build jobs start.
+
+The explicit route runs the required legacy checks and the separate eight-target
+`pi-native` matrix on the same source SHA and catalog pin. It uses read-only
+permissions and does not pass the catalog PAT to any build. The legacy Intel Mac
+smoke logs Python stages without changing its assertions or deadlines. Check the
+branch tip and existing runs before dispatch, then verify the SHA GitHub admitted.
+The version input labels artifacts only; it does not bump or publish a release.
+
+The inherited `build-binaries.yml` writer is separate. A push to main can still
+publish legacy beta artifacts and update its moving prerelease if configured,
+even with no version bump. That is not a Pi preview. Verify that the inherited
+writer cannot publish before a nonpublishing merge.
 
 Before rehearsing, check that `build-check-test` passed, all eight `pi-native-*`
 artifacts came from that run, and each receipt names that SHA and catalog pin.

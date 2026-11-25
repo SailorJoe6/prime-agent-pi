@@ -2,13 +2,20 @@ name: CI
 
 on:
   workflow_dispatch:
+    inputs:
+      public_version:
+        description: Pi public version for artifact validation only (requires catalog_sha)
+        type: string
+      catalog_sha:
+        description: Exact commit of the public Prime Agent catalog (requires public_version)
+        type: string
   push:
-    branches: [main, JLanders/prime-agent-papi-61-episode-b35069ea]
+    branches: [main]
   pull_request:
     branches: [main]
 
 concurrency:
-  group: ci-${{ github.ref }}
+  group: ci-${{ github.ref }}${{ github.event_name == 'workflow_dispatch' && (inputs.public_version != '' || inputs.catalog_sha != '') && '-pi-artifacts' || '' }}
   cancel-in-progress: true
 
 permissions:
@@ -19,12 +26,35 @@ jobs:
     name: Contributor trust
     runs-on: ubuntu-latest
     outputs:
-      episode: ${{ (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.repository == 'SailorJoe6/prime-agent-pi' && github.ref == 'refs/heads/JLanders/prime-agent-papi-61-episode-b35069ea' }}
-      allowed: >-
-        ${{ (github.event_name == 'push' && (github.ref == 'refs/heads/main' ||
-        (github.repository == 'SailorJoe6/prime-agent-pi' && github.ref == 'refs/heads/JLanders/prime-agent-papi-61-episode-b35069ea'))) ||
-        github.event_name == 'workflow_dispatch' || steps.vouch.outputs.vouched == 'true' }}
+      allowed: ${{ github.event_name == 'push' || github.event_name == 'workflow_dispatch' || steps.vouch.outputs.vouched == 'true' }}
+      artifact_validation: ${{ steps.artifacts.outputs.enabled }}
     steps:
+      - name: Validate optional Pi artifact inputs
+        id: artifacts
+        if: github.event_name == 'workflow_dispatch' && (inputs.public_version != '' || inputs.catalog_sha != '')
+        env:
+          PUBLIC_VERSION: ${{ inputs.public_version }}
+          CATALOG_SHA: ${{ inputs.catalog_sha }}
+        shell: bash
+        run: |
+          part='(0|[1-9][0-9]{0,15})'
+          if [[ ! "$PUBLIC_VERSION" =~ ^$part\.$part\.$part(\.$part)?$ ]]; then
+            echo 'Provide a three- or four-component Pi public_version.' >&2
+            exit 1
+          fi
+          IFS=. read -ra parts <<< "$PUBLIC_VERSION"
+          for value in "${parts[@]}"; do
+            if (( value > 9007199254740991 )); then
+              echo 'Each public_version component must be a safe integer.' >&2
+              exit 1
+            fi
+          done
+          if [[ ! "$CATALOG_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+            echo 'Provide a full lowercase public catalog commit SHA.' >&2
+            exit 1
+          fi
+          echo 'enabled=true' >> "$GITHUB_OUTPUT"
+
       - name: Check pull request author
         id: vouch
         if: github.event_name == 'pull_request'
@@ -70,8 +100,8 @@ jobs:
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           repository: PrimeIntellect-ai/prime-agent-catalog
-          ref: main
-          token: ${{ needs.trust.outputs.episode != 'true' && secrets.PRIME_CATALOG_REPO_TOKEN || github.token }}
+          ref: ${{ needs.trust.outputs.artifact_validation == 'true' && inputs.catalog_sha || 'main' }}
+          token: ${{ needs.trust.outputs.artifact_validation != 'true' && secrets.PRIME_CATALOG_REPO_TOKEN || github.token }}
           path: prime-agent-catalog
           persist-credentials: false
 
@@ -161,8 +191,8 @@ jobs:
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           repository: PrimeIntellect-ai/prime-agent-catalog
-          ref: main
-          token: ${{ needs.trust.outputs.episode != 'true' && secrets.PRIME_CATALOG_REPO_TOKEN || github.token }}
+          ref: ${{ needs.trust.outputs.artifact_validation == 'true' && inputs.catalog_sha || 'main' }}
+          token: ${{ needs.trust.outputs.artifact_validation != 'true' && secrets.PRIME_CATALOG_REPO_TOKEN || github.token }}
           path: prime-agent-catalog
           persist-credentials: false
 
@@ -202,22 +232,23 @@ jobs:
     if: needs.trust.outputs.allowed == 'true'
     uses: ./.github/workflows/standalone-binaries.yml
     with:
-      python_smoke_diagnostics: ${{ needs.trust.outputs.episode == 'true' }}
+      catalog_sha: ${{ needs.trust.outputs.artifact_validation == 'true' && inputs.catalog_sha || '' }}
+      python_smoke_diagnostics: ${{ needs.trust.outputs.artifact_validation == 'true' }}
     secrets:
-      PRIME_CATALOG_REPO_TOKEN: ${{ needs.trust.outputs.episode != 'true' && secrets.PRIME_CATALOG_REPO_TOKEN || '' }}
+      PRIME_CATALOG_REPO_TOKEN: ${{ needs.trust.outputs.artifact_validation != 'true' && secrets.PRIME_CATALOG_REPO_TOKEN || '' }}
 
   pi-native:
     needs: trust
-    if: needs.trust.outputs.allowed == 'true' && needs.trust.outputs.episode == 'true'
+    if: needs.trust.outputs.allowed == 'true' && needs.trust.outputs.artifact_validation == 'true'
     uses: ./.github/workflows/standalone-binaries.yml
     with:
-      public_version: '0.10.2.4'
-      catalog_sha: '01f4d46dd5157ec73f8faf440214088237c81d59'
+      public_version: ${{ inputs.public_version }}
+      catalog_sha: ${{ inputs.catalog_sha }}
 
   build-check-test:
     name: build-check-test
     if: always() && needs.trust.outputs.allowed == 'true'
-    needs: [trust, build-check, test, standalone]
+    needs: [trust, build-check, test, standalone, pi-native]
     runs-on: ubuntu-latest
     steps:
       - name: Verify CI results
@@ -225,7 +256,12 @@ jobs:
           BUILD_CHECK_RESULT: ${{ needs.build-check.result }}
           TEST_RESULT: ${{ needs.test.result }}
           STANDALONE_RESULT: ${{ needs.standalone.result }}
+          PI_NATIVE_RESULT: ${{ needs.pi-native.result }}
+          ARTIFACT_VALIDATION: ${{ needs.trust.outputs.artifact_validation }}
         run: |
           test "$BUILD_CHECK_RESULT" = success
           test "$TEST_RESULT" = success
           test "$STANDALONE_RESULT" = success
+          if [[ "$ARTIFACT_VALIDATION" == true ]]; then
+            test "$PI_NATIVE_RESULT" = success
+          fi
