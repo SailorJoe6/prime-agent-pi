@@ -1837,13 +1837,11 @@ export class AgentSession {
 			parentSessionId: config.semanticParentSessionId,
 			spawnedByRequestId: config.semanticSpawnedByRequestId,
 		});
-		const stream = wrapStreamFnWithSemanticEdges(this.agent.streamFn, this._semanticEdges);
-		this.agent.streamFn = (model, context, options) => {
+		this.agent.streamFn = wrapStreamFnWithSemanticEdges(this.agent.streamFn, this._semanticEdges, (context) => {
 			// Inspect the request after context hooks and conversion to LLM messages.
 			this._failoverRequestHasImages =
 				this.settingsManager.getProviderFailoverRoutes().length > 0 && context.messages.some(messageCarriesImages);
-			return stream(model, context, options);
-		};
+		});
 		// A resumed child may have replied before this process started; false would
 		// claim knowledge that is not present in the session transcript.
 		this._repliedToParentSinceTask =
