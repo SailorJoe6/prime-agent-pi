@@ -4,7 +4,7 @@ title: Build and validate the Prime Agent Pi packaging and release pipeline
 status: In Progress
 assignee: []
 created_date: '2026-11-24T00:57:00Z'
-updated_date: '2026-11-25T21:00:00Z'
+updated_date: '2026-11-25T21:15:00Z'
 labels: []
 dependencies: []
 documentation:
@@ -549,6 +549,10 @@ Prove final ancestry, the exact tip marker and committed main-push writer isolat
 Published Episode `9903edf3202428e02aface2211eae073257f63ad` has the prior Episode `0c30da6db1e8589d7f858e79cfc3c00a6ddcaa33` and exact published `main` `60b6cf70dc7b207f6ec6c98ae599a876a6a7b2fb` as its parents, tree `96527ebd60c1da176b734676122b425898942d64`, and the exact standalone `Legacy-Publication: skip` line on its actual tip. No history rewrite. PAPI-18 prompt preview integrated without conflict. Release workflows are byte-identical to the previous Episode. Independent audit reran eight main-push guard cases and seven CI input cases: the exact marker blocks legacy publication before release context, ordinary CI and existing contributor trust remain unchanged, and the artifact-only route is read-only with no catalog PAT or release writer. `npm run check` and pre-commit passed; seven focused suites (including PAPI-18 and Pi feed/update/installer) had 302 passes and one skip. Local evidence: `/var/folders/4_/twy0wz3s1mq650wnqzn1b8rr0000gq/T/papi61-integrated-0wsx1fix`.
 
 Exactly one [artifact-only CI run 45700177091](https://github.com/SailorJoe6/prime-agent-pi/actions/runs/45700177091) attempt 1 is admitted on this SHA, suite `123651502733`, fixture release `0.10.2.4`, catalog `01f4d46dd5157ec73f8faf440214088237c81d59`, HTTP 204 request `CC6F:185A3:10D388C:11F4203:6B074C40`. Prior SHA receipts do not transfer. Readiness pending hosted CI, new artifact verification and relevant exact-byte probes. Main, lifecycle and acceptance unchanged. No release, tag, writer or live activation.
+
+### Landing blocked: required Intel standalone smoke failed on integrated candidate
+
+[Artifact-only CI 45700177091](https://github.com/SailorJoe6/prime-agent-pi/actions/runs/45700177091) attempt 1 on `9903edf3202428e02aface2211eae073257f63ad` (published main parent `60b6cf70dc7b207f6ec6c98ae599a876a6a7b2fb`) finished with 26 passes and two failures. [Intel legacy standalone 139508013882](https://github.com/SailorJoe6/prime-agent-pi/actions/runs/45700177091/job/139508013882) reached session startup and completed Python installation and venv creation. At its unchanged 300-second deadline `uv` had started base dependency installation but not completed it, bootstrap metadata was missing, and neither Python cell ran. The harness killed the CLI; owned daemon shutdown was acknowledged, but fixture removal returned false, with a separate ENOTEMPTY cleanup failure. This identifies the last observed stage, not the root cause. [Required aggregate 139514031082](https://github.com/SailorJoe6/prime-agent-pi/actions/runs/45700177091/job/139514031082) failed with `STANDALONE_RESULT: failure`. All eight Pi build jobs succeeded and uploaded artifacts; that does not satisfy the required legacy gate. Exact API evidence and failed job logs are under `/var/folders/4_/twy0wz3s1mq650wnqzn1b8rr0000gq/T/papi61-integrated-0wsx1fix`. Owner has a concrete blocker: clear and pass mandatory Intel cold-bootstrap smoke and aggregate with assertions and deadlines intact before recommending landing. No rerun, weaker gate, main mutation or release.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
