@@ -19,7 +19,7 @@ jobs:
     name: Contributor trust
     runs-on: ubuntu-latest
     outputs:
-      episode: ${{ github.event_name == 'push' && github.repository == 'SailorJoe6/prime-agent-pi' && github.ref == 'refs/heads/JLanders/prime-agent-papi-61-episode-b35069ea' }}
+      episode: ${{ (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.repository == 'SailorJoe6/prime-agent-pi' && github.ref == 'refs/heads/JLanders/prime-agent-papi-61-episode-b35069ea' }}
       allowed: >-
         ${{ (github.event_name == 'push' && (github.ref == 'refs/heads/main' ||
         (github.repository == 'SailorJoe6/prime-agent-pi' && github.ref == 'refs/heads/JLanders/prime-agent-papi-61-episode-b35069ea'))) ||
