@@ -4,7 +4,7 @@ title: Run and recover named machines from Python
 status: In Progress
 assignee: []
 created_date: '2026-11-22T22:17:00Z'
-updated_date: '2026-11-26T21:08:00Z'
+updated_date: '2026-11-26T21:10:00Z'
 labels: []
 milestone: m-0
 dependencies:
@@ -63,4 +63,6 @@ Next bounded slice: add selected-run watch and stop to the existing serial execu
 Selected-run watch/stop slice published at code 491ea1619256c845054ab3a7c86055ac12c59527. Watch uses the same live graph as graph(run_id), waiting for selected-run change or a bounded timeout. Stop prevents new admissions and uses the existing exact-child deletion path, including a stop while child admission returns. Stop does not pause or enable resume. Offline Python tests covered overlapping runs, watch wakeup and timeout, repeated stop, and exact ownership during admission. All 12 factory tests and npm run check passed; order seeds 13, 421 and 2026 passed; three watch/stop mutations were detected. No live providers. Resume, broader graph/output parity, and exact-base Bash comparison remain open; neither acceptance criterion is closed.
 
 Next bounded slice: adapt the released v0.10.0 max_transitions pause to the existing serial text DAG path. Resume only the selected paused run with settled outputs intact and keep stop terminal. Use deterministic two-run offline tests; other graph and output behavior and the Bash baseline comparison remain open.
+
+Transition-limit pause/resume slice published at code 99dc5306e7b76b26a57c4c8a09e3002d272d29db. Adapted released v0.10.0 factory.py transition evaluation and resume (763094e1): the next transition beyond max_transitions pauses the selected serial DAG before child admission; resume continues the same worker past that limit, retaining settled output bindings. Stop on a paused run is terminal. Offline two-run coverage exercised watch/status pause, selected resume without state replay, stop while paused, and stop immediately after resume before child admission. All 13 focused factory tests and npm run check passed; order seeds 13/421/2026 passed and two pause/stop mutations were caught. No live providers. Broader released graph and full-result/multiple-port behavior plus exact-base Bash comparison remain open. No acceptance criteria closed.
 <!-- SECTION:NOTES:END -->
