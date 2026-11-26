@@ -1,9 +1,12 @@
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { NATIVE_PLATFORMS } from "../src/utils/native-installation.js";
+import { SettingsManager } from "../src/core/settings-manager.js";
+import { gatherStartupNotices } from "../src/modes/shared/startup-notices.js";
 import {
 	checkForNewPiVersion,
 	comparePackageVersions,
-	getLatestPiRelease,
 	getLatestPiVersion,
 	isBaseVersionDowngrade,
 	isNewerPackageVersion,
@@ -12,18 +15,15 @@ import {
 } from "../src/utils/version-check.js";
 import { clearAmbientRuntimeEnv } from "./ambient-env.js";
 
-const defaultPrimeAgentDownloadBaseUrl = "https://pub-728493de92a943e2a9b2d17b4719f318.r2.dev";
+import { fakeFeed, listingUrl, taggedRelease } from "./fixtures/pi-release-feed.js";
 
-// These checks read the environment, so each test starts from a cleared one and the
-// host shell cannot decide the outcome. Tests that need a variable set it themselves.
 let restoreAmbientRuntimeEnv: () => void;
-
 beforeEach(() => {
 	restoreAmbientRuntimeEnv = clearAmbientRuntimeEnv();
 });
-
 afterEach(() => {
 	vi.unstubAllGlobals();
+	vi.unstubAllEnvs();
 	restoreAmbientRuntimeEnv();
 });
 
@@ -37,222 +37,75 @@ describe("version checks", () => {
 		expect(isNewerPackageVersion("0.70.6", "0.70.5")).toBe(true);
 	});
 
-	it("returns only newer versions", async () => {
-		const fetchMock = vi.fn(async () => Response.json({ version: "v1.2.3" }));
-		vi.stubGlobal("fetch", fetchMock);
-
-		await expect(checkForNewPiVersion("1.2.3")).resolves.toBeUndefined();
-		await expect(checkForNewPiVersion("1.2.2")).resolves.toBe("1.2.3");
+	it("PAPI-61 startup notice uses only tagged Pi metadata, never downloads a payload or honors the legacy mirror", async () => {
+		const stable = taggedRelease("1.2.3.10");
+		const preview = taggedRelease("1.2.4-preview.11");
+		const feed = fakeFeed(preview, stable);
+		vi.stubGlobal("fetch", feed.fetcher);
+		vi.stubEnv("PRIME_AGENT_DOWNLOAD_BASE_URL", "https://legacy.invalid");
+		await expect(checkForNewPiVersion("1.2.3.2")).resolves.toBe("1.2.3.10");
+		expect(feed.requests).toEqual([listingUrl, `${stable.base}/pi-release-manifest.json`]);
+		await expect(checkForNewPiVersion("1.2.3.2", "preview")).resolves.toBe("1.2.4-preview.11");
+		await expect(checkForNewPiVersion("1.2.3.10")).resolves.toBeUndefined();
 	});
 
-	it("uses the Prime Agent release manifest with a Prime Agent user agent", async () => {
-		const fetchMock = vi.fn(async () => Response.json({ version: "v1.2.4" }));
-		vi.stubGlobal("fetch", fetchMock);
+	it.each(["nightly", "preview"])(
+		"PAPI-61 startup honors saved %s as a Pi preview opt-in without rewriting it",
+		async (channel) => {
+			const agentDir = mkdtempSync(join(tmpdir(), "pi-startup-channel-"));
+			try {
+				const settingsPath = join(agentDir, "settings.json");
+				const saved = JSON.stringify({ updateChannel: channel });
+				writeFileSync(settingsPath, saved);
+				const release = taggedRelease("1.2.4-preview.11");
+				const feed = fakeFeed(release);
+				vi.stubGlobal("fetch", feed.fetcher);
+				vi.stubEnv("TMUX", "");
+				const settingsManager = SettingsManager.create(agentDir, agentDir);
+				const notices = await gatherStartupNotices({
+					version: "1.2.3.2",
+					cwd: agentDir,
+					agentDir,
+					settingsManager,
+				});
+				expect(notices.newVersion).toBe("1.2.4-preview.11");
+				expect(feed.requests).toEqual([listingUrl, `${release.base}/pi-release-manifest.json`]);
+				expect(readFileSync(settingsPath, "utf8")).toBe(saved);
+			} finally {
+				rmSync(agentDir, { recursive: true, force: true });
+			}
+		},
+	);
 
-		await expect(getLatestPiVersion("1.2.3")).resolves.toBe("1.2.4");
-		expect(fetchMock).toHaveBeenCalledWith(
-			`${defaultPrimeAgentDownloadBaseUrl}/latest.json`,
-			expect.objectContaining({
-				headers: expect.objectContaining({
-					"User-Agent": expect.stringMatching(/^prime-agent\/1\.2\.3 /),
-					accept: "application/json",
-				}),
-			}),
-		);
-	});
-
-	it("keeps beta installations on the beta release manifest", async () => {
-		const fetchMock = vi.fn(async () => Response.json({ version: "v1.2.4-beta.124.1.abcdef0" }));
-		vi.stubGlobal("fetch", fetchMock);
-
-		await expect(getLatestPiVersion("1.2.4-beta.123.1.1234567")).resolves.toBe("1.2.4-beta.124.1.abcdef0");
-		expect(fetchMock).toHaveBeenCalledWith(`${defaultPrimeAgentDownloadBaseUrl}/beta.json`, expect.any(Object));
-	});
-
-	it("returns the active package and tarball install spec from the release manifest", async () => {
-		const fetchMock = vi.fn(async () =>
-			Response.json({
-				package: "prime-agent",
-				tarball: "releases/v1.2.4/prime-agent-1.2.4.tgz",
-				version: "v1.2.4",
-			}),
-		);
-		vi.stubGlobal("fetch", fetchMock);
-
-		await expect(getLatestPiRelease("1.2.3")).resolves.toEqual({
-			installSpec: `${defaultPrimeAgentDownloadBaseUrl}/releases/v1.2.4/prime-agent-1.2.4.tgz`,
-			packageName: "prime-agent",
-			version: "1.2.4",
-		});
-	});
-
-	it("skips api calls when version checks are disabled", async () => {
-		process.env.PI_SKIP_VERSION_CHECK = "1";
-		const fetchMock = vi.fn();
-		vi.stubGlobal("fetch", fetchMock);
-
+	it.each(["PI_SKIP_VERSION_CHECK", "PI_OFFLINE"])("does not call GitHub when %s is set", async (name) => {
+		vi.stubEnv(name, "1");
+		const feed = fakeFeed();
+		vi.stubGlobal("fetch", feed.fetcher);
 		await expect(getLatestPiVersion("1.2.3")).resolves.toBeUndefined();
-		expect(fetchMock).not.toHaveBeenCalled();
-	});
-});
-
-describe("update channel preference", () => {
-	it("infers the channel from the running version when none is preferred", () => {
-		expect(resolveUpdateChannel("1.2.4")).toBe("stable");
-		expect(resolveUpdateChannel("1.2.4-beta.123.1.1234567")).toBe("nightly");
-		expect(resolveUpdateChannel("1.2.4-beta.123.1.1234567", "stable")).toBe("stable");
-		expect(resolveUpdateChannel("1.2.4", "nightly")).toBe("nightly");
+		expect(feed.requests).toEqual([]);
 	});
 
-	it("follows a preferred nightly channel from a stable installation", async () => {
-		const fetchMock = vi.fn(async () => Response.json({ version: "v1.2.5-beta.130.1.abcdef0" }));
-		vi.stubGlobal("fetch", fetchMock);
-		await expect(getLatestPiVersion("1.2.4", { channel: "nightly" })).resolves.toBe("1.2.5-beta.130.1.abcdef0");
-		expect(fetchMock).toHaveBeenCalledWith(`${defaultPrimeAgentDownloadBaseUrl}/beta.json`, expect.any(Object));
+	it("PAPI-61 does not infer preview opt-in from running version; explicit legacy nightly opt-in is honored", () => {
+		expect(resolveUpdateChannel("1.2.4-preview.1")).toBe("stable");
+		expect(resolveUpdateChannel("1.2.4-beta.123.1.1234567")).toBe("stable");
+		expect(resolveUpdateChannel("1.2.4", "nightly")).toBe("preview");
 	});
 
-	it("follows a preferred stable channel from a beta installation", async () => {
-		const fetchMock = vi.fn(async () => Response.json({ version: "v1.2.4" }));
-		vi.stubGlobal("fetch", fetchMock);
-		await expect(getLatestPiVersion("1.2.4-beta.123.1.1234567", { channel: "stable" })).resolves.toBe("1.2.4");
-		expect(fetchMock).toHaveBeenCalledWith(`${defaultPrimeAgentDownloadBaseUrl}/latest.json`, expect.any(Object));
+	it.each([
+		["1.2.3.10", "1.2.3.2", undefined, true],
+		["1.2.3.2", "1.2.3.10", "preview", false],
+		["1.2.3-preview.11", "1.2.3-preview.2", "preview", true],
+		["1.2.3-preview.11", "1.2.3", "preview", true],
+		["1.2.3-preview.11", "1.2.3", undefined, false],
+		["1.2.3", "1.2.3-preview.11", "preview", true],
+		["1.2.3", "1.2.3-beta.11.1.abcdef0", "stable", true],
+	] as const)("offers %s over %s on %s only according to Pi ordering", (candidate, current, channel, expected) => {
+		expect(isReleaseUpdateCandidate(candidate, current, channel)).toBe(expected);
 	});
 
-	it("lets a stable installation move onto the current beta build when nightly is preferred", () => {
-		expect(isReleaseUpdateCandidate("1.2.3-beta.5.1.abcdef0", "1.2.3", "nightly")).toBe(true);
-		expect(isReleaseUpdateCandidate("1.2.3-beta.5.1.abcdef0", "1.2.3")).toBe(false);
-		expect(isReleaseUpdateCandidate("1.2.3-beta.5.1.abcdef0", "1.2.3", "stable")).toBe(false);
-	});
-
-	it("never downgrades the base version when switching channels", () => {
-		expect(isReleaseUpdateCandidate("1.2.2-beta.9.1.abcdef0", "1.2.3", "nightly")).toBe(false);
-		expect(isReleaseUpdateCandidate("1.2.2", "1.2.3-beta.5.1.abcdef0", "stable")).toBe(false);
-		expect(isReleaseUpdateCandidate("1.2.3", "1.2.3-beta.5.1.abcdef0", "stable")).toBe(true);
-	});
-
-	it("flags only a lower base version as a downgrade", () => {
-		expect(isBaseVersionDowngrade("1.2.2-beta.9.1.abcdef0", "1.2.3")).toBe(true);
+	it("flags lower public versions, including repairs, but not stable promotion", () => {
+		expect(isBaseVersionDowngrade("1.2.3.2", "1.2.3.10")).toBe(true);
 		expect(isBaseVersionDowngrade("1.2.2", "1.2.3-beta.5.1.abcdef0")).toBe(true);
-		expect(isBaseVersionDowngrade("1.2.3-beta.5.1.abcdef0", "1.2.3")).toBe(false);
-		expect(isBaseVersionDowngrade("1.2.3", "1.2.3-beta.5.1.abcdef0")).toBe(false);
-		expect(isBaseVersionDowngrade("1.3.0", "1.2.9")).toBe(false);
-		expect(isBaseVersionDowngrade("not-a-version", "1.2.3")).toBe(false);
-	});
-
-	it("keeps same-channel updates strictly newer", () => {
-		expect(isReleaseUpdateCandidate("1.2.3-beta.5.1.abcdef0", "1.2.3-beta.5.1.abcdef0", "nightly")).toBe(false);
-		expect(isReleaseUpdateCandidate("1.2.3-beta.4.1.abcdef0", "1.2.3-beta.5.1.abcdef0", "nightly")).toBe(false);
-		expect(isReleaseUpdateCandidate("1.2.3-beta.6.1.abcdef0", "1.2.3-beta.5.1.abcdef0", "nightly")).toBe(true);
-	});
-
-	it("reports the current beta build from a stable installation once nightly is preferred", async () => {
-		vi.stubGlobal(
-			"fetch",
-			vi.fn(async () => Response.json({ version: "v1.2.3-beta.5.1.abcdef0" })),
-		);
-		await expect(checkForNewPiVersion("1.2.3", "nightly")).resolves.toBe("1.2.3-beta.5.1.abcdef0");
-		await expect(checkForNewPiVersion("1.2.3")).resolves.toBeUndefined();
-	});
-
-	it("reports a newer beta build when nightly is preferred", async () => {
-		vi.stubGlobal(
-			"fetch",
-			vi.fn(async () => Response.json({ version: "v1.2.5-beta.1.1.abcdef0" })),
-		);
-		await expect(checkForNewPiVersion("1.2.4", "nightly")).resolves.toBe("1.2.5-beta.1.1.abcdef0");
-	});
-});
-
-describe("manifest binary schema compatibility", () => {
-	const artifact = (platform: string, sha256 = "a".repeat(64)) => ({
-		platform,
-		file: `prime-agent-1.2.4-${platform}.tar.gz`,
-		sha256,
-	});
-
-	function stubManifest(fields: Record<string, unknown>): void {
-		vi.stubGlobal(
-			"fetch",
-			vi.fn(async () =>
-				Response.json({
-					version: "v1.2.4",
-					package: "prime-agent",
-					tarball: "releases/v1.2.4/prime-agent-1.2.4.tgz",
-					...fields,
-				}),
-			),
-		);
-	}
-
-	it("prefers binariesV2, keeps every supported platform, and skips future platforms", async () => {
-		stubManifest({
-			binaries: [artifact("darwin-arm64", "b".repeat(64))],
-			binariesV2: [
-				...NATIVE_PLATFORMS.map((platform, index) => artifact(platform, index.toString(16).padStart(64, "0"))),
-				artifact("future-riscv128", "f".repeat(64)),
-			],
-		});
-
-		const release = await getLatestPiRelease("1.2.3");
-		expect(release?.binaries?.map(({ platform }) => platform)).toEqual(NATIVE_PLATFORMS);
-		expect(release?.binaries?.map(({ platform }) => platform)).toEqual(
-			expect.arrayContaining([
-				"linux-arm64-musl",
-				"linux-x64-baseline",
-				"linux-x64-musl",
-				"linux-x64-musl-baseline",
-			]),
-		);
-	});
-
-	it("falls back to binaries when binariesV2 is absent", async () => {
-		stubManifest({ binaries: [artifact("darwin-arm64")] });
-
-		await expect(getLatestPiRelease("1.2.3")).resolves.toMatchObject({
-			binaries: [artifact("darwin-arm64")],
-		});
-	});
-
-	it("rejects the selected list when an entry is structurally malformed", async () => {
-		stubManifest({
-			binaries: [artifact("darwin-arm64")],
-			binariesV2: [artifact("linux-x64"), null],
-		});
-
-		const release = await getLatestPiRelease("1.2.3");
-		expect(release?.version).toBe("1.2.4");
-		expect(release?.binaries).toBeUndefined();
-	});
-
-	it("rejects the selected list when a supported platform entry is malformed", async () => {
-		stubManifest({
-			binaries: [artifact("darwin-arm64")],
-			binariesV2: [artifact("linux-x64"), artifact("linux-x64-musl", "not-hex")],
-		});
-
-		const release = await getLatestPiRelease("1.2.3");
-		expect(release?.version).toBe("1.2.4");
-		expect(release?.binaries).toBeUndefined();
-	});
-
-	it("rejects the selected list when a supported platform is duplicated", async () => {
-		stubManifest({
-			binaries: [artifact("darwin-arm64")],
-			binariesV2: [artifact("linux-x64"), artifact("linux-x64", "b".repeat(64))],
-		});
-
-		const release = await getLatestPiRelease("1.2.3");
-		expect(release?.version).toBe("1.2.4");
-		expect(release?.binaries).toBeUndefined();
-	});
-
-	it("preserves npm release info when the selected list contains only future platforms", async () => {
-		stubManifest({ binariesV2: [artifact("future-riscv128", "b".repeat(64))] });
-
-		await expect(getLatestPiRelease("1.2.3")).resolves.toEqual({
-			version: "1.2.4",
-			packageName: "prime-agent",
-			installSpec: `${defaultPrimeAgentDownloadBaseUrl}/releases/v1.2.4/prime-agent-1.2.4.tgz`,
-		});
+		expect(isBaseVersionDowngrade("1.2.3", "1.2.3-preview.11")).toBe(false);
 	});
 });

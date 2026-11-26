@@ -13,7 +13,7 @@
   RLM-native terminal coding and research harness.
 </p>
 
-Prime Agent began as a hard fork of [pi-mono](https://github.com/badlogic/pi-mono), but it is now developed and distributed independently. This workspace retains inherited `@earendil-works/pi-*` source package identifiers, the `pi` package manifest key, and a source-package `pi` bin entry for internal compatibility. Public releases are currently versioned tarball artifacts installed by the scripts below; release packaging rewrites the application package and command to `prime-agent`. Do not use the inherited npm package as the Prime Agent install path.
+Prime Agent Pi is the independent TypeScript continuation of Prime Agent, which began as a hard fork of [pi-mono](https://github.com/badlogic/pi-mono). The distributed application package is `prime-agent-pi`; its command is `prime-agent`. The source workspace retains inherited `@earendil-works/pi-*` identifiers for compatibility.
 
 ## Table of Contents
 
@@ -42,15 +42,18 @@ Prime Agent began as a hard fork of [pi-mono](https://github.com/badlogic/pi-mon
 
 ## Quick Start
 
-```bash
-curl -fsSL https://app.primeintellect.ai/prime-agent/install.sh | sh
-```
-
-To install the beta built from the latest commit on `main`:
+Use the [Prime Agent Pi source checkout](https://github.com/SailorJoe6/prime-agent-pi) while no tagged installer is available:
 
 ```bash
-curl -fsSL https://app.primeintellect.ai/prime-agent/install.sh | sh -s -- beta
+git clone https://github.com/SailorJoe6/prime-agent-pi.git
+cd prime-agent-pi
+npm ci
+./prime-agent.sh
 ```
+
+When native assets are available on [Prime Agent Pi Releases](https://github.com/SailorJoe6/prime-agent-pi/releases), choose an exact stable tag unless you deliberately want a preview. Follow the [verified install and repair instructions](https://github.com/SailorJoe6/prime-agent-pi/blob/main/docs/pi-release-engineering.md#native-install-update-and-repair-papi-61): download `install-pi.sh` and `SHA256SUMS` from the same tag, verify the installer before running it, and let it verify the selected archive before installation. Do not run an unverified installer piped from the network.
+
+For a managed native install, `prime-agent update` or `/update` uses stable by default. Use `--preview` to opt in (`--nightly` is an alias), `--stable` to switch back, and `prime-agent update --rollback` to restore a retained previous release offline. For a source or unmanaged install, use the original setup route to update it.
 
 Authenticate with an API key:
 
@@ -279,7 +282,7 @@ See [docs/settings.md](docs/settings.md) for all options.
 
 ### Update checks
 
-Prime Agent stable builds fetch `https://pub-728493de92a943e2a9b2d17b4719f318.r2.dev/latest.json` to check whether a newer version exists. Beta builds fetch `beta.json` and remain on the beta channel. Override the base URL with `PRIME_AGENT_DOWNLOAD_BASE_URL`. Disable version checks with `PI_SKIP_VERSION_CHECK=1`.
+Startup notices check Prime Agent Pi release metadata only; they do not download installers or install updates. An explicit native update verifies both the tagged installer and the selected archive before changing the active release. See [Update Checks](docs/settings.md#update-checks) for channel settings and opt-out controls.
 
 Use `--offline` or `PI_OFFLINE=1` to disable startup network operations, including update checks and package update checks.
 
@@ -703,7 +706,6 @@ prime-agent --thinking high "Solve this complex problem"
 | `PRIME_AGENT_TELEMETRY` | Override pseudonymous aggregate usage analytics with `1`/`true`/`yes` or `0`/`false`/`no` |
 | `PRIME_AGENT_TELEMETRY_ENDPOINT` | Override the aggregate analytics ingestion endpoint |
 | `DO_NOT_TRACK` | Disable aggregate usage analytics when set to `1`/`true`/`yes` |
-| `PRIME_AGENT_DOWNLOAD_BASE_URL` | Override the Prime Agent release manifest and tarball base URL |
 | `PI_CACHE_RETENTION` | Set to `long` for extended prompt cache (Anthropic: 1h, OpenAI: 24h) |
 | `PRIME_API_KEY` | Prime Inference API key; also used for trace sharing if it has `agent_traces` scope |
 | `PRIME_TEAM_ID` | Override the Prime Inference team request header without changing the saved Agent team |

@@ -4,6 +4,7 @@ import { dirname, join } from "node:path";
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { SessionManager } from "../src/core/session-manager.js";
+import { SettingsManager } from "../src/core/settings-manager.js";
 import type { ActiveSessionState } from "../src/modes/daemon/active-session-state.js";
 import {
 	type AgentRosterEntry,
@@ -479,6 +480,7 @@ describe("worker roster reporter", () => {
 
 		// set_model has no session-event carrier either; its explicit flush publishes the new model.
 		const session = state.runtime.session as unknown as Record<string, unknown>;
+		session.settingsManager = SettingsManager.inMemory({ allowedModels: ["prov/m2"] });
 		session.modelRegistry = {
 			refreshAvailableModels: async () => [{ provider: "prov", id: "m2" }],
 		};

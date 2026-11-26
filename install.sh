@@ -9,6 +9,7 @@ prime_agent_unconfigured_base_url="__PRIME_AGENT_DOWNLOAD_BASE""_URL__"
 prime_agent_unconfigured_default_release_channel="__PRIME_AGENT_DEFAULT_RELEASE_""CHANNEL__"
 prime_agent_base_url="${PRIME_AGENT_DOWNLOAD_BASE_URL:-__PRIME_AGENT_DOWNLOAD_BASE_URL__}"
 prime_agent_base_url="${prime_agent_base_url%/}"
+readonly prime_agent_pi_repo=https://github.com/SailorJoe6/prime-agent-pi
 prime_agent_default_release_channel="__PRIME_AGENT_DEFAULT_RELEASE_CHANNEL__"
 if [ "$prime_agent_default_release_channel" = "$prime_agent_unconfigured_default_release_channel" ]; then
 	prime_agent_default_release_channel=stable
@@ -69,6 +70,23 @@ main() {
 		prime_agent_native_rollback
 		return
 	fi
+	# The same file is published as install-pi.sh and retained beside Pi metadata.
+	if [ "${PRIME_AGENT_PI_TAG+x}" = x ] || prime_agent_is_pi_installer; then
+		if [ "$#" -ne 1 ] || ! prime_agent_pi_valid_version "$1" || [ "${PRIME_AGENT_PI_TAG:-}" != "pi-v$1" ]; then
+			printf 'error: set PRIME_AGENT_PI_TAG=pi-vVERSION and pass that exact VERSION to the Pi installer.\n' >&2
+			exit 1
+		fi
+		case "${PRIME_AGENT_INSTALL_METHOD:-auto}" in
+			auto|binary) ;;
+			*) printf 'error: the Pi release installer only supports a native binary install.\n' >&2; exit 1 ;;
+		esac
+		if ! native_platform=$(prime_agent_native_platform); then
+			printf 'error: no compatible Prime Agent Pi archive is available for this platform; see the Pi source setup instructions.\n' >&2
+			exit 1
+		fi
+		prime_agent_install_native "$native_platform" "$1"
+		return
+	fi
 	if [ "${1:-}" = --native-platform ]; then
 		prime_agent_native_platform
 		return
@@ -89,6 +107,16 @@ main() {
 		printf 'Using the Node installation for this platform.\n' >&2
 	fi
 	prime_agent_install_node "$@"
+}
+
+prime_agent_is_pi_installer() {
+	case "$0" in
+		install-pi.sh|*/install-pi.sh) return 0 ;;
+		*/*) pi_installer_dir="${0%/*}" ;;
+		*) pi_installer_dir=. ;;
+	esac
+	[ -f "$pi_installer_dir/pi-release.json" ] ||
+		{ [ -f "$pi_installer_dir/.install-source" ] && [ "$(cat "$pi_installer_dir/.install-source")" = "$prime_agent_pi_repo" ]; }
 }
 
 prime_agent_install_node() {
@@ -220,7 +248,10 @@ prime_agent_validate_download_base_url() {
 }
 
 prime_agent_curl_download() {
-	if [ "$prime_agent_allow_insecure_http" = 1 ]; then
+	if [ -n "${PRIME_AGENT_PI_TAG:-}" ]; then
+		# Do not let a curl config file alter the exact tagged HTTPS downloads.
+		curl -q --proto '=https' --proto-redir '=https' "$@"
+	elif [ "$prime_agent_allow_insecure_http" = 1 ]; then
 		curl --proto '=http,https' --proto-redir '=https' "$@"
 	else
 		curl --proto '=https' --proto-redir '=https' "$@"
@@ -1890,6 +1921,11 @@ prime_agent_native_valid_target() {
 	return $?
 }
 
+prime_agent_pi_valid_version() {
+	case "$1" in ''|*[!0-9.a-z-]*) return 1 ;; esac
+	printf '%s\n' "$1" | LC_ALL=C grep -Eq '^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(\.[1-9][0-9]*)?(-preview\.[1-9][0-9]*)?$'
+}
+
 prime_agent_native_parse_target() {
 	native_parsed_target="$1"
 	case "$native_parsed_target" in ../releases/*/prime-agent) ;; *) return 1 ;; esac
@@ -1920,7 +1956,8 @@ prime_agent_native_parse_target() {
 		*) return 1 ;;
 	esac
 	native_parsed_version=${native_parsed_prefix%-"$native_parsed_platform"}
-	printf '%s\n' "$native_parsed_version" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$' || return 1
+	prime_agent_pi_valid_version "$native_parsed_version" ||
+		printf '%s\n' "$native_parsed_version" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$' || return 1
 	native_parsed_dir="$native_root/releases/$native_parsed_name"
 }
 
@@ -1957,6 +1994,9 @@ prime_agent_native_validate_release_metadata() {
 	native_metadata_package_version=$(sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$native_metadata_dir/package.json")
 	[ "$native_metadata_package_version" = "$native_metadata_version" ] || return 1
 	native_metadata_source=$(cat "$native_metadata_dir/.install-source")
+	if [ "$native_metadata_source" = "$prime_agent_pi_repo" ]; then
+		prime_agent_native_validate_asset "$native_metadata_dir" pi-release.json || return 1
+	fi
 	case "$native_metadata_source" in http://*|https://*) ;; *) return 1 ;; esac
 }
 
@@ -2027,7 +2067,9 @@ prime_agent_native_probe_missing_libstdcxx() {
 prime_agent_native_report_missing_libstdcxx() {
 	printf 'error: the compiled executable needs the libstdc++ runtime library, which is missing here.\n' >&2
 	printf 'Install it and run this installer again (Alpine: apk add --no-cache libstdc++).\n' >&2
-	printf 'To install the Node.js build instead, set PRIME_AGENT_INSTALL_METHOD=node.\n' >&2
+	if [ -z "${PRIME_AGENT_PI_TAG:-}" ]; then
+		printf 'To install the Node.js build instead, set PRIME_AGENT_INSTALL_METHOD=node.\n' >&2
+	fi
 }
 
 prime_agent_native_verify_release_target() {
@@ -2201,25 +2243,39 @@ prime_agent_release_is_node_only() {
 prime_agent_install_native() {
 	native_platform="$1"
 	shift
-	if [ "$prime_agent_base_url" = "$prime_agent_unconfigured_base_url" ]; then
-		printf 'error: set PRIME_AGENT_DOWNLOAD_BASE_URL or use the published installer.\n' >&2; exit 1
+	native_allow_node_fallback=0
+	if [ -n "${PRIME_AGENT_PI_TAG:-}" ]; then
+		native_version="$1"
+		native_source="$prime_agent_pi_repo"
+		native_download_url="$native_source/releases/download/$PRIME_AGENT_PI_TAG"
+		native_file="prime-agent-pi-$native_version-$native_platform.tar.gz"
+		[ -f "$0" ] || { printf 'error: run the verified Pi installer from a local file.\n' >&2; exit 1; }
+	else
+		if [ "$prime_agent_base_url" = "$prime_agent_unconfigured_base_url" ]; then
+			printf 'error: set PRIME_AGENT_DOWNLOAD_BASE_URL or use the published installer.\n' >&2; exit 1
+		fi
+		prime_agent_validate_download_base_url
 	fi
-	prime_agent_validate_download_base_url
 	prime_agent_install_traps
 	prime_agent_init_screen
-	native_version=$(resolve_prime_agent_version "$@")
-	printf '%s\n' "$native_version" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$' || {
-		printf 'error: invalid native release version.\n' >&2; exit 1;
-	}
+	if [ -z "${PRIME_AGENT_PI_TAG:-}" ]; then
+		native_version=$(resolve_prime_agent_version "$@")
+		printf '%s\n' "$native_version" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$' || {
+			printf 'error: invalid native release version.\n' >&2; exit 1;
+		}
+		native_source="$prime_agent_base_url"
+		native_download_url="$native_source/releases/v$native_version"
+		native_file="prime-agent-$native_version-$native_platform.tar.gz"
+		if [ "${PRIME_AGENT_INSTALL_METHOD:-auto}" = auto ]; then native_allow_node_fallback=1; fi
+	fi
 	# Select the release format before touching native-owned installation paths.
 	prime_agent_download_dir=$(create_temp_dir)
-	native_file="prime-agent-$native_version-$native_platform.tar.gz"
 	native_checksums="$prime_agent_download_dir/SHA256SUMS"
 	prime_agent_run_quiet_with_animation "Downloading Prime Agent" "Downloading release checksums" "Prime Agent v$native_version" \
-		prime_agent_curl_download -fsSL --connect-timeout 10 --max-time 120 "$prime_agent_base_url/releases/v$native_version/SHA256SUMS" -o "$native_checksums"
+		prime_agent_curl_download -fsSL --connect-timeout 10 --max-time 120 "$native_download_url/SHA256SUMS" -o "$native_checksums"
 	awk -v file="$native_file" '$2 == file { count++; hash=$1; fields=NF } END { if (count != 1 || fields != 2 || length(hash) != 64 || hash ~ /[^0-9a-fA-F]/) exit 1; print tolower(hash) "  " file }' \
 		"$native_checksums" >"$prime_agent_download_dir/selected.sha256" || {
-		if [ "${PRIME_AGENT_INSTALL_METHOD:-auto}" = auto ] &&
+		if [ "$native_allow_node_fallback" = 1 ] &&
 			prime_agent_release_is_node_only "$native_checksums" "$prime_agent_package-$native_version.tgz"; then
 			rm -rf "$prime_agent_download_dir"
 			prime_agent_download_dir=
@@ -2229,6 +2285,9 @@ prime_agent_install_native() {
 		fi
 		printf 'error: expected one valid checksum for %s.\n' "$native_file" >&2; exit 1;
 	}
+	if [ -n "${PRIME_AGENT_EXPECTED_SHA256:-}" ] && [ "$(awk '{print $1}' "$prime_agent_download_dir/selected.sha256")" != "$PRIME_AGENT_EXPECTED_SHA256" ]; then
+		printf 'error: release manifest and checksum inventory disagree.\n' >&2; exit 1
+	fi
 	if [ "${PRIME_AGENT_INSTALLER_NONINTERACTIVE:-0}" != 1 ]; then
 		if prime_agent_prompt_yes_no "Install Prime Agent v$native_version?" "Downloads and verifies the compiled application." "Install? [Y/n]"; then
 			:
@@ -2242,11 +2301,8 @@ prime_agent_install_native() {
 	rm -rf "$prime_agent_download_dir"
 	prime_agent_download_dir=
 	native_archive="$prime_agent_native_stage/$native_file"
-	if [ -n "${PRIME_AGENT_EXPECTED_SHA256:-}" ] && [ "$(awk '{print $1}' "$prime_agent_native_stage/selected.sha256")" != "$PRIME_AGENT_EXPECTED_SHA256" ]; then
-		printf 'error: release manifest and checksum inventory disagree.\n' >&2; exit 1
-	fi
 	prime_agent_run_quiet_with_animation "Downloading Prime Agent" "Downloading compiled Prime Agent" "$native_platform" \
-		prime_agent_curl_download -fsSL --connect-timeout 10 --max-time 300 "$prime_agent_base_url/releases/v$native_version/$native_file" -o "$native_archive"
+		prime_agent_curl_download -fsSL --connect-timeout 10 --max-time 300 "$native_download_url/$native_file" -o "$native_archive"
 	if command -v sha256sum >/dev/null 2>&1; then native_checker=sha256sum; else native_checker=shasum; fi
 	prime_agent_run_quiet_with_animation "Verifying Prime Agent" "Verifying SHA-256" "Checking the downloaded archive." \
 		prime_agent_run_checksum_check "$prime_agent_native_stage" selected.sha256 "$native_checker"
@@ -2254,6 +2310,15 @@ prime_agent_install_native() {
 	mkdir "$prime_agent_native_stage/application"
 	tar -xzf "$native_archive" -C "$prime_agent_native_stage/application"
 	native_extracted="$prime_agent_native_stage/application"
+	if [ -n "${PRIME_AGENT_PI_TAG:-}" ]; then
+		[ -f "$native_extracted/pi-release.json" ] || { printf 'error: missing Pi release metadata.\n' >&2; exit 1; }
+		if [ -e "$native_extracted/install.sh" ]; then
+			printf 'error: Pi archive must not supply its own installer.\n' >&2; exit 1
+		fi
+		# TypeScript or the manual caller verifies this script before execution.
+		cat <"$0" >"$native_extracted/install.sh"
+		chmod 755 "$native_extracted/install.sh"
+	fi
 	for native_asset in prime-agent package.json install.sh prime-agent-runtime/pyproject.toml prime-agent-runtime/src/rlm/repl.py theme/prime.json export-html/template.html photon_rs_bg.wasm; do
 		[ -f "$native_extracted/$native_asset" ] || { printf 'error: missing archive asset: %s\n' "$native_asset" >&2; exit 1; }
 	done
@@ -2272,7 +2337,7 @@ prime_agent_install_native() {
 		# A timeout means the executable never answered, not that it cannot run here.
 		if [ "$native_probe_status" -eq 124 ]; then
 			native_probe_hint="Set PRIME_AGENT_PROBE_TIMEOUT_SECONDS to a larger value and run the installer again."
-			if [ "${PRIME_AGENT_INSTALL_METHOD:-auto}" = auto ]; then
+			if [ "$native_allow_node_fallback" = 1 ]; then
 				printf 'The compiled executable did not answer in time; using the Node installation. %s\n' "$native_probe_hint" >&2
 				prime_agent_install_node "$native_version"
 				return
@@ -2281,7 +2346,7 @@ prime_agent_install_native() {
 				"$(prime_agent_native_probe_timeout)" "$native_probe_hint" >&2
 			exit 1
 		fi
-		if [ "${PRIME_AGENT_INSTALL_METHOD:-auto}" = auto ]; then
+		if [ "$native_allow_node_fallback" = 1 ]; then
 			printf 'The compiled executable cannot run here; using the Node installation.\n' >&2
 			prime_agent_install_node "$native_version"
 			return
@@ -2301,7 +2366,7 @@ prime_agent_install_native() {
 		native_release_name=${native_destination##*/}
 	fi
 	printf '%s\n' "$native_digest" >"$native_extracted/.archive-sha256"
-	printf '%s\n' "$prime_agent_base_url" >"$native_extracted/.install-source"
+	printf '%s\n' "$native_source" >"$native_extracted/.install-source"
 	mv "$native_extracted" "$native_destination"
 	if [ "${PRIME_AGENT_BOOTSTRAP_KERNEL_ON_INSTALL:-}" != 0 ]; then
 		confirm_kernel_runtime_setup

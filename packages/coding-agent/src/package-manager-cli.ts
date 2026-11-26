@@ -40,10 +40,7 @@ import {
 	getAgentDir,
 	getDaemonUpdateRestartManifestPath,
 	getLegacyDaemonUpdateRestartManifestPath,
-	getSelfUpdateCommand,
-	getSelfUpdateUnavailableInstruction,
 	isBunBinary,
-	PACKAGE_NAME,
 	SELF_UPDATE_INTERACTIVE_CHILD_ENV,
 	SELF_UPDATE_NOT_ATTEMPTED_EXIT_CODE,
 	type SelfUpdateCommand,
@@ -75,13 +72,7 @@ import {
 	DAEMON_WORKER_SUPERVISOR_SOCKET_ENV,
 } from "./modes/daemon/daemon-worker-protocol.js";
 import { shouldUseWindowsShell } from "./utils/child-process.js";
-import {
-	getLatestPiRelease,
-	isBaseVersionDowngrade,
-	isReleaseUpdateCandidate,
-	resolveUpdateChannel,
-	type UpdateChannel,
-} from "./utils/version-check.js";
+import { getPiUpdateChannelPreference, resolveUpdateChannel, type UpdateChannel } from "./utils/version-check.js";
 
 export type PackageCommand = "install" | "remove" | "update" | "list";
 
@@ -100,7 +91,7 @@ interface PackageCommandOptions {
 	local: boolean;
 	force: boolean;
 	rollback: boolean;
-	channel?: UpdateChannel;
+	channel?: "stable" | "preview";
 	help: boolean;
 	daemonSocketPath?: string;
 	restartCoordinator: boolean;
@@ -129,7 +120,7 @@ function getPackageCommandUsage(command: PackageCommand): string {
 		case "remove":
 			return `${APP_NAME} package remove <source> [--local]`;
 		case "update":
-			return `${APP_NAME} update [--force] [--rollback] [--nightly|--stable] or ${APP_NAME} package update [source]`;
+			return `${APP_NAME} update [--force] [--rollback] [--preview|--stable] or ${APP_NAME} package update [source]`;
 		case "list":
 			return `${APP_NAME} package list`;
 	}
@@ -182,7 +173,8 @@ Options:
   --extension <source>    Update one package only
   --force                 Reinstall ${APP_NAME} even if the current version is latest
   --rollback              Restore the previous compiled release
-  --nightly               Switch updates to the nightly channel (unreleased builds, may be broken)
+  --preview               Opt in to preview releases (may be unstable)
+  --nightly               Alias for --preview
   --stable                Return updates to the stable channel
   --daemon-socket <path>  Restart the daemon listening on this exact socket
 
@@ -218,7 +210,7 @@ function parsePackageCommand(args: string[]): PackageCommandOptions | undefined 
 	let local = false;
 	let force = false;
 	let rollback = false;
-	let channel: UpdateChannel | undefined;
+	let channel: PackageCommandOptions["channel"];
 	let help = false;
 	let invalidOption: string | undefined;
 	let invalidArgument: string | undefined;
@@ -283,14 +275,14 @@ function parsePackageCommand(args: string[]): PackageCommandOptions | undefined 
 			continue;
 		}
 
-		if (arg === "--nightly" || arg === "--stable") {
+		if (arg === "--preview" || arg === "--nightly" || arg === "--stable") {
 			if (command !== "update") {
 				invalidOption = invalidOption ?? arg;
 				continue;
 			}
-			const requested: UpdateChannel = arg === "--nightly" ? "nightly" : "stable";
+			const requested = arg === "--stable" ? "stable" : "preview";
 			if (channel && channel !== requested) {
-				conflictingOptions = conflictingOptions ?? "--nightly and --stable cannot be combined";
+				conflictingOptions = conflictingOptions ?? "--preview (or --nightly) and --stable cannot be combined";
 			}
 			channel = requested;
 			continue;
@@ -408,7 +400,7 @@ function parsePackageCommand(args: string[]): PackageCommandOptions | undefined 
 	if (rollback && (extensionsFlag || extensionFlagSource || (source && !isSelfUpdateSource(source))))
 		conflictingOptions = "--rollback only applies to Prime Agent itself";
 	if (channel && (extensionsFlag || extensionFlagSource || (source && !isSelfUpdateSource(source))))
-		conflictingOptions = conflictingOptions ?? "--nightly and --stable only apply to Prime Agent itself";
+		conflictingOptions = conflictingOptions ?? "--preview, --nightly, and --stable only apply to Prime Agent itself";
 	return {
 		command,
 		source,
@@ -453,34 +445,12 @@ function reportDaemonUpdateRestartStatus(status: DaemonUpdateRestartStatus): voi
 	}
 }
 
-function printSelfUpdateUnavailable(
-	npmCommand?: string[],
-	updateSpec = PACKAGE_NAME,
-	updatePackageName = updateSpec,
-): void {
-	console.error(`error: ${APP_NAME} cannot self-update this installation.`);
-	console.error(getSelfUpdateUnavailableInstruction(PACKAGE_NAME, npmCommand, updateSpec, updatePackageName));
+const PI_RELEASES_URL = "https://github.com/SailorJoe6/prime-agent-pi/releases";
 
-	const entrypoint = process.argv[1];
-	if (entrypoint) {
-		console.error("");
-		console.error(`Location of pi executable: ${entrypoint}`);
-	}
-}
-
-function printSelfUpdateFallback(command: SelfUpdateCommand): void {
-	console.error(chalk.dim(`If this keeps failing, run this command yourself: ${command.display}`));
-}
-
-interface SelfUpdatePlan {
-	installSpec: string;
-	packageName: string;
-	shouldRun: boolean;
-	targetVersion?: string;
-	command?: SelfUpdateCommand;
-	/** The requested channel could not be resolved; nothing was installed and nothing should be persisted. */
-	unavailable?: boolean;
-}
+type SelfUpdatePlan =
+	| { kind: "unavailable" }
+	| { kind: "unchanged" }
+	| { kind: "install"; targetVersion: string; command: SelfUpdateCommand };
 
 /** A cancelled or refused self-update: the interactive parent must not relaunch, a shell caller gets a failure. */
 function setSelfUpdateAbortedExitCode(): void {
@@ -493,30 +463,20 @@ function setSelfUpdateAbortedExitCode(): void {
  * we refuse, since --force is also how a channel switch is scripted without a TTY.
  */
 function behindChannelPlan(latestVersion: string, force: boolean, channel: UpdateChannel | undefined): SelfUpdatePlan {
-	const plan = { installSpec: PACKAGE_NAME, packageName: PACKAGE_NAME };
 	if (force) {
 		console.error(
 			chalk.red(
-				`Refusing to move from v${VERSION} to v${latestVersion}: that is a downgrade, and --force does not override it. ${APP_NAME} was not updated and the update channel was not changed.${isBunBinary ? " Use --rollback to restore the previous compiled release." : ""}`,
+				`Refusing to move from v${VERSION} to v${latestVersion}: that is a downgrade, and --force does not override it. ${APP_NAME} was not updated and the update channel was not changed. Use --rollback to restore the previous compiled release.`,
 			),
 		);
-		return { ...plan, shouldRun: false, unavailable: true };
+		return { kind: "unavailable" };
 	}
 	console.log(
 		chalk.green(
 			`${APP_NAME} v${VERSION} is ahead of the ${resolveUpdateChannel(VERSION, channel)} channel (v${latestVersion}); nothing to update.`,
 		),
 	);
-	return { ...plan, shouldRun: false };
-}
-
-function nightlyReleaseUnavailablePlan(): SelfUpdatePlan {
-	console.error(
-		chalk.red(
-			`Could not resolve a nightly release from the release manifest. ${APP_NAME} was not updated and the update channel was not changed.`,
-		),
-	);
-	return { installSpec: PACKAGE_NAME, packageName: PACKAGE_NAME, shouldRun: false, unavailable: true };
+	return { kind: "unchanged" };
 }
 
 function setSelfUpdateNoChangeExitCode(): void {
@@ -525,70 +485,57 @@ function setSelfUpdateNoChangeExitCode(): void {
 }
 
 async function getSelfUpdatePlan(force: boolean, rollback = false, channel?: UpdateChannel): Promise<SelfUpdatePlan> {
-	// A -beta install with no saved preference is on the nightly channel too; a missing manifest
-	// must never push it onto the stable registry package.
-	const effectiveChannel = resolveUpdateChannel(VERSION, channel);
-	if (isBunBinary) {
-		try {
-			const plan = await getNativeUpdatePlan({ force, rollback, channel });
-			if (plan.refusedDowngradeTo) return behindChannelPlan(plan.refusedDowngradeTo, force, channel);
-			if (!plan.command) console.log(chalk.green(`${APP_NAME} is already up to date (v${plan.targetVersion})`));
-			return { installSpec: PACKAGE_NAME, packageName: PACKAGE_NAME, shouldRun: !!plan.command, ...plan };
-		} catch (error) {
-			if (effectiveChannel === "nightly" && error instanceof NativeReleaseUnavailableError)
-				return nightlyReleaseUnavailablePlan();
-			throw error;
-		}
+	if (!isBunBinary) {
+		console.error(
+			rollback
+				? "Rollback is only available for managed compiled installations."
+				: `${APP_NAME} cannot self-update this installation. Update it using the original installation method or the Prime Agent Pi source checkout that provides it.`,
+		);
+		console.error(`Prime Agent Pi releases: ${PI_RELEASES_URL}`);
+		return { kind: "unavailable" };
 	}
-	if (rollback) throw new Error("Rollback is only available for managed compiled installations.");
 	try {
-		const latestRelease = await getLatestPiRelease(VERSION, { channel });
-		// The registry default resolves to the stable package, so a missing nightly manifest must not fall through to it.
-		if (!latestRelease && effectiveChannel === "nightly") return nightlyReleaseUnavailablePlan();
-		const packageName = latestRelease?.packageName ?? PACKAGE_NAME;
-		const installSpec = latestRelease?.installSpec ?? packageName;
-		const packageRenameRequiresUpdate = !latestRelease?.installSpec && packageName !== PACKAGE_NAME;
-		if (latestRelease && isBaseVersionDowngrade(latestRelease.version, VERSION))
-			return behindChannelPlan(latestRelease.version, force, channel);
-		if (
-			force ||
-			!latestRelease ||
-			packageRenameRequiresUpdate ||
-			isReleaseUpdateCandidate(latestRelease.version, VERSION, channel)
-		) {
-			return { installSpec, packageName, shouldRun: true, targetVersion: latestRelease?.version };
-		}
-	} catch {
-		if (effectiveChannel === "nightly") return nightlyReleaseUnavailablePlan();
-		return { installSpec: PACKAGE_NAME, packageName: PACKAGE_NAME, shouldRun: true };
+		const plan = await getNativeUpdatePlan({ force, rollback, channel });
+		if (plan.refusedDowngradeTo) return behindChannelPlan(plan.refusedDowngradeTo, force, channel);
+		if (plan.command) return { kind: "install", command: plan.command, targetVersion: plan.targetVersion };
+		console.log(chalk.green(`${APP_NAME} is already up to date (v${plan.targetVersion})`));
+		return { kind: "unchanged" };
+	} catch (error) {
+		if (!(error instanceof NativeReleaseUnavailableError)) throw error;
+		const effectiveChannel = resolveUpdateChannel(VERSION, channel);
+		console.error(
+			chalk.red(
+				`Could not resolve a ${effectiveChannel} release. ${APP_NAME} was not updated and the update channel was not changed.`,
+			),
+		);
+		return { kind: "unavailable" };
 	}
-
-	console.log(chalk.green(`${APP_NAME} is already up to date (v${VERSION})`));
-	return { installSpec: PACKAGE_NAME, packageName: PACKAGE_NAME, shouldRun: false };
 }
 
 async function runSelfUpdate(command: SelfUpdateCommand): Promise<void> {
 	console.log(chalk.dim(`Updating ${APP_NAME} with ${command.display}...`));
-	for (const step of command.steps ?? [command]) {
-		await new Promise<void>((resolve, reject) => {
-			// Windows package managers are commonly .cmd shims. Use the shell so Node can execute them.
-			const child = spawn(step.command, step.args, {
-				stdio: "inherit",
-				shell: shouldUseWindowsShell(step.command),
+	const prepared = await command.prepare?.();
+	try {
+		for (const step of prepared ? [prepared] : (command.steps ?? [command])) {
+			await new Promise<void>((resolve, reject) => {
+				const child = spawn(step.command, step.args, {
+					stdio: "inherit",
+					shell: shouldUseWindowsShell(step.command),
+				});
+				child.on("error", reject);
+				child.on("close", (code, signal) => {
+					if (code === 0) {
+						resolve();
+					} else if (signal) {
+						reject(new Error(`${command.display} terminated by signal ${signal}`));
+					} else {
+						reject(new Error(`${command.display} exited with code ${code ?? "unknown"}`));
+					}
+				});
 			});
-			child.on("error", (error) => {
-				reject(error);
-			});
-			child.on("close", (code, signal) => {
-				if (code === 0) {
-					resolve();
-				} else if (signal) {
-					reject(new Error(`${step.display} terminated by signal ${signal}`));
-				} else {
-					reject(new Error(`${step.display} exited with code ${code ?? "unknown"}`));
-				}
-			});
-		});
+		}
+	} finally {
+		prepared?.cleanup();
 	}
 }
 
@@ -1597,7 +1544,6 @@ export async function handlePackageCommand(args: string[]): Promise<boolean> {
 	const agentDir = getAgentDir();
 	const settingsManager = SettingsManager.create(cwd, agentDir);
 	reportSettingsErrors(settingsManager, "package command");
-	const selfUpdateNpmCommand = settingsManager.getGlobalSettings().npmCommand;
 
 	const packageManager = new DefaultPackageManager({ cwd, agentDir, settingsManager });
 
@@ -1664,25 +1610,25 @@ export async function handlePackageCommand(args: string[]): Promise<boolean> {
 			case "update": {
 				const target = options.updateTarget ?? { type: "all" };
 				const includesSelf = updateTargetIncludesSelf(target);
-				const persistedChannel = settingsManager.getUpdateChannel();
+				const persistedChannel = getPiUpdateChannelPreference(settingsManager);
 				// Warn and confirm before any update work so declining changes nothing, not even extensions.
-				if (includesSelf && options.channel === "nightly" && persistedChannel !== "nightly") {
+				if (includesSelf && options.channel === "preview" && persistedChannel !== "preview") {
 					console.log(
 						chalk.yellow(
-							`Nightly releases are unreleased ${APP_NAME} builds. They can be broken, and a broken update can leave ${APP_NAME} unusable until you roll back or reinstall.`,
+							`Preview releases are pre-release ${APP_NAME} builds. They can be broken, and a broken update can leave ${APP_NAME} unusable until you roll back or reinstall.`,
 						),
 					);
 					if (!options.force) {
 						if (!process.stdin.isTTY) {
 							console.error(
 								chalk.red(
-									"Switching to the nightly channel needs confirmation. Re-run with --force to proceed.",
+									"Switching to the preview channel needs confirmation. Re-run with --force to proceed.",
 								),
 							);
 							setSelfUpdateAbortedExitCode();
 							return true;
 						}
-						if (!(await promptYesNo("Switch to the nightly channel and continue with the update?"))) {
+						if (!(await promptYesNo("Switch to the preview channel and continue with the update?"))) {
 							console.log(chalk.dim("Update cancelled. Nothing was changed."));
 							setSelfUpdateAbortedExitCode();
 							return true;
@@ -1702,40 +1648,21 @@ export async function handlePackageCommand(args: string[]): Promise<boolean> {
 					const updateChannel = options.channel ?? persistedChannel;
 					const commitChannel = () => {
 						if (options.channel && options.channel !== persistedChannel) {
-							settingsManager.setUpdateChannel(options.channel);
+							// Preserve the spelling understood by v0.9.8 if the user rolls back.
+							settingsManager.setUpdateChannel(options.channel === "preview" ? "nightly" : "stable");
 							console.log(chalk.dim(`Updates now follow the ${options.channel} channel.`));
 						}
 					};
 					const selfUpdatePlan = await getSelfUpdatePlan(options.force, options.rollback, updateChannel);
-					if (selfUpdatePlan.unavailable) {
-						// With an all target the extension half already succeeded; the message above
-						// says Prime Agent itself was not updated, so do not fail the whole run for it.
+					if (selfUpdatePlan.kind === "unavailable") {
+						// A successful extension update still counts for an all target.
 						if (updateTargetIncludesExtensions(target)) setSelfUpdateNoChangeExitCode();
 						else setSelfUpdateAbortedExitCode();
 						return true;
 					}
-					if (!selfUpdatePlan.shouldRun) {
+					if (selfUpdatePlan.kind === "unchanged") {
 						commitChannel();
 						setSelfUpdateNoChangeExitCode();
-						return true;
-					}
-					const selfUpdateCommand =
-						selfUpdatePlan.command ??
-						getSelfUpdateCommand(
-							PACKAGE_NAME,
-							selfUpdateNpmCommand,
-							selfUpdatePlan.installSpec,
-							selfUpdatePlan.packageName,
-						);
-					if (!selfUpdateCommand) {
-						// The channel switch was already confirmed; keep it even though this install must be updated by hand.
-						commitChannel();
-						printSelfUpdateUnavailable(
-							selfUpdateNpmCommand,
-							selfUpdatePlan.installSpec,
-							selfUpdatePlan.packageName,
-						);
-						process.exitCode = 1;
 						return true;
 					}
 					// Confirm before the install, since upgrading the daemon afterward stops and resumes busy work.
@@ -1749,20 +1676,17 @@ export async function handlePackageCommand(args: string[]): Promise<boolean> {
 						process.exitCode = 1;
 						return true;
 					}
-					commitChannel();
 					try {
-						await runSelfUpdate(selfUpdateCommand);
+						await runSelfUpdate(selfUpdatePlan.command);
 					} catch (error: unknown) {
 						const message = error instanceof Error ? error.message : "Unknown package command error";
 						console.error(chalk.red(`Error: ${message}`));
-						printSelfUpdateFallback(selfUpdateCommand);
+						console.error(chalk.dim(`For manual installation or repair, see ${PI_RELEASES_URL}`));
 						process.exitCode = 1;
 						return true;
 					}
-					const versionChange = selfUpdatePlan.targetVersion
-						? ` from v${VERSION} to v${selfUpdatePlan.targetVersion}`
-						: "";
-					console.log(chalk.green(`Updated ${APP_NAME}${versionChange}`));
+					commitChannel();
+					console.log(chalk.green(`Updated ${APP_NAME} from v${VERSION} to v${selfUpdatePlan.targetVersion}`));
 					if (process.env[SELF_UPDATE_INTERACTIVE_CHILD_ENV] === "1") {
 						return true;
 					}

@@ -157,7 +157,7 @@ async function runPublicCommand(args: string[]): Promise<PublicCommandResult> {
 			}
 			const options = parseBooleanOptions(
 				rest,
-				new Set(["--force", "--rollback", "--nightly", "--stable"]),
+				new Set(["--force", "--rollback", "--preview", "--nightly", "--stable"]),
 				"update",
 			);
 			if (!options) return HANDLED;

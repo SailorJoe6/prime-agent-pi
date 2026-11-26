@@ -1,0 +1,2 @@
+- Repointed managed native install, repair, and update to checksum-verified Prime Agent Pi releases, with stable by default and optional previews.
+- Fixed request attribution for side questions and spawned sessions when composing provider failover with semantic-edge recording.

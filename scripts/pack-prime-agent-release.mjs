@@ -148,12 +148,12 @@ function packageJsonPath(packageDir) {
 	return join(packagePath(packageDir), "package.json");
 }
 
-function requireBuiltPackage(packageDir) {
+export function requireBuiltPackage(packageDir, allowSmallFixture = false) {
 	const dist = join(packagePath(packageDir), "dist");
 	if (!existsSync(dist)) {
 		throw new Error(`Missing ${dist}. Run npm run build before packing a release.`);
 	}
-	if (packageDir === "coding-agent") validateBundledCatalogDir(dist);
+	if (packageDir === "coding-agent") validateBundledCatalogDir(dist, { allowSmallFixture });
 }
 
 function copyIfExists(source, target) {
@@ -186,7 +186,7 @@ function releaseScripts(sourceScripts) {
 	};
 }
 
-function createReleasePackageJson(sourcePackage, packageName, releaseVersion, internalPackageUrls) {
+export function createReleasePackageJson(sourcePackage, packageName, releaseVersion, internalPackageUrls) {
 	const packageJson = {
 		...sourcePackage,
 		name: packageName,
@@ -214,7 +214,7 @@ function createReleasePackageJson(sourcePackage, packageName, releaseVersion, in
 	return packageJson;
 }
 
-function copyPackageContents(sourceDir, targetDir, packageJson) {
+export function copyPackageContents(sourceDir, targetDir, packageJson) {
 	mkdirSync(targetDir, { recursive: true });
 	writeJson(join(targetDir, "package.json"), packageJson);
 
@@ -275,6 +275,22 @@ export function writeReleaseMetadata({
 			sha256: tarball.sha256,
 		})),
 	});
+}
+
+export function packTarball(stagingDir, artifactsDir, name, file, options = []) {
+	const tarballName = run("npm", ["pack", stagingDir, "--pack-destination", artifactsDir, "--silent", ...options], root)
+		.split("\n").at(-1);
+	if (!tarballName) throw new Error(`npm pack did not report a tarball name for ${name}`);
+	const tarballPath = join(artifactsDir, basename(tarballName));
+	if (!existsSync(tarballPath) || !statSync(tarballPath).isFile()) {
+		throw new Error(`npm pack did not create ${tarballPath}`);
+	}
+	const artifactPath = join(artifactsDir, file);
+	if (tarballPath !== artifactPath) {
+		rmSync(artifactPath, { force: true });
+		renameSync(tarballPath, artifactPath);
+	}
+	return { name, file, sha256: sha256File(artifactPath) };
 }
 
 function main() {
@@ -344,30 +360,7 @@ function main() {
 			writeJson(join(stagingDir, "dist/native-release.json"), { baseUrl: args.baseUrl, version: releaseVersion });
 		}
 
-		const tarballName = run("npm", ["pack", stagingDir, "--pack-destination", artifactsDir, "--silent"], root)
-			.split("\n")
-			.at(-1);
-		if (!tarballName) {
-			throw new Error(`npm pack did not report a tarball name for ${packageName}`);
-		}
-
-		const tarballPath = join(artifactsDir, basename(tarballName));
-		if (!existsSync(tarballPath) || !statSync(tarballPath).isFile()) {
-			throw new Error(`npm pack did not create ${tarballPath}`);
-		}
-
-		const artifactFile = artifactFiles.get(releasePackage.packageDir);
-		const artifactPath = join(artifactsDir, artifactFile);
-		if (tarballPath !== artifactPath) {
-			rmSync(artifactPath, { force: true });
-			renameSync(tarballPath, artifactPath);
-		}
-
-		tarballs.push({
-			name: packageName,
-			file: artifactFile,
-			sha256: sha256File(artifactPath),
-		});
+		tarballs.push(packTarball(stagingDir, artifactsDir, packageName, artifactFiles.get(releasePackage.packageDir)));
 	}
 
 	tarballs.sort((left, right) => left.file.localeCompare(right.file));

@@ -1,7 +1,8 @@
-import { spawnSync } from "node:child_process";
-import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { execFileSync, spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, readlinkSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { delimiter, join } from "node:path";
+import { delimiter, dirname, join } from "node:path";
 
 const installerSource = readFileSync("install.sh", "utf-8");
 const mainCall = '\nmain "$@"';
@@ -154,6 +155,7 @@ try {
 	check(compactRows.meta.second.visible === "0", "expected compact row mode to hide the logo");
 
 	checkNpmInstallPolicies();
+	checkPiNativeLifecycle();
 } finally {
 	rmSync(tempDir, { recursive: true, force: true });
 }
@@ -223,6 +225,132 @@ fi
 			failures.push(`npm ${npmVersion}: install policy check failed\n${result.stderr}${result.stdout}`);
 		}
 	}
+}
+
+function checkPiNativeLifecycle() {
+	const fixture = join(tempDir, "pi");
+	const root = join(fixture, "managed");
+	const bin = join(fixture, "tools");
+	const home = join(fixture, "home");
+	const routeLog = join(fixture, "routes");
+	const repo = "https://github.com/SailorJoe6/prime-agent-pi";
+	const installer = join(fixture, "install-pi.sh");
+	const legacyInstaller = join(fixture, "install.sh");
+	const privateInstaller = join(fixture, "private script");
+	for (const path of [bin, home]) mkdirSync(path, { recursive: true });
+	for (const path of [installer, privateInstaller, legacyInstaller]) writeFileSync(path, installerSource);
+	const tool = (name, code) => writeFileSync(join(bin, name), `#!/bin/sh\nset -eu\n${code}\n`, { mode: 0o755 });
+	tool("uname", 'case "$1" in -s) echo Darwin ;; -m) echo arm64 ;; *) exit 1 ;; esac');
+	tool("sw_vers", "echo 14.0");
+	tool("npm", 'echo npm >>"$ROUTE_LOG"; exit 1');
+	tool("curl", `
+url= output=
+while [ "$#" -gt 0 ]; do
+	case "$1" in
+		https://*) url="$1" ;;
+		-o) shift; output="$1" ;;
+	esac
+	shift
+done
+printf '%s\\n' "$url" >>"$ROUTE_LOG"
+case "$url" in
+	${repo}/releases/download/"\${PRIME_AGENT_PI_TAG:-}"/*)
+		cp "$FIXTURE_FEED/\${url##*/}" "$output" ;;
+	*) exit 1 ;;
+esac`);
+	const env = {
+		PATH: `${bin}${delimiter}${process.env.PATH ?? ""}`,
+		HOME: home,
+		TMPDIR: fixture,
+		ROUTE_LOG: routeLog,
+		PRIME_AGENT_INSTALL_DIR: root,
+		PRIME_AGENT_INSTALL_LINK: "0",
+		PRIME_AGENT_INSTALLER_NONINTERACTIVE: "1",
+		PRIME_AGENT_BOOTSTRAP_KERNEL_ON_INSTALL: "0",
+		PRIME_AGENT_DOWNLOAD_BASE_URL: "https://legacy.invalid",
+	};
+	const run = (label, path, arg, extraEnv, expectedSuccess, routes) => {
+		writeFileSync(routeLog, "");
+		const result = spawnSync("sh", [path, arg], { env: { ...env, ...extraEnv }, encoding: "utf8", timeout: 15_000 });
+		if (result.error || result.status === null || (result.status === 0) !== expectedSuccess) {
+			throw new Error(`${label}: unexpected result ${result.status}\n${result.error ?? ""}\n${result.stdout}${result.stderr}`);
+		}
+		check(readFileSync(routeLog, "utf8") === routes.map((url) => `${url}\n`).join(""), `${label}: unexpected download or fallback`);
+		return result.stderr;
+	};
+	const release = (version) => {
+		const tag = `pi-v${version}`;
+		const feed = join(fixture, tag);
+		const app = join(feed, "application");
+		const file = `prime-agent-pi-${version}-darwin-arm64.tar.gz`;
+		const entries = {
+			"prime-agent": `#!/bin/sh\ncase "$1" in --version) echo '${version}' ;; --help) echo help ;; *) exit 1 ;; esac\n`,
+			"package.json": JSON.stringify({ version }),
+			"pi-release.json": "{}\n",
+			"prime-agent-runtime/pyproject.toml": "",
+			"prime-agent-runtime/src/rlm/repl.py": "",
+			"theme/prime.json": "{}\n",
+			"export-html/template.html": "",
+			"photon_rs_bg.wasm": "",
+		};
+		for (const [asset, data] of Object.entries(entries)) {
+			const path = join(app, asset);
+			mkdirSync(dirname(path), { recursive: true });
+			writeFileSync(path, data);
+		}
+		chmodSync(join(app, "prime-agent"), 0o755);
+		const archive = join(feed, file);
+		execFileSync("tar", ["-czf", archive, "-C", app, ...Object.keys(entries)], { env: { ...env, COPYFILE_DISABLE: "1" } });
+		const archiveBytes = readFileSync(archive);
+		const sha256 = createHash("sha256").update(archiveBytes).digest("hex");
+		const inventory = join(feed, "SHA256SUMS");
+		writeFileSync(inventory, `${sha256}  ${file}\n`);
+		const url = `${repo}/releases/download/${tag}`;
+		return { archive, archiveBytes, inventory, sha256, version, env: { PRIME_AGENT_PI_TAG: tag, FIXTURE_FEED: feed }, routes: [`${url}/SHA256SUMS`, `${url}/${file}`] };
+	};
+	const stable = release("0.10.2.1");
+	const preview = release("0.10.2.2-preview.3");
+	const activePath = join(root, "bin/prime-agent");
+	const previousPath = join(root, "bin/previous");
+	const activeVersion = () => execFileSync(activePath, ["--version"], { env, encoding: "utf8" }).trim();
+	const retainedInstaller = () => join(dirname(join(root, "bin", readlinkSync(activePath))), "install.sh");
+
+	const tagUsage = "PRIME_AGENT_PI_TAG=pi-vVERSION";
+	check(run("PAPI-61 published installer requires a Pi tag", installer, stable.version, {}, false, []).includes(tagUsage), "published installer did not show Pi usage");
+	run("PAPI-61 requires a matching Pi tag", installer, preview.version, stable.env, false, []);
+	run("PAPI-61 explicit legacy installer still selects the legacy feed", legacyInstaller, "0.10.2", {}, false, ["https://legacy.invalid/releases/v0.10.2/SHA256SUMS"]);
+	run("PAPI-61 exact tagged fresh install", installer, stable.version, stable.env, true, stable.routes);
+	const stableLink = readlinkSync(activePath);
+	check(activeVersion() === stable.version, "fresh install did not activate the stable runtime version");
+	const updateEnv = { ...preview.env, PRIME_AGENT_EXPECTED_SHA256: preview.sha256, PRIME_AGENT_EXPECTED_CURRENT: stableLink };
+	run("PAPI-61 manifest digest mismatch", privateInstaller, preview.version, { ...updateEnv, PRIME_AGENT_EXPECTED_SHA256: "0".repeat(64) }, false, preview.routes.slice(0, 1));
+	writeFileSync(preview.archive, stable.archiveBytes);
+	run("PAPI-61 archive digest mismatch", privateInstaller, preview.version, updateEnv, false, preview.routes);
+	writeFileSync(preview.archive, preview.archiveBytes);
+	check(readlinkSync(activePath) === stableLink, "checksum failure replaced the active release");
+	run("PAPI-61 stale active release", privateInstaller, preview.version, { ...updateEnv, PRIME_AGENT_EXPECTED_CURRENT: "" }, false, preview.routes.slice(0, 1));
+	run("PAPI-61 verified preview update", privateInstaller, preview.version, updateEnv, true, preview.routes);
+	const previewLink = readlinkSync(activePath);
+	check(readlinkSync(previousPath) === stableLink && activeVersion() === preview.version, "preview update did not retain the stable release");
+	check(readFileSync(retainedInstaller(), "utf8") === installerSource, "installed rollback script differs from the verified download");
+	check(readFileSync(join(dirname(retainedInstaller()), ".install-source"), "utf8").trim() === repo, "Pi install source was not recorded");
+	check(run("PAPI-61 retained installer requires a Pi tag outside rollback", retainedInstaller(), preview.version, {}, false, []).includes(tagUsage), "retained installer did not show Pi usage");
+	run("PAPI-61 retained offline rollback", retainedInstaller(), "--rollback", { PRIME_AGENT_EXPECTED_CURRENT: previewLink, PRIME_AGENT_EXPECTED_PREVIOUS: stableLink }, true, []);
+	check(readlinkSync(previousPath) === previewLink && activeVersion() === stable.version, "rollback did not restore stable and retain preview");
+
+	const releaseMetadata = () => join(dirname(retainedInstaller()), "pi-release.json");
+	rmSync(releaseMetadata());
+	run("PAPI-61 same-tag repair of missing Pi metadata", privateInstaller, stable.version, {
+		...stable.env,
+		PRIME_AGENT_EXPECTED_CURRENT: stableLink,
+		PRIME_AGENT_EXPECTED_SHA256: stable.sha256,
+	}, true, stable.routes);
+	check(readlinkSync(activePath) !== stableLink && activeVersion() === stable.version, "same-tag repair did not activate a fresh stable release");
+	check(readFileSync(releaseMetadata(), "utf8") === "{}\n", "same-tag repair did not restore Pi release metadata");
+	check(readlinkSync(previousPath) === previewLink, "same-tag repair retained the damaged Pi target instead of the healthy rollback target");
+
+	writeFileSync(preview.inventory, `${preview.sha256}  prime-agent-${preview.version}.tgz\n`);
+	run("PAPI-61 no npm fallback", privateInstaller, preview.version, preview.env, false, preview.routes.slice(0, 1));
 }
 
 function runCase(name, initialCols, initialRows, resizedCols, resizedRows) {

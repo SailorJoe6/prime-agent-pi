@@ -9,6 +9,7 @@ import { NATIVE_PLATFORMS } from "../src/utils/native-installation.js";
 interface Step {
 	name?: string;
 	id?: string;
+	env?: Record<string, string>;
 	run?: string;
 	uses?: string;
 	if?: string;
@@ -59,6 +60,64 @@ function requiresSuccess(job: Job): void {
 }
 
 describe("release workflow signature gates", () => {
+	it("PAPI-61 gates only main pushes before release context and leaves ordinary CI separate", () => {
+		const trust = release.jobs.trust!;
+		const optOut = step(trust, "Check main push publication opt-out");
+		expect(optOut.if).toBe("github.event_name == 'push' && github.ref == 'refs/heads/main'");
+		expect(optOut.env).toEqual({
+			HEAD_COMMIT_SHA: `\${{ github.event.head_commit.id }}`,
+			HEAD_COMMIT_MESSAGE: `\${{ github.event.head_commit.message }}`,
+		});
+		expect(optOut.run).not.toContain("${{");
+		expect(trust.outputs?.legacy_publication).toBe(`\${{ steps.legacy-publication.outputs.allowed }}`);
+		const context = release.jobs["release-context"]!;
+		expect(context.needs).toBe("trust");
+		expect(context.if).toBe(
+			"needs.trust.outputs.allowed == 'true' && (github.event_name != 'push' || github.ref != 'refs/heads/main' || needs.trust.outputs.legacy_publication == 'true')",
+		);
+		expect(release.on).toMatchObject({ push: { branches: ["main"], tags: ["v*"] } });
+		expect(release.on).toHaveProperty("workflow_dispatch.inputs.release_tag");
+		const ci: Workflow = parse(readFileSync(join(repository, ".github/workflows/ci.yml"), "utf8"));
+		expect(ci.on).toMatchObject({ push: { branches: ["main"] } });
+		expect(JSON.stringify(ci)).not.toMatch(/legacy.publication|head_commit/);
+	});
+
+	// test-policy: allow conditional-or-disabled-test -- exercises the Ubuntu workflow's Bash step directly
+	it.skipIf(process.platform === "win32")("PAPI-61 matches the exact pushed head message line as data", () => {
+		const optOut = step(release.jobs.trust!, "Check main push publication opt-out");
+		const directory = mkdtempSync(join(tmpdir(), "prime-release-opt-out-"));
+		try {
+			for (const [message, sha, expected] of [
+				["Normal commit", "tip", "allowed=true\n"],
+				["Subject\n\nLegacy-Publication: skip\n\nOther: value", "tip", "allowed=false\n"],
+				["Legacy-Publication: skip", "tip", "allowed=false\n"],
+				["Not Legacy-Publication: skip", "tip", "allowed=true\n"],
+				[" Legacy-Publication: skip", "tip", "allowed=true\n"],
+				["Legacy-Publication: skip ", "tip", "allowed=true\n"],
+				["legacy-publication: skip", "tip", "allowed=true\n"],
+				["Legacy-Publication: skip", "", ""],
+				["Legacy-Publication: skip", "previous-commit", ""],
+			] as const) {
+				const output = join(directory, "output");
+				writeFileSync(output, "");
+				const result = spawnSync("bash", ["-e", "-o", "pipefail", "-c", optOut.run!], {
+					encoding: "utf8",
+					env: {
+						...process.env,
+						GITHUB_SHA: "tip",
+						HEAD_COMMIT_SHA: sha,
+						HEAD_COMMIT_MESSAGE: message,
+						GITHUB_OUTPUT: output,
+					},
+				});
+				expect(result.status, `${message}: ${result.stderr}`).toBe(expected ? 0 : 1);
+				expect(readFileSync(output, "utf8")).toBe(expected);
+			}
+		} finally {
+			rmSync(directory, { recursive: true, force: true });
+		}
+	});
+
 	it("requires successful build and both native final validation jobs before publication", () => {
 		const validation = release.jobs["validate-macos"]!;
 		expect(validation.needs).toEqual(expect.arrayContaining(["release-context", "build"]));
@@ -165,7 +224,7 @@ ${step(validation, "Verify and exercise exact final Mac archives").run}`,
 		const test = step(build, "Test extracted application without JavaScript runtimes on PATH");
 		expect(test.run).toContain("test/compiled-artifact.test.ts");
 		expect(test.run).toContain("test/release-signatures.test.ts");
-		const upload = build.steps.find((entry) => entry.uses?.startsWith("actions/upload-artifact@"))!;
+		const upload = step(build, "Upload standalone reference");
 		expect(upload.with?.path).toContain("binaries.json");
 		expect(build.steps.indexOf(test)).toBeLessThan(build.steps.indexOf(upload));
 		requiresSuccess(build);
@@ -177,19 +236,34 @@ ${step(validation, "Verify and exercise exact final Mac archives").run}`,
 		const glibc = step(build, "Test extracted application without JavaScript runtimes on PATH");
 		const musl = step(build, "Test extracted application on Alpine without JavaScript runtimes");
 		// A cross-compiled musl archive cannot run on the glibc runner that built it.
-		expect(glibc.if).toBe(`\${{ !contains(matrix.platform, 'musl') }}`);
-		expect(musl.if).toBe(`\${{ contains(matrix.platform, 'musl') }}`);
+		expect(glibc.if).toBe(`\${{ inputs.public_version == '' && !contains(matrix.platform, 'musl') }}`);
+		expect(musl.if).toBe(`\${{ inputs.public_version == '' && contains(matrix.platform, 'musl') }}`);
 		expect(musl.run).toContain("docker run");
 		expect(musl.run).toContain("alpine:");
 		expect(musl.run).toContain("prime-agent --version");
 		expect(musl.run).toContain("prime-agent --help");
-		const upload = build.steps.find((entry) => entry.uses?.startsWith("actions/upload-artifact@"))!;
+		const upload = step(build, "Upload standalone reference");
 		expect(build.steps.indexOf(musl)).toBeLessThan(build.steps.indexOf(upload));
 		// A container smoke test only proves execution when the runner matches the target architecture.
 		for (const entry of build.strategy!.matrix.include) {
 			if (!entry.platform.startsWith("linux-")) continue;
 			expect(entry.runner.endsWith("-arm"), entry.platform).toBe(entry.platform.includes("arm64"));
 		}
+	});
+
+	it("builds and tests Pi workflow artifacts without calling the release writer", () => {
+		const build = standalone.jobs.build!;
+		expect(standalone.on.workflow_dispatch).toBeDefined();
+		const compile = step(build, "Build Prime Agent Pi archive and receipt");
+		const probe = step(build, "Verify extracted Pi archive");
+		const upload = step(build, "Upload tested Pi build evidence");
+		for (const entry of [compile, probe, upload]) expect(entry.if).toBe("inputs.public_version != ''");
+		expect(compile.run).toContain("scripts/build-pi-native-archive.mjs");
+		expect(probe.run).toContain("scripts/smoke-pi-native-archive.sh");
+		expect(build.steps.indexOf(probe)).toBeLessThan(build.steps.indexOf(upload));
+		expect(upload.uses).toMatch(/^actions\/upload-artifact@/);
+		expect(Object.keys(standalone.jobs)).toEqual(["build"]);
+		requiresSuccess(build);
 	});
 
 	it("keeps one platform set across the installer, the release scripts, and the workflows", () => {

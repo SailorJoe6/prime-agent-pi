@@ -201,7 +201,7 @@ export interface Settings {
 	defaultProvider?: string;
 	defaultModel?: string;
 	subagentDefaultModel?: string; // "provider/id" for rlm.spawn without a pinned model; unset inherits the parent model
-	updateChannel?: "stable" | "nightly"; // release channel for self-updates; unset follows the running version
+	updateChannel?: "stable" | "nightly"; // saved in the legacy format; Pi defaults to stable
 	recentModels?: string[]; // "provider/id" keys, most-recently-used first
 	// "provider/id" for background LLM passes (refinement review and planning,
 	// compaction summaries, branch summaries); unset falls back to the session

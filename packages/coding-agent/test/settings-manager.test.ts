@@ -1,11 +1,13 @@
+import { randomUUID } from "node:crypto";
+import type { SettingsManager as PublicSettingsManager } from "@earendil-works/pi-coding-agent";
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "fs";
-import { homedir } from "os";
+import { homedir, tmpdir } from "os";
 import { join } from "path";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, expectTypeOf, it } from "vitest";
 import { SettingsManager } from "../src/core/settings-manager.js";
 
 describe("SettingsManager", () => {
-	const testDir = join(process.cwd(), "test-settings-tmp");
+	const testDir = join(tmpdir(), `prime-settings-${randomUUID()}`);
 	const agentDir = join(testDir, "agent");
 	const projectDir = join(testDir, "project");
 	const globalPath = join(agentDir, "settings.json");
@@ -24,6 +26,27 @@ describe("SettingsManager", () => {
 	const writeSettings = (path: string, value: unknown): void => writeFileSync(path, JSON.stringify(value));
 	const readSettings = (path: string): Record<string, unknown> =>
 		JSON.parse(readFileSync(path, "utf-8")) as Record<string, unknown>;
+
+	it("PAPI-61 preserves the v0.9.8 TypeScript API and round-trips the global nightly preference", async () => {
+		writeSettings(projectPath, { updateChannel: "nightly" });
+		expect(SettingsManager.create(projectDir, agentDir).getUpdateChannel()).toBeUndefined();
+		writeSettings(globalPath, { updateChannel: "preview", theme: "dark" });
+		const manager: PublicSettingsManager = SettingsManager.create(projectDir, agentDir);
+		expectTypeOf(manager.getUpdateChannel).toEqualTypeOf<() => "stable" | "nightly" | undefined>();
+		expectTypeOf(manager.setUpdateChannel).toEqualTypeOf<(channel: "stable" | "nightly") => void>();
+		expect(manager.getUpdateChannel()).toBeUndefined();
+
+		manager.setUpdateChannel("nightly");
+		await manager.flush();
+		const reloaded = SettingsManager.create(projectDir, agentDir);
+		expect(reloaded.getUpdateChannel()).toBe("nightly");
+		expect(readSettings(globalPath)).toEqual({ updateChannel: "nightly", theme: "dark" });
+
+		reloaded.setUpdateChannel("stable");
+		await reloaded.flush();
+		expect(SettingsManager.create(projectDir, agentDir).getUpdateChannel()).toBe("stable");
+		expect(readSettings(projectPath)).toEqual({ updateChannel: "nightly" });
+	});
 
 	describe("on-disk settings file", () => {
 		it("preserves keys it does not own, including ones written after load", async () => {

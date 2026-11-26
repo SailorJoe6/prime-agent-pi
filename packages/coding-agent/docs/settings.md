@@ -88,21 +88,11 @@ Conversation output starts at the `chatDetail` level (default `details`). Ctrl+O
 
 ### Update Checks
 
-Stable builds fetch the release manifest at `https://pub-728493de92a943e2a9b2d17b4719f318.r2.dev/latest.json`. Beta builds fetch `beta.json` and continue following beta updates. Override the base URL with `PRIME_AGENT_DOWNLOAD_BASE_URL`.
+Prime Agent Pi checks tagged manifests from [Prime Agent Pi Releases](https://github.com/SailorJoe6/prime-agent-pi/releases). Startup checks only metadata and never install anything. Managed native updates verify the tagged installer and selected archive against the release checksums before replacing the active release.
+
+Stable is the default when `updateChannel` is unset. Use `prime-agent update --preview` or `/update --preview` to opt in to previews, or `--stable` to return to stable. Pi saves the preview preference as `"nightly"` so it still works after a rollback to v0.9.8. An existing `"nightly"` preference selects Pi previews, and `--nightly` remains an alias for `--preview`. Running a preview build does not by itself opt in to future previews.
 
 Set `PI_SKIP_VERSION_CHECK=1` to disable the Prime Agent version update check. Use `--offline` or `PI_OFFLINE=1` to disable startup network operations, including update checks and package update checks.
-
-The stable `latest.json` and beta `beta.json` manifests use the same JSON shape:
-
-```json
-{
-  "version": "0.73.1",
-  "package": "prime-agent",
-  "tarball": "releases/v0.73.1/prime-agent-0.73.1.tgz"
-}
-```
-
-`version` is required. `package` is optional and may also be named `packageName`; it defaults to the current package name. `tarball` is optional; when present, Prime Agent installs that tarball instead of the package name. Relative tarball paths resolve against `PRIME_AGENT_DOWNLOAD_BASE_URL`.
 
 ### Pseudonymous usage analytics
 

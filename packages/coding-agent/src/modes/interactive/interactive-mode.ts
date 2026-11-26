@@ -188,7 +188,7 @@ import { resizeImage } from "../../utils/image-resize.js";
 import { getCwdRelativePath } from "../../utils/paths.js";
 import { killTrackedDetachedChildren } from "../../utils/shell.js";
 import { ensureTool, ensureToolWithStatus, formatMissingRipgrepMessage } from "../../utils/tools-manager.js";
-import { checkForNewPiVersion, resolveUpdateChannel } from "../../utils/version-check.js";
+import { checkForNewPiVersion, getPiUpdateChannelPreference, resolveUpdateChannel } from "../../utils/version-check.js";
 import type {
 	AgentConnection,
 	AgentConnectionExtensionUiRequest,
@@ -1951,7 +1951,7 @@ export class InteractiveMode {
 		// rendered the agents view and still want the in-session fallback.)
 		const ownsGlobalStartupNotices = !this.options.agentsViewOwnsStartupNotices;
 		const newVersionPromise = ownsGlobalStartupNotices
-			? checkForNewPiVersion(this.version, this.settingsManager.getUpdateChannel())
+			? checkForNewPiVersion(this.version, getPiUpdateChannelPreference(this.settingsManager))
 			: undefined;
 		const packageUpdatesPromise = ownsGlobalStartupNotices
 			? checkForPackageUpdates({
@@ -5487,35 +5487,34 @@ export class InteractiveMode {
 					await this.handleReloadCommand();
 					return;
 				}
-				if (commandName === "nightly") {
+				if (commandName === "preview" || commandName === "nightly") {
 					this.editor.setText("");
-					const nightlyArg = commandArgs?.trim().toLowerCase();
-					if (nightlyArg === "status") {
-						const channel = resolveUpdateChannel(this.version, this.settingsManager.getUpdateChannel());
-						const source = this.settingsManager.getUpdateChannel()
-							? "set in settings"
-							: "inferred from the running version";
+					const previewArg = commandArgs?.trim().toLowerCase();
+					if (previewArg === "status") {
+						const preference = getPiUpdateChannelPreference(this.settingsManager);
+						const channel = resolveUpdateChannel(this.version, preference);
+						const source = preference ? "set in settings" : "default";
 						this.showStatus(`Updates follow the ${channel} channel (${source}). v${this.version} installed.`);
 						return;
 					}
-					if (nightlyArg === "off" || nightlyArg === "stable") {
+					if (previewArg === "off" || previewArg === "stable") {
 						this.settingsManager.setUpdateChannel("stable");
 						this.showStatus(
 							"Updates now follow the stable channel. Run /update to install the latest stable release.",
 						);
 						return;
 					}
-					if (nightlyArg && nightlyArg !== "on") {
-						this.showError("Usage: /nightly [on|off|status]");
+					if (previewArg && previewArg !== "on") {
+						this.showError("Usage: /preview [on|off|status]");
 						return;
 					}
 					if (this.isAgentCompacting() || this.isAgentStreaming() || this.isBashRunning()) {
 						this.showWarning("Wait for the current work to finish before updating.");
 						return;
 					}
-					// The update command owns the nightly warning, the channel switch, and the
+					// The update command owns the preview warning, the channel switch, and the
 					// busy-session confirmation, so declining either leaves settings untouched.
-					await this.handleUpdateCommand("--self --nightly");
+					await this.handleUpdateCommand("--self --preview");
 					return;
 				}
 				if (commandName === "update") {

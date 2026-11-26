@@ -559,7 +559,11 @@ export function unwrapSemanticEdgeStreamFn(streamFn: StreamFn): StreamFn {
  * resolves (an error/aborted final message is a failure). When the recorder is
  * disabled (its ledger failed), calls carry no request ID at all.
  */
-export function wrapStreamFnWithSemanticEdges(streamFn: StreamFn, recorder: SemanticEdgeRecorder): StreamFn {
+export function wrapStreamFnWithSemanticEdges(
+	streamFn: StreamFn,
+	recorder: SemanticEdgeRecorder,
+	observeContext?: (context: Parameters<StreamFn>[1]) => void,
+): StreamFn {
 	const inner = unwrapSemanticEdgeStreamFn(streamFn);
 	// Tool schemas are usually stable across a session's requests, so the digest is memoized by element identity;
 	// a tool mutated in place keeps the stale digest — replace the object to change tools.
@@ -580,6 +584,7 @@ export function wrapStreamFnWithSemanticEdges(streamFn: StreamFn, recorder: Sema
 		return digest;
 	};
 	const wrapped: StreamFn = (model, context, options) => {
+		observeContext?.(context);
 		const requestId = recorder.startTurnRequest(hashTurnBody(model, context, options, toolsDigestFor(context.tools)));
 		if (requestId === undefined) {
 			return inner(model, context, options);

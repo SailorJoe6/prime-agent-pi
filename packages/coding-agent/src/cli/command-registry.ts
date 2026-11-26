@@ -191,12 +191,13 @@ export const COMMAND_SPECS: readonly CommandSpec[] = [
 	},
 	{
 		path: ["update"],
-		usage: "update [--force] [--rollback] [--nightly|--stable]",
+		usage: "update [--force] [--rollback] [--preview|--stable]",
 		summary: "Update Prime Agent",
 		options: [
 			"--force     Reinstall even if the current version is the latest on the channel",
 			"--rollback  Restore the previous compiled release",
-			"--nightly   Switch updates to the nightly channel (unreleased builds, may be broken)",
+			"--preview   Opt in to preview releases (may be unstable)",
+			"--nightly   Alias for --preview",
 			"--stable    Return updates to the stable channel",
 		],
 	},

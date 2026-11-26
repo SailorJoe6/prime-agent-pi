@@ -29,7 +29,24 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       allowed: ${{ github.event_name != 'pull_request' || steps.vouch.outputs.vouched == 'true' }}
+      legacy_publication: ${{ steps.legacy-publication.outputs.allowed }}
     steps:
+      - name: Check main push publication opt-out
+        id: legacy-publication
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        env:
+          HEAD_COMMIT_SHA: ${{ github.event.head_commit.id }}
+          HEAD_COMMIT_MESSAGE: ${{ github.event.head_commit.message }}
+        shell: bash
+        run: |
+          test "$HEAD_COMMIT_SHA" = "$GITHUB_SHA"
+          if [[ $'\n'"$HEAD_COMMIT_MESSAGE"$'\n' == *$'\nLegacy-Publication: skip\n'* ]]; then
+            echo 'Legacy publication disabled by the pushed head commit.'
+            echo 'allowed=false' >> "$GITHUB_OUTPUT"
+          else
+            echo 'allowed=true' >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Check pull request author
         id: vouch
         if: github.event_name == 'pull_request'
@@ -42,7 +59,9 @@ jobs:
 
   release-context:
     needs: trust
-    if: needs.trust.outputs.allowed == 'true'
+    if: >-
+      needs.trust.outputs.allowed == 'true' &&
+      (github.event_name != 'push' || github.ref != 'refs/heads/main' || needs.trust.outputs.legacy_publication == 'true')
     runs-on: ubuntu-latest
     permissions:
       contents: read
