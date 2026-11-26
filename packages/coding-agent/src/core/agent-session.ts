@@ -1443,6 +1443,7 @@ function factoryAnswerPreview(message: AssistantMessage | undefined): string | u
 	let space = false;
 	for (const block of message?.content ?? []) {
 		if (block.type !== "text") continue;
+		space = prefix.length > 0; // Released worker joins text blocks before compaction.
 		for (const char of block.text) {
 			if (/\p{White_Space}/u.test(char)) {
 				space = prefix.length > 0;

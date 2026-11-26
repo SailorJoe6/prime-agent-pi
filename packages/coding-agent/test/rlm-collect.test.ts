@@ -43,12 +43,12 @@ function usage(input = 7, output = 3): Usage {
 	};
 }
 
-function streamAnswer(text: string): ReturnType<typeof createAssistantMessageEventStream> {
+function streamAnswer(...blocks: string[]): ReturnType<typeof createAssistantMessageEventStream> {
 	const stream = createAssistantMessageEventStream();
 	queueMicrotask(() => {
 		const message: AssistantMessage = {
 			role: "assistant",
-			content: [{ type: "text", text }],
+			content: blocks.map((text) => ({ type: "text", text })),
 			api: model.api,
 			provider: model.provider,
 			model: model.id,
@@ -85,7 +85,10 @@ describe("rlm.collect typed fan-in", () => {
 			convertToLlm,
 			getApiKey: () => "test-key",
 			initialState: { model, systemPrompt: "", tools: [], thinkingLevel: "off" },
-			streamFn: (_model, context) => streamAnswer(`child answer: ${userText(context)}`),
+			streamFn: (_model, context) => {
+				const text = userText(context);
+				return streamAnswer(...`child answer: ${text}`.split("<block>"));
+			},
 		});
 		return new AgentSession({
 			agent,
@@ -127,7 +130,7 @@ describe("rlm.collect typed fan-in", () => {
 		session = makeSession();
 		const prefix = "child answer: [task from parent] Heading ";
 		const letters = "𐐷".repeat(157 - Array.from(prefix).length);
-		const prompt = `Heading\n\t${letters}\n${"example ".repeat(70)}Final line.`;
+		const prompt = `Heading<block>${letters}\n\t${"example ".repeat(70)}Final line.`;
 		const first = await session.runRlmChild(prompt, { name: "worker-a" });
 		const other = await session.runRlmChild("different answer", { name: "worker-b" });
 		// biome-ignore lint/complexity/useLiteralKeys: Bracket access exercises the private kernel RPC without exporting it.

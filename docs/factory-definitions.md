@@ -146,9 +146,9 @@ With `factory.enabled` set to `true`, `run` first checks the harness and then
 looks in the machine library. It does not edit either definition. This run path
 accepts one-shot DAGs and explicit task machines with text and JSON ports.
 Independent task entries can run together. `run.max_parallel` bounds active
-children per run (default `8`; set `1` to run serially). A DAG with more nodes than `max_children`
-is rejected before launch. An explicit machine counts actual child admissions,
-including re-entries, against `max_children`.
+children per run (default `8`; set `1` to run serially). Both DAGs and explicit
+machines pause before exceeding `max_children`. Only successful admissions count,
+including retries and re-entries.
 
 ```python
 rlm.harness.save_factory("color-label", {"nodes": [
@@ -165,8 +165,9 @@ print(snapshot["state"], snapshot["children"])
 
 `run` returns before the children finish. Factory outputs bind from the exact
 child's settled answer preview, not its full reply or the public `rlm.collect`
-preview. The factory collapses whitespace to single spaces and limits each
-child's preview to 160 Unicode characters, including `...` when truncated.
+preview. The factory separates text blocks, collapses whitespace to single spaces,
+and limits each child's preview to 160 Unicode characters, including `...` when
+truncated.
 Keep structured replies short: truncation can remove a JSON port or make the
 preview invalid JSON. Each JSON port uses the last fenced `json` object with
 its key, or falls back to parsing the whole preview as an object. A JSON
@@ -262,7 +263,8 @@ result = await rlm.factory.stop(run_id)
 print(result["state"], result["cancelled"])
 ```
 
-`status(run_id)`, `graph(run_id)`, and `watch(run_id)` all include
+`status(run_id)`, `graph(run_id)`, and `watch(run_id)` show per-state nodes,
+including pending states whose required sources never settled. They also include
 `active_children` (exact child IDs grouped by state) and `queued` (counts by
 state). A ready entry counts as one until expanded; after `foreach` expands,
 each waiting item counts separately. An admission in flight remains queued

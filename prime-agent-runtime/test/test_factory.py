@@ -235,7 +235,8 @@ class FactoryTest(unittest.IsolatedAsyncioTestCase):
             self.assertEqual((await rlm.factory.status(b))["state"], "running")
             self.assertEqual(len(requested), 3)
             snap = await rlm.factory.watch(a)
-            self.assertEqual(snap["nodes"], [{"state_id": "produce", "status": "cancelled", "rlm_child_id": first}])
+            self.assertEqual({row["state_id"]: (row["status"], row["rlm_child_id"]) for row in snap["nodes"]},
+                             {"produce": ("cancelled", first), "consume": ("pending", None)})
             graph = await rlm.factory.graph(a)
             self.assertEqual(snap["machine"], graph["machine"])
             graph["machine"]["order"].clear()
@@ -309,7 +310,9 @@ class FactoryTest(unittest.IsolatedAsyncioTestCase):
             self.assertFalse(snap.pop("changed"))
             graph = await rlm.factory.graph(run_id)
             self.assertEqual(snap.keys(), graph.keys())
-            self.assertEqual((snap["run_id"], snap["state"], snap["nodes"]), (run_id, "stopped", []))
+            self.assertEqual((snap["run_id"], snap["state"]), (run_id, "stopped"))
+            self.assertEqual({node["state_id"]: node["status"] for node in snap["nodes"]},
+                             {"produce": "pending", "consume": "pending"})
             host.assert_not_called()
 
     async def test_papi_13_transition_pause_resume_and_stop_are_scoped(self):
@@ -989,9 +992,101 @@ class FactoryTest(unittest.IsolatedAsyncioTestCase):
                 async with asyncio.timeout(3):
                     await rlm.factory.stop(a)
 
+    async def test_papi_13_conditional_required_source_pending_vs_settled_without_value(self):
+        self.settings.write_text('{"factory":{"enabled":true}}')
+        rlm.harness.save_factory("conditional-index", {
+            "states": [
+                {"id": "review", "entry": True, "subagent": {"prompt": "Review document"},
+                 "outputs": [{"name": "decision", "type": "text"}]},
+                {"id": "extract", "subagent": {"prompt": "Extract heading"},
+                 "outputs": [{"name": "heading", "type": "text"}]},
+                {"id": "index", "subagent": {"prompt": "Index {heading}"},
+                 "inputs": [{"name": "heading", "type": "text", "from": "extract.heading"}]},
+                {"id": "audit", "subagent": {"prompt": "Audit index"}},
+            ],
+            "transitions": [
+                {"from": "review", "to": "index"},
+                {"from": "review", "to": "extract", "when": {"output": "decision", "op": "eq", "value": "approve"}},
+                {"from": "index", "to": "audit"},
+            ],
+            "run": {"failure_policy": "continue"},
+        })
+        for decision in ("skip", "approve"):
+            with self.subTest(decision=decision):
+                prompts = []
+                release = asyncio.Event()
+
+                async def host(kind, data):
+                    if kind == "rlm.run":
+                        prompts.append(data["prompt"])
+                        return {"rlm_child_id": str(len(prompts)), "name": data["kwargs"]["name"],
+                                "session_dir": str(self.directory), "model": "fake"}
+                    self.assertEqual(kind, "rlm.collect")
+                    child, = data["targets"]
+                    await release.wait()
+                    return {"results": [{"rlm_child_id": child, "status": "done", "settled": True,
+                                         "factory_answer_preview": decision if child == "1" else ""}]}
+
+                with patch("rlm.host_request", side_effect=host):
+                    run_id = (await rlm.factory.run("conditional-index"))["run_id"]
+                    initial = await rlm.factory.status(run_id)
+                    self.assertEqual([node["status"] for node in initial["nodes"]], ["pending"] * 4)
+                    release.set()
+                    finished = await rlm.factory.watch(run_id, timeout=2)
+                    selected = await rlm.factory.status(run_id)
+                    self.assertEqual(selected["nodes"], finished["nodes"])
+                    states = {node["state_id"]: node["status"] for node in selected["nodes"]}
+                    if decision == "skip":
+                        self.assertEqual(prompts, ["Review document"])
+                        self.assertEqual(finished["state"], "done")
+                        self.assertIsNone(finished["error"])
+                        self.assertEqual(states, {"review": "done", "extract": "pending", "index": "pending", "audit": "pending"})
+                        self.assertEqual([edge["to"] for edge in finished["last_fired"]], ["index"])
+                    else:
+                        self.assertEqual(prompts, ["Review document", "Extract heading", "Audit index"])
+                        self.assertEqual(finished["state"], "error")
+                        self.assertIn("extract.heading", finished["error"])
+                        self.assertEqual(states, {"review": "done", "extract": "done", "index": "error", "audit": "done"})
+
+    async def test_papi_13_refused_spawns_do_not_consume_document_admission_budget(self):
+        self.settings.write_text('{"factory":{"enabled":true}}')
+        rlm.harness.save_factory("proofread", {
+            "nodes": [{"id": key, "subagent": {"prompt": key}} for key in ("appendix", "draft", "style")],
+            "run": {"max_parallel": 1, "max_children": 1, "failure_policy": "continue"},
+        })
+        attempts = []
+
+        async def host(kind, data):
+            if kind == "rlm.run":
+                prompt, name = data["prompt"], data["kwargs"]["name"]
+                attempts.append((prompt, name))
+                if prompt == "appendix":
+                    raise RuntimeError("appendix admission refused")
+                return {"rlm_child_id": prompt, "name": name, "session_dir": str(self.directory), "model": "fake"}
+            self.assertEqual(kind, "rlm.collect")
+            child, = data["targets"]
+            return {"results": [{"rlm_child_id": child, "status": "done", "settled": True}]}
+
+        with patch("rlm.host_request", side_effect=host):
+            run_id = (await rlm.factory.run("proofread"))["run_id"]
+            try:
+                paused = await rlm.factory.watch(run_id, timeout=2)
+                self.assertEqual(paused["pause_reason"], "max_children exceeded")
+                self.assertEqual(paused["children"], {"draft": "draft"})
+                self.assertEqual([prompt for prompt, _ in attempts], ["appendix", "draft"])
+                await rlm.factory.resume(run_id)
+                finished = await rlm.factory.watch(run_id, timeout=2)
+                self.assertEqual(finished["state"], "error")
+                self.assertIn("appendix admission refused", finished["error"])
+                self.assertEqual(finished["children"], {"draft": "draft", "style": "style"})
+                self.assertEqual([prompt for prompt, _ in attempts], ["appendix", "draft", "style"])
+                self.assertEqual(len({name for _, name in attempts}), 3)
+            finally:
+                await rlm.factory.stop(run_id)
+
     async def test_papi_13_document_failure_policies_scope_resume_and_cancellation(self):
         self.settings.write_text('{"factory":{"enabled":true}}')
-        for mode in ("escalate", "continue", "fail_fast", "override"):
+        for mode in ("escalate", "continue", "fail_fast", "stop_during_fail_fast", "override"):
             with self.subTest(mode=mode):
                 spec = {
                     "states": [
@@ -1017,10 +1112,14 @@ class FactoryTest(unittest.IsolatedAsyncioTestCase):
                     spec["run"]["failure_policy"] = "fail_fast"
                     for state in spec["states"][:1] + spec["states"][2:3]:
                         state["failure_policy"] = "continue"
+                if mode == "stop_during_fail_fast":
+                    spec["run"]["failure_policy"] = "fail_fast"
                 rlm.harness.save_factory("document-review", spec)
                 started = asyncio.Queue()
                 children = {}
                 deleted = []
+                deleting = asyncio.Event()
+                release_delete = asyncio.Event()
                 runs = []
 
                 async def host(kind, data):
@@ -1036,6 +1135,9 @@ class FactoryTest(unittest.IsolatedAsyncioTestCase):
                     self.assertEqual(kind, "rlm.delete_subagent")
                     child = data["target"]
                     deleted.append(child)
+                    if mode == "stop_during_fail_fast" and child == style:
+                        deleting.set()
+                        await release_delete.wait()
                     return {"subagent": {"rlm_child_id": child, "session_name": children[child][0],
                                          "session_dir": str(self.directory), "status": "running"}}
 
@@ -1061,7 +1163,25 @@ class FactoryTest(unittest.IsolatedAsyncioTestCase):
                             release(draft, status="error", error="draft unavailable", factory_answer_preview="not a valid title")
                             initial = await rlm.factory.watch(a, timeout=2)
                             self.assertIn("draft unavailable", initial["error"])
-                            if mode == "fail_fast":
+                            if mode == "stop_during_fail_fast":
+                                await deleting.wait()
+                                stop_entered = asyncio.Event()
+
+                                async def selected_stop():
+                                    stop_entered.set()
+                                    return await rlm.factory.stop(a)
+
+                                stop = asyncio.create_task(selected_stop())
+                                await stop_entered.wait()
+                                try:
+                                    self.assertEqual(deleted, [style])
+                                    self.assertEqual((await rlm.factory.status(a))["state"], "stopping")
+                                finally:
+                                    release_delete.set()
+                                    stopped_a = await stop
+                                self.assertEqual(stopped_a, {"run_id": a, "state": "stopped", "cancelled": ["style"]})
+                                self.assertEqual((await rlm.factory.status(a))["error"], "draft: draft unavailable")
+                            elif mode == "fail_fast":
                                 self.assertEqual(initial["state"], "error")
                                 drained = await rlm.factory.watch(a, timeout=2) if initial["active_nodes"] else initial
                                 self.assertEqual(drained["active_nodes"], [])
@@ -1093,7 +1213,8 @@ class FactoryTest(unittest.IsolatedAsyncioTestCase):
                                 self.assertEqual(finished["state"], "error")
                                 self.assertEqual([edge["to"] for edge in finished["last_fired"]], ["note", "catalog"])
                                 self.assertEqual({node["state_id"]: node["status"] for node in finished["nodes"]},
-                                                 {"draft": "error", "catalog": "error", "style": "done", "note": "done"})
+                                                 {"draft": "error", "catalog": "error", "style": "done",
+                                                  "note": "done", "approved": "pending"})
                             with self.assertRaisesRegex(ValueError, "not paused"):
                                 await rlm.factory.resume(a)
                             self.assertEqual((await rlm.factory.status(b))["children"],
@@ -1107,10 +1228,11 @@ class FactoryTest(unittest.IsolatedAsyncioTestCase):
                             finally:
                                 stopped.cancel()
                                 await asyncio.gather(stopped, return_exceptions=True)
-                            self.assertCountEqual(deleted, [other_draft, other_style] + ([style] if mode == "fail_fast" else []))
-                            self.assertEqual(len(children), 4 if mode == "fail_fast" else 5)
+                            self.assertCountEqual(deleted, [other_draft, other_style] + ([style] if mode in ("fail_fast", "stop_during_fail_fast") else []))
+                            self.assertEqual(len(children), 4 if mode in ("fail_fast", "stop_during_fail_fast") else 5)
                             self.assertTrue(started.empty())
                     finally:
+                        release_delete.set()
                         for _, response in children.values():
                             if not response.done():
                                 response.set_result({"settled": False, "status": "running"})

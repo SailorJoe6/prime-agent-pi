@@ -392,6 +392,7 @@ class FactoryRuns:
     ) -> dict[str, Any]:
         states, machine = _prepare_machine(select_factory(spec_id, harness), harness)
         run = _Run(uuid4().hex, spec_id, name, machine, monotonic(), delete)
+        run.nodes.update((state["id"], "pending") for state in states)
         run.ready.extend(state["id"] for state in states if state.get("entry"))
         self._runs[run.run_id] = run
         run.worker = asyncio.create_task(self._execute(run, states, spawn, collect))
@@ -407,7 +408,7 @@ class FactoryRuns:
             raise ValueError(f"unknown factory run {run_id!r}")
         return run
 
-    def status(self, run_id: str) -> dict[str, Any]:
+    def status(self, run_id: str, *, compact: bool = False) -> dict[str, Any]:
         run = self._require_run(run_id)
         active_children: dict[str, list[str]] = {}
         for key, handle in run.active.values():
@@ -416,8 +417,13 @@ class FactoryRuns:
         if run.state in ("running", "paused"):
             queued.update(run.ready)
             queued.update(entry.key for entry, _, _ in run.pending if not entry.failed)
+        nodes = [{"state_id": key, "status": status, "rlm_child_id": run.children.get(key),
+                  **({"answer_preview": run.answer_previews[key]}
+                     if not compact and key in run.answer_previews else {})}
+                 for key, status in run.nodes.items()]
         return {"run_id": run.run_id, "spec_id": run.spec_id, "name": run.name,
-                "active_children": active_children, "queued": dict(queued), "state": run.state, "children": dict(run.children), "error": run.error,
+                "nodes": nodes, "active_children": active_children, "queued": dict(queued),
+                "state": run.state, "children": dict(run.children), "error": run.error,
                 "pause_reason": run.pause_reason}
 
     def graphs(self) -> dict[str, Any]:
@@ -432,11 +438,7 @@ class FactoryRuns:
 
     def graph(self, run_id: str, *, compact: bool = False) -> dict[str, Any]:
         run = self._require_run(run_id)
-        nodes = [{"state_id": key, "status": status, "rlm_child_id": run.children.get(key),
-                  **({"answer_preview": run.answer_previews[key]}
-                     if not compact and key in run.answer_previews else {})}
-                 for key, status in run.nodes.items()]
-        return {**self.status(run_id), "machine": copy.deepcopy(run.machine), "nodes": nodes,
+        return {**self.status(run_id, compact=compact), "machine": copy.deepcopy(run.machine),
                 "active_nodes": list(dict.fromkeys(key for key, _ in run.active.values())),
                 "last_fired": copy.deepcopy(list(run.last_fired)),
                 "elapsed_ms": int(1000 * (monotonic() - run.started_at))}
@@ -469,14 +471,16 @@ class FactoryRuns:
     async def stop(self, run_id: str) -> dict[str, Any]:
         run = self._require_run(run_id)
         cancelled: list[str] = []
-        if run.state in ("running", "paused"):
+        if run.state in ("running", "paused") or (
+            run.state == "error" and run.worker is not None and not run.worker.done()
+        ):
             run.state = "stopping"
             run.pause_reason = None
             run.pause_released.set()
             run.notify()
             assert run.worker is not None
-            # The worker owns admission and remembers the exact handle even if
-            # stop was requested while spawn was returning it. Do not cancel it.
+            # The worker owns in-flight admission and fail-fast retirement.
+            # Join it rather than deleting any of its exact handles again.
             cancelled = await asyncio.shield(run.worker)
         elif run.state in ("done", "error") and run.active:
             run.state = "stopping"
@@ -566,7 +570,8 @@ class FactoryRuns:
             for key, state in by_id.items()
         }
         current = ""
-        index = 0
+        attempt_index = 0
+        admitted = 0
         sequence = 0
         instances: dict[int, tuple[_Entry, int, int, float]] = {}
         latest: dict[str, int] = {}
@@ -652,11 +657,11 @@ class FactoryRuns:
             while (ready or pending or run.active) and run.state == "running":
                 while (ready or pending) and len(run.active) < parallel_limit and run.state == "running":
                     if not pending:
-                        # Let in-flight required sources settle before binding.
+                        # Never bind until every required source has settled.
                         candidate = next((key for key in ready if required_sources[key] <= settled.keys()), None)
-                        if candidate is None and tasks_in_flight():
+                        if candidate is None:
                             break
-                        current = candidate or ready[0]
+                        current = candidate
                         ready.remove(current)
                         state = by_id[current]
                         sequence += 1
@@ -677,24 +682,25 @@ class FactoryRuns:
                         continue
                     current = entry.key
                     subagent = by_id[current]["subagent"]
-                    if index == child_limit:
+                    if admitted == child_limit:
                         await self._pause(run, "max_children exceeded")
                         if run.state != "running":
                             break
                     await check_run_budget()
                     if run.state != "running":
                         break
-                    index += 1
+                    attempt_index += 1
                     try:
-                        handle = await spawn(entry.prompts[item], name=_child_label(subagent.get("name"), run.run_id, index),
+                        handle = await spawn(entry.prompts[item], name=_child_label(subagent.get("name"), run.run_id, attempt_index),
                                              model=subagent.get("model"), thinking=subagent.get("thinking"))
                     except Exception as exc:
                         pending.popleft()
                         await fail(entry, str(exc))
                         continue
                     pending.popleft()
-                    run.active[index] = (current, handle)
-                    instances[index] = (entry, item, attempt, monotonic())
+                    admitted += 1
+                    run.active[attempt_index] = (current, handle)
+                    instances[attempt_index] = (entry, item, attempt, monotonic())
                     run.children[current] = handle.rlm_child_id
                     run.nodes[current] = "running"
                     run.notify()
@@ -704,7 +710,9 @@ class FactoryRuns:
                 has_tasks = tasks_in_flight()
                 completed_poll = next((number for number, poll in polls.items() if poll.done()), None)
                 if not has_tasks and completed_poll is None:
-                    if ready or pending:
+                    if any(not entry.failed for entry, _, _ in pending) or any(
+                        required_sources[key] <= settled.keys() for key in ready
+                    ):
                         await check_run_budget()
                         if run.state != "running":
                             break

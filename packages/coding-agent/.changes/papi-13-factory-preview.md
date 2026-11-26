@@ -13,3 +13,5 @@
 - Added resident states and selected-run retirement after named Python factory graphs finish.
 - Added Python factory run discovery and per-state queue counts and exact active child IDs.
 - Changed Python factory output previews to match the release for Python bindings and live graph inspection without changing public collect.
+- Fixed factory admission counts, pending input handling, preview spacing, and stop during fail-fast cleanup.
+- Added per-state node details to selected Python factory status.
