@@ -4,7 +4,7 @@ title: Run and recover named machines from Python
 status: In Progress
 assignee: []
 created_date: '2026-11-22T22:17:00Z'
-updated_date: '2026-11-26T22:01:00Z'
+updated_date: '2026-11-26T22:04:00Z'
 labels: []
 milestone: m-0
 dependencies:
@@ -103,4 +103,8 @@ Published named-run failure policies at code b84147659c3b35f9d880d4e4663068fe135
 Offline document fixtures cover all three policies, a state override, required and optional inputs and guarded edges, no replay or cross-run effects, exact cancellation and foreach admission failure. Passed 22 focused factory tests via `uv run --locked python -m unittest discover -s test -p 'test_factory*.py' -v`, FactoryTest shuffles 13/421/2026, `npm run check` including test-policy, and `git diff --check`. Five deliberate defects were caught: no escalation, no fail-fast, ignored override, partial failed-entry outputs, and admitting a queued item after its entry failed. No new full-suite or released-parity claim. Retries, budgets, residents, diagnostics, preview semantics and unnamed execution remain open; no later recovery, terminal UI, live providers, or lifecycle changes. Acceptance checkboxes unchanged; not merge-ready.
 
 Next bounded slice: adapt v0.10.0 (763094e1) per-state child retries and run/state budget_ms in the existing Python executor. Exercise exact retries of a rendered item without graph re-entry, retry exhaustion, the existing admission cap, successful settlements that exceed the state budget without retry, and a one-time run budget pause with selected resume and terminal stop. Use offline document fixtures and a controlled clock. Keep residents, diagnostics, preview semantics and unrelated behavior open.
+
+Published named-run retries and time budgets at code ddd835a9c3680a9ccae8375e27bb6d043f052e62. Compared v0.10.0 (763094e1) admission, settlement, retry and budget behavior. A settled child failure retries the same rendered item with a fresh exact handle and counts toward the run-wide child cap, without graph re-entry or early output binding. Exhaustion uses the existing failure policy; input/admission errors are not retried. Pi does not add provider-specific admission backoff in this slice. Successful attempts observed beyond state budget_ms fail through that policy, with no output or retry; timing starts after admission. Run budget_ms pauses the selected run once before further admission or between collects, without interrupting host calls or deleting children. Selected resume continues without replay and stop stays terminal with exact-child cleanup.
+
+Passed 26 focused offline tests via `uv run --locked python -m unittest discover -s test -p 'test_factory*.py' -v`, FactoryTest shuffles 13/421/2026, `npm run check` including test-policy, and `git diff --check`. Controlled-clock manuscript fixtures cover state budget boundary, admission timing, pause between admissions and during active work, selected resume, and terminal stop with two overlapping runs. Retry fixtures cover a foreach item, fresh child identity, admission cap, output order and exhaustion. Seven deliberate regressions were caught. No full-suite or released-parity claim; residents, Python diagnostics, released preview behavior and unnamed execution remain open. Acceptance checkboxes and lifecycle unchanged; not merge-ready.
 <!-- SECTION:NOTES:END -->
