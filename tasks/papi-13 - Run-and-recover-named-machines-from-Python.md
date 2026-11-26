@@ -4,7 +4,7 @@ title: Run and recover named machines from Python
 status: In Progress
 assignee: []
 created_date: '2026-11-22T22:17:00Z'
-updated_date: '2026-11-26T21:18:00Z'
+updated_date: '2026-11-26T21:21:00Z'
 labels: []
 milestone: m-0
 dependencies:
@@ -69,4 +69,6 @@ Transition-limit pause/resume slice published at code 99dc5306e7b76b26a57c4c8a09
 Next bounded slice: use the existing exact-child collect path with opt-in settled answer text, preserving its default preview behavior, then bind released text/JSON and multiple declared outputs in the serial DAG. Exercise the host and Python paths offline; leave explicit graph behavior and the Bash baseline open.
 
 Declared-output slice published at code 2c8303918272e12266fae886db77057defb82835. Adapted v0.10.0 (763094e1) declared text and named JSON capture: multiple ports bind from settled child text; JSON prefers the last fenced object containing the port and falls back to a whole-answer object. JSON null is distinct from a missing port. Pi requests the exact child’s settled final assistant text through the existing kernel collect route instead of a preview. Default collect is unchanged; answers over 256 KiB are unavailable, not truncated. Offline validation: npm run check, 14 Python factory tests, 9 TypeScript collect tests, shuffle seeds 13/421/2026 for both focused suites, and three caught preview/order mutations. Existing run isolation, pause and stop tests passed. No live providers or acceptance closure. Remaining bounded explicit-machine/graph behavior and exact-base Bash comparison stay open.
+
+Next bounded slice: run one-shot explicit task machines serially in the existing executor. Compare v0.10.0 settled-output guard and join semantics; verify filtered branches, exact input handoff and a transition-limit pause at the join with deterministic offline fixtures. Bounded re-entry, parallel and item fan-out, and the exact-base Bash comparison remain open.
 <!-- SECTION:NOTES:END -->
