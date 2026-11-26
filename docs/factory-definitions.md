@@ -142,8 +142,9 @@ returns an empty run list. Pass a run ID to `graph` to inspect that run instead.
 
 With `factory.enabled` set to `true`, `run` first checks the harness and then
 looks in the machine library. It does not edit either definition. This run path
-accepts one-shot DAGs and explicit task machines with text and JSON ports. It
-runs one child at a time per run. A DAG with more nodes than `max_children`
+accepts one-shot DAGs and explicit task machines with text and JSON ports.
+Independent task entries can run together. `run.max_parallel` bounds active
+children per run (default `8`; set `1` to run serially). A DAG with more nodes than `max_children`
 is rejected before launch. An explicit machine counts actual child admissions,
 including re-entries, against `max_children`.
 
@@ -165,7 +166,8 @@ text of the exact child's final assistant message, including line breaks.
 For JSON outputs, tell the child to return an object keyed by the declared port
 names. Each port uses the last fenced `json` object containing its key, or
 falls back to an object returned as the whole answer. A JSON `null` is a value.
-A missing required output or child failure ends the run with an error. Answers
+A missing required output or child failure ends the run with an error and
+cancels remaining active work in that run. Answers
 larger than 256 KiB are unavailable for binding; they are never truncated.
 In an explicit machine, mark starting states with `entry: true`. A
 single-source transition can test settled output, for example:
@@ -183,8 +185,8 @@ latest settled outputs of its input sources. If that settle omitted a port,
 an earlier value is not reused. `status` shows the latest child ID per state;
 `graph` and `watch` show recent fired edges in `last_fired`, newest first.
 
-Resident states, parallel or `foreach` fan-out, retries, time budgets, and
-custom failure handling are not supported. Run records are kernel-local
+Resident states, `foreach` item fan-out, retries, time budgets, and custom
+failure handling are not supported. Run records are kernel-local
 and do not survive a restart.
 Children are ordinary RLM children and remain visible through the existing
 child APIs until deleted.
@@ -206,10 +208,10 @@ is in seconds, defaults to zero (snapshot without waiting), and is capped at
 60. If nothing changes before the timeout, `changed` is false.
 
 `stop` prevents new states from starting in the selected run and asks the
-existing child API to delete its active child by exact ID. It does not delete
+existing child API to delete its active children by exact ID. It does not delete
 children already observed to be settled or touch another run. A stop requested
-while child admission is in flight waits for that admission before acting;
-if a collect call is already in flight, stop checks its result first. Look for
+while child admission is in flight waits for that admission before acting. Stop
+accounts for observed settlements before deleting any remaining children. Look for
 `stopped` in the result. If the stop fails, `status` reports the error.
 
 If firing the next transition would exceed `run.max_transitions`, the run
@@ -219,6 +221,7 @@ pauses before starting the next child. `status`, `graph`, and `watch` report
 limit. It keeps settled outputs and does not restart completed states. This
 transition limit pauses a run at most once. An explicit machine can also pause
 once before exceeding `run.max_children`, with `pause_reason: "max_children exceeded"`.
-Resume authorizes that run to continue past the reported limit; it does not
+Children already in flight may finish while the run is paused. Resume
+authorizes that run to continue past the reported limit; it does not
 raise a state's `max_entries`. You can also stop a paused run. Stopping is
 terminal, and `resume` rejects any run that is not paused.

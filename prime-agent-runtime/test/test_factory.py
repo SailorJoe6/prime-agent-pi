@@ -461,7 +461,7 @@ class FactoryTest(unittest.IsolatedAsyncioTestCase):
                 {"from": "review", "to": "approved", "when": accept},
                 join,
             ],
-            "run": {"max_transitions": 1},
+            "run": {"max_transitions": 1, "max_parallel": 1},
         }
         rlm.harness.save_factory("format", spec)
         prompts = []
@@ -515,7 +515,7 @@ class FactoryTest(unittest.IsolatedAsyncioTestCase):
                 {"from": ["review", "style"], "to": "label"},
                 {"from": "edit", "to": "review"},
             ],
-            "run": {"max_transitions": 3, "max_children": 3},
+            "run": {"max_transitions": 3, "max_children": 3, "max_parallel": 1},
         }
         for label in ("atlas", "garden"):
             spec["states"][0]["subagent"] = {"prompt": f"Style for {label}"}
@@ -574,3 +574,121 @@ class FactoryTest(unittest.IsolatedAsyncioTestCase):
                              ["review", "edit", "label", "review", "edit", "label"])
             self.assertEqual([len(spawns[label]) for label in scripts], [7, 3])
             self.assertFalse(answers)
+
+    async def test_papi_13_parallel_documents_settle_join_and_stop_exact_children(self):
+        self.settings.write_text('{"factory":{"enabled":true}}')
+        for label in ("atlas", "garden"):
+            rlm.harness.save_factory(label, {
+                "states": [
+                    {"id": key, "entry": True, "subagent": {"prompt": f"{label} {key}"},
+                     "outputs": [{"name": "value", "type": kind}]}
+                    for key, kind in (("title", "text"), ("style", "json"), ("summary", "text"))
+                ] + [{"id": "format", "subagent": {"prompt": "{title}|{style}|{summary}"},
+                      "inputs": [{"name": key, "type": kind, "from": f"{key}.value"}
+                                 for key, kind in (("title", "text"), ("style", "json"), ("summary", "text"))]}],
+                "transitions": [{"from": ["title", "style", "summary"], "to": "format"}],
+                "run": {"max_parallel": 2, "max_children": 3},
+            })
+        requests = {}
+        collecting = asyncio.Queue()
+        gates = {}
+        deleted = []
+
+        async def host(kind, data):
+            if kind == "rlm.run":
+                name = data["kwargs"]["name"]
+                child = f"id-{name}"
+                self.assertNotIn(child, requests)
+                requests[child] = (name, data["prompt"])
+                return {"rlm_child_id": child, "name": name, "session_dir": str(self.directory), "model": "fake"}
+            if kind == "rlm.collect":
+                child, = data["targets"]
+                name, prompt = requests[child]
+                self.assertEqual(data.get("include_answer", False), "|" not in prompt)
+                gates[child] = asyncio.get_running_loop().create_future()
+                collecting.put_nowait(child)
+                return {"results": [{"rlm_child_id": child, "answer_preview": "preview", **await gates[child]}]}
+            self.assertEqual(kind, "rlm.delete_subagent")
+            child = data["target"]
+            deleted.append(child)
+            return {"subagent": {"rlm_child_id": child, "session_name": requests[child][0],
+                                 "session_dir": str(self.directory), "status": "running"}}
+
+        def settle(child, answer=None):
+            gates[child].set_result({"settled": True, "status": "done", "answer_text": answer})
+
+        async def until(run_id, state, *, drained=False):
+            snapshot = await rlm.factory.graph(run_id)
+            while snapshot["state"] != state or (drained and snapshot["active_nodes"]):
+                if snapshot["state"] != state:
+                    self.assertNotIn(snapshot["state"], ("error", "done", "stopped"), snapshot)
+                snapshot = await rlm.factory.watch(run_id, timeout=30)
+            return snapshot
+
+        run_ids = []
+        with patch("rlm.host_request", side_effect=host):
+            try:
+                async with asyncio.timeout(3):
+                    first = await rlm.factory.run("atlas")
+                    a = first["run_id"]
+                    run_ids.append(a)
+                    self.assertEqual(first["max_parallel"], 2)
+                    title, style = await collecting.get(), await collecting.get()
+                    self.assertEqual([prompt for _, prompt in requests.values()], ["atlas title", "atlas style"])
+                    snapshot = await rlm.factory.graph(a)
+                    self.assertEqual(snapshot["active_nodes"], ["title", "style"])
+                    self.assertEqual(snapshot["machine"]["run"]["max_parallel"], 2)
+                    b = (await rlm.factory.run("garden"))["run_id"]
+                    run_ids.append(b)
+                    other_title, other_style = await collecting.get(), await collecting.get()
+                    self.assertEqual([requests[k][1] for k in (other_title, other_style)], ["garden title", "garden style"])
+                    self.assertNotEqual(a, b)
+                    gates[style].set_result({"settled": False, "status": "done", "answer_text": '{"value":"early"}'})
+                    self.assertEqual(await collecting.get(), style)
+                    self.assertEqual(len(requests), 4)
+                    settle(style, '{"value":{"font":"plain"}}')
+                    summary = await collecting.get()
+                    self.assertEqual(requests[summary][1], "atlas summary")
+                    self.assertEqual((await rlm.factory.graph(a))["active_nodes"], ["title", "summary"])
+
+                    stop = asyncio.create_task(rlm.factory.stop(b))
+                    try:
+                        await until(b, "stopping")
+                        gates[other_title].set_result({"settled": False, "status": "running"})
+                        self.assertEqual(await stop, {"run_id": b, "state": "stopped", "cancelled": ["title", "style"]})
+                    finally:
+                        stop.cancel()
+                        await asyncio.gather(stop, return_exceptions=True)
+                    self.assertCountEqual(deleted, [other_title, other_style])
+                    self.assertEqual((await rlm.factory.graph(a))["active_nodes"], ["title", "summary"])
+                    settle(summary, "Two paragraphs")
+                    settle(title, "Atlas\nTitle")
+                    paused = await until(a, "paused")
+                    self.assertEqual(paused["pause_reason"], "max_children exceeded")
+                    self.assertEqual(paused["active_nodes"], [])
+                    self.assertEqual([edge["to"] for edge in paused["last_fired"]], ["format"])
+                    self.assertEqual(len(requests), 5)
+                    await rlm.factory.resume(a)
+                    formatted = await collecting.get()
+                    self.assertEqual(requests[formatted][1], 'Atlas\nTitle|{"font": "plain"}|Two paragraphs')
+                    settle(formatted)
+                    self.assertIsNone((await until(a, "done"))["error"])
+                    self.assertEqual(len(requests), 6)
+                    self.assertCountEqual(deleted, [other_title, other_style])
+
+                    c = (await rlm.factory.run("garden"))["run_id"]
+                    run_ids.append(c)
+                    failed, sibling = await collecting.get(), await collecting.get()
+                    gates[failed].set_result({"settled": True, "status": "error", "error": "draft unavailable"})
+                    failed_run = await until(c, "error", drained=True)
+                    self.assertIn("draft unavailable", failed_run["error"])
+                    self.assertEqual(failed_run["active_nodes"], [])
+                    self.assertCountEqual(deleted, [other_title, other_style, sibling])
+                    self.assertEqual(len(requests), 8)
+            finally:
+                stops = [asyncio.create_task(rlm.factory.stop(run_id)) for run_id in run_ids]
+                for gate in gates.values():
+                    if not gate.done():
+                        gate.set_result({"settled": False, "status": "running"})
+                async with asyncio.timeout(3):
+                    await asyncio.gather(*stops)

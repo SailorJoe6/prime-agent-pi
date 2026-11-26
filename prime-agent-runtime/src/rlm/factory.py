@@ -159,7 +159,7 @@ class _Run:
     children: dict[str, str] = field(default_factory=dict)
     nodes: dict[str, str] = field(default_factory=dict)
     last_fired: deque[dict[str, Any]] = field(default_factory=lambda: deque(maxlen=10))
-    active: RLMSpawnHandle | None = None
+    active: dict[int, tuple[str, RLMSpawnHandle]] = field(default_factory=dict)
     worker: asyncio.Task[list[str]] | None = None
     changed: asyncio.Event = field(default_factory=asyncio.Event)
     error: str | None = None
@@ -300,7 +300,6 @@ def _prepare_machine(spec: dict[str, Any], harness: HarnessState) -> tuple[list[
         machine = copy.deepcopy(spec)
 
     structure = _machine_structure(machine)
-    structure["run"]["max_parallel"] = 1
     states = machine["states"]
     limits = machine.get("run") or {}
     if "budget_ms" in limits or limits.get("failure_policy", "fail_fast") != "fail_fast":
@@ -345,7 +344,7 @@ class FactoryRuns:
         self._runs[run.run_id] = run
         run.worker = asyncio.create_task(self._execute(run, states, spawn, collect, delete))
         return {"run_id": run.run_id, "spec_id": spec_id, "name": name,
-                "nodes": len(states), "max_parallel": 1}
+                "nodes": len(states), "max_parallel": machine["run"]["max_parallel"]}
 
     def contains(self, run_id: str) -> bool:
         return run_id in self._runs
@@ -367,7 +366,7 @@ class FactoryRuns:
         nodes = [{"state_id": key, "status": status, "rlm_child_id": run.children[key]}
                  for key, status in run.nodes.items()]
         return {**self.status(run_id), "machine": copy.deepcopy(run.machine), "nodes": nodes,
-                "active_nodes": [row["state_id"] for row in nodes if row["status"] == "running"],
+                "active_nodes": list(dict.fromkeys(key for key, _ in run.active.values())),
                 "last_fired": copy.deepcopy(list(run.last_fired)),
                 "elapsed_ms": int(1000 * (asyncio.get_running_loop().time() - run.started_at))}
 
@@ -418,6 +417,20 @@ class FactoryRuns:
         run.notify()
         await run.pause_released.wait()
 
+    @staticmethod
+    async def _poll_child(collect: _Collect, handle: RLMSpawnHandle, include_answer: bool) -> RLMChildResult:
+        results = await collect(handle, timeout_ms=1000, include_answer=include_answer)
+        if len(results) != 1 or results[0].rlm_child_id != handle.rlm_child_id:
+            raise RuntimeError("collect did not return the exact factory child")
+        return results[0]
+
+    @staticmethod
+    def _record_settlement(run: _Run, admission: int, result: RLMChildResult) -> None:
+        key, handle = run.active.pop(admission)
+        if run.children[key] == handle.rlm_child_id:
+            run.nodes[key] = result.status
+        run.notify()
+
     async def _execute(
         self, run: _Run, states: list[dict[str, Any]], spawn: _Spawn, collect: _Collect,
         delete: _DeleteChild,
@@ -426,6 +439,7 @@ class FactoryRuns:
         transitions = 0
         transition_limit = run.machine["run"]["max_transitions"]
         child_limit = run.machine["run"]["max_children"]
+        parallel_limit = run.machine["run"]["max_parallel"]
         by_id = {state["id"]: state for state in states}
         ready = deque(state["id"] for state in states if state.get("entry"))
         entries = dict.fromkeys(ready, 1)
@@ -445,52 +459,66 @@ class FactoryRuns:
         current = ""
         index = 0
         cancelled: list[str] = []
+        polls: dict[int, asyncio.Task[RLMChildResult]] = {}
         try:
-            while ready and run.state == "running":
-                # Leave entries with unsettled required inputs queued while another
-                # entry can make progress. With no such entry, report the missing input.
-                current = next((key for key in ready if required_sources[key] <= settled.keys()), ready[0])
-                ready.remove(current)
-                state = by_id[current]
-                bindings = {}
-                for port in state.get("inputs") or []:
-                    source, _, output = port["from"].partition(".")
-                    value = outputs.get(source, {}).get(output)
-                    if value is not None:
-                        bindings[port["name"]] = value
-                    elif port.get("optional"):
-                        bindings[port["name"]] = "null" if port["type"] == "json" else "None"
-                    else:
-                        raise ValueError(f"missing {port['type']} output {port['from']!r}")
-                subagent = state["subagent"]
-                prompt = _render_prompt(subagent["prompt"], bindings)
-                if index == child_limit:
-                    await self._pause(run, "max_children exceeded")
-                    if run.state != "running":
+            while (ready or run.active) and run.state == "running":
+                while ready and len(run.active) < parallel_limit and run.state == "running":
+                    # A required source may still be in flight. If no work can
+                    # settle, fall through to the ordinary missing-input error.
+                    candidate = next((key for key in ready if required_sources[key] <= settled.keys()), None)
+                    if candidate is None and run.active:
                         break
-                index += 1
-                handle = await spawn(prompt, name=f"factory-{run.run_id}-{index}",
-                                     model=subagent.get("model"), thinking=subagent.get("thinking"))
-                run.active = handle
-                run.children[current] = handle.rlm_child_id
-                run.nodes[current] = "running"
-                run.notify()
-                ports = state.get("outputs") or []
-                while run.state == "running":
-                    results = await collect(handle, timeout_ms=1000, include_answer=bool(ports))
-                    if len(results) != 1 or results[0].rlm_child_id != handle.rlm_child_id:
-                        raise RuntimeError("collect did not return the exact factory child")
-                    result = results[0]
-                    if not result.settled:
-                        continue
-                    run.active = None
-                    run.nodes[current] = result.status
+                    current = candidate or ready[0]
+                    ready.remove(current)
+                    state = by_id[current]
+                    bindings = {}
+                    for port in state.get("inputs") or []:
+                        source, _, output = port["from"].partition(".")
+                        value = outputs.get(source, {}).get(output)
+                        if value is not None:
+                            bindings[port["name"]] = value
+                        elif port.get("optional"):
+                            bindings[port["name"]] = "null" if port["type"] == "json" else "None"
+                        else:
+                            raise ValueError(f"missing {port['type']} output {port['from']!r}")
+                    subagent = state["subagent"]
+                    prompt = _render_prompt(subagent["prompt"], bindings)
+                    if index == child_limit:
+                        await self._pause(run, "max_children exceeded")
+                        if run.state != "running":
+                            break
+                    index += 1
+                    handle = await spawn(prompt, name=f"factory-{run.run_id}-{index}",
+                                         model=subagent.get("model"), thinking=subagent.get("thinking"))
+                    run.active[index] = (current, handle)
+                    run.children[current] = handle.rlm_child_id
+                    run.nodes[current] = "running"
                     run.notify()
-                    if result.status != "done" and run.state == "running":
-                        raise RuntimeError(result.error or f"child settled with status {result.status!r}")
+                if run.state != "running" or not run.active:
                     break
+
+                # Answer capture only supports a single exact child per request.
+                if len(run.active) == 1 and not polls:
+                    admission, (current, handle) = next(iter(run.active.items()))
+                    result = await self._poll_child(collect, handle, bool(by_id[current].get("outputs")))
+                else:
+                    for admission, (key, handle) in run.active.items():
+                        if admission not in polls:
+                            polls[admission] = asyncio.create_task(
+                                self._poll_child(collect, handle, bool(by_id[key].get("outputs")))
+                            )
+                    await asyncio.wait(polls.values(), return_when=asyncio.FIRST_COMPLETED)
+                    admission = next(number for number, poll in polls.items() if poll.done())
+                    current, _ = run.active[admission]
+                    result = polls.pop(admission).result()
+                if not result.settled:
+                    continue
+                self._record_settlement(run, admission, result)
                 if run.state != "running":
                     break
+                if result.status != "done":
+                    raise RuntimeError(result.error or f"child settled with status {result.status!r}")
+                ports = by_id[current].get("outputs") or []
 
                 captured = _capture_outputs(result.answer_text or "", ports)
                 outputs[current] = captured
@@ -498,7 +526,7 @@ class FactoryRuns:
                     name: json.loads(captured[name]) if port["type"] == "json" else captured[name]
                     for port in ports if (name := port["name"]) in captured
                 }
-                settled[current] = index
+                settled[current] = admission
                 for edge_index, edge in outgoing.get(current, []):
                     target = edge["to"]
                     when = edge.get("when")
@@ -527,22 +555,38 @@ class FactoryRuns:
                     ready.append(target)
                     run.notify()
         except Exception as exc:
-            if run.state != "stopping" or run.active is None:
+            if run.state != "stopping" or not run.active:
                 run.state = "error"
                 run.error = f"{current}: {exc}"
-        if run.state == "stopping":
-            try:
-                if run.active is not None:
-                    deleted = await delete(run.active)
-                    if deleted.rlm_child_id != run.active.rlm_child_id:
+        finally:
+            for admission, poll in polls.items():
+                if not poll.done():
+                    poll.cancel()
+                elif not poll.cancelled() and poll.exception() is None and poll.result().settled:
+                    self._record_settlement(run, admission, poll.result())
+            if polls:
+                await asyncio.gather(*polls.values(), return_exceptions=True)
+
+        if run.state in ("stopping", "error"):
+            stopping = run.state == "stopping"
+            failures = []
+            for admission, (key, handle) in list(run.active.items()):
+                try:
+                    deleted = await delete(handle)
+                    if deleted.rlm_child_id != handle.rlm_child_id:
                         raise RuntimeError("delete did not return the exact factory child")
-                    run.active = None
-                    run.nodes[current] = "cancelled"
-                    cancelled.append(current)
-            except Exception as exc:
+                    del run.active[admission]
+                    if run.children[key] == handle.rlm_child_id:
+                        run.nodes[key] = "cancelled"
+                    if key not in cancelled:
+                        cancelled.append(key)
+                except Exception as exc:
+                    failures.append(f"{key}: {exc}")
+            if failures:
+                detail = "; ".join(failures)
+                run.error = f"{run.error}; cleanup failed: {detail}" if run.error else f"stop failed: {detail}"
                 run.state = "error"
-                run.error = f"{current}: stop failed: {exc}"
-            else:
+            elif stopping:
                 run.state = "stopped"
         elif run.state == "running":
             run.state = "done"

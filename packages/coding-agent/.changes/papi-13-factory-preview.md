@@ -5,3 +5,4 @@
 - Added text and named JSON output bindings from settled child answers in Python factory DAGs.
 - Added guarded transitions and joins for one-shot explicit Python factory machines.
 - Added bounded re-entry for serial Python factory machines, with latest settled output bindings and an admission-limit pause.
+- Added per-run parallel task execution and exact-child stop for Python factory machines.
