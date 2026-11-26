@@ -1,4 +1,4 @@
-"""Python factory inspection and named DAG execution, adapted from Prime Agent v0.10.0.
+"""Python factory inspection and named machine execution, adapted from Prime Agent v0.10.0.
 
 Copyright (c) 2025-2026 Prime Intellect Ltd.; distributed under the MIT license.
 """
@@ -9,6 +9,7 @@ import asyncio
 import copy
 import json
 import re
+from collections import deque
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Protocol
 from uuid import uuid4
@@ -53,7 +54,7 @@ max_entries and set run limits in the run block.
 Opt in by adding {"factory": {"enabled": true}} to your agent settings.json.
 Use await rlm.factory.graph(name) to inspect a saved definition without
 starting children. Library files can be validated with rlm.machine_library.
-Run a one-shot DAG with await rlm.factory.run(name) and inspect its
+Run a one-shot machine or DAG with await rlm.factory.run(name) and inspect its
 returned run_id with await rlm.factory.status(run_id). Use
 await rlm.factory.watch(run_id, timeout=5) to wait for its graph to change,
 await rlm.factory.resume(run_id) to continue a paused run, and
@@ -157,6 +158,7 @@ class _Run:
     state: str = "running"
     children: dict[str, str] = field(default_factory=dict)
     nodes: dict[str, str] = field(default_factory=dict)
+    last_fired: deque[dict[str, Any]] = field(default_factory=lambda: deque(maxlen=10))
     active: RLMSpawnHandle | None = None
     worker: asyncio.Task[list[str]] | None = None
     changed: asyncio.Event = field(default_factory=asyncio.Event)
@@ -195,6 +197,82 @@ def _capture_outputs(answer: str, ports: list[dict[str, Any]]) -> dict[str, str]
     return outputs
 
 
+def _json_equal(actual: Any, expected: Any) -> bool:
+    """JSON-strict equality for eq/ne guards: a boolean never equals a
+    number (true != 1, false != 0), numbers compare numerically (1 == 1.0),
+    and everything else compares within its own type."""
+    if isinstance(actual, bool) or isinstance(expected, bool):
+        return isinstance(actual, bool) and isinstance(expected, bool) and actual is expected
+    if actual is None or expected is None:
+        return actual is None and expected is None
+    if schema._is_number(actual) and schema._is_number(expected):
+        # Exact: Python compares int/int, int/float, and float/float
+        # mathematically (no lossy float conversion), so distinct large
+        # JSON integers never compare equal (9007199254740993 != 9007199254740992).
+        return actual == expected
+    if isinstance(actual, str) and isinstance(expected, str):
+        return actual == expected
+    return False
+
+
+def _guard_passes(when: dict[str, Any], outputs: dict[str, Any]) -> bool:
+    """Evaluate one transition guard over a settle's captured outputs.
+
+    A missing or unparseable port fails every op except ``exists`` (which is
+    explicitly false then); ``ne`` needs a found value to compare against.
+    ``eq``/``ne`` compare JSON-strictly (bools never equal numbers); an
+    empty ``contains`` needle is defensively false.
+    """
+    port = when.get("output")
+    value: Any = None
+    found = False
+    path = when.get("path")
+    if path:
+        current = outputs.get(port)
+        if isinstance(current, dict):
+            found = True
+            for part in path.split("."):
+                if isinstance(current, dict) and part in current:
+                    current = current[part]
+                else:
+                    found = False
+                    break
+            value = current
+    elif port in outputs:
+        found = True
+        value = outputs[port]
+    op = when.get("op")
+    if op == "exists":
+        return found
+    if not found:
+        return False
+    if op == "eq":
+        return _json_equal(value, when.get("value"))
+    if op == "ne":
+        return not _json_equal(value, when.get("value"))
+    if op in ("gt", "gte", "lt", "lte"):
+        bound = when.get("value")
+        if not schema._is_number(value) or not schema._is_number(bound):
+            return False
+        if op == "gt":
+            return value > bound
+        if op == "gte":
+            return value >= bound
+        if op == "lt":
+            return value < bound
+        return value <= bound
+    if op == "contains":
+        needle = when.get("value")
+        if not isinstance(needle, list) or not needle:
+            return False
+        if isinstance(value, list):
+            return all(item in value for item in needle)
+        if isinstance(value, str):
+            return all(isinstance(item, str) and item in value for item in needle)
+        return False
+    return False
+
+
 def _render_prompt(template: str, values: dict[str, str]) -> str:
     if not values:
         return template
@@ -211,54 +289,47 @@ def _render_prompt(template: str, values: dict[str, str]) -> str:
     return prompt + ("\n\n## Inputs\n" + "".join(extra) if extra else "")
 
 
-def _prepare_dag(spec: dict[str, Any], harness: HarnessState) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+def _prepare_machine(spec: dict[str, Any], harness: HarnessState) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     errors = schema.validate_factory_spec(spec)
     if errors:
         raise ValueError("invalid factory definition: " + "; ".join(errors))
-    if "nodes" not in spec:
-        raise ValueError("named execution currently supports only one-shot DAGs (nodes)")
-    machine, _ = schema.compile_factory_dag(spec)
-    assert machine is not None
+    if "nodes" in spec:
+        machine, _ = schema.compile_factory_dag(spec)
+        assert machine is not None
+    else:
+        machine = copy.deepcopy(spec)
+
     structure = _machine_structure(machine)
     structure["run"]["max_parallel"] = 1
     states = machine["states"]
     limits = machine.get("run") or {}
     if "budget_ms" in limits or limits.get("failure_policy", "fail_fast") != "fail_fast":
-        raise ValueError("named DAG execution does not yet support time budgets or custom failure handling")
+        raise ValueError("one-shot execution does not support time budgets or custom failure handling")
     if len(states) > limits.get("max_children", schema.RUN_MAX_CHILDREN_DEFAULT):
-        raise ValueError("DAG exceeds run.max_children")
+        raise ValueError("machine exceeds run.max_children")
 
-    deps = {edge["to"]: {edge["from"]} if isinstance(edge["from"], str) else set(edge["from"])
-            for edge in machine["transitions"]}
-    pending = {state["id"]: state for state in states}
-    ordered: list[dict[str, Any]] = []
-    while pending:
-        ready = [key for key in pending if deps.get(key, set()).isdisjoint(pending)]
-        if not ready:
-            raise ValueError("DAG has a dependency cycle")
-        for key in ready:
-            state = pending.pop(key)
-            if (state.get("lifecycle", "task") != "task" or state.get("foreach") is not None
-                    or state.get("retries", 0) or "budget_ms" in state
-                    or state.get("failure_policy", "fail_fast") != "fail_fast"):
-                raise ValueError(f"state {key!r}: this run path only supports one-shot task states")
-            subagent = state["subagent"]
-            if isinstance(subagent, str):
-                entry = harness.get("subagent", subagent)
-                if entry is None:
-                    entry = next((row for row in harness.list("subagent") if row.title == subagent), None)
-                if entry is None or not entry.content.strip():
-                    raise ValueError(f"state {key!r} has no usable subagent {subagent!r}")
-                metadata = entry.metadata if isinstance(entry.metadata, dict) else {}
-                subagent = {"prompt": entry.content, "model": metadata.get("model"),
-                            "thinking": metadata.get("thinking")}
-            for setting in ("model", "thinking"):
-                value = subagent.get(setting)
-                if value is not None and (not isinstance(value, str) or not value.strip()):
-                    raise ValueError(f"state {key!r} subagent {setting} must be a non-empty string")
-            state["subagent"] = subagent
-            ordered.append(state)
-    return ordered, structure
+    for state in states:
+        key = state["id"]
+        if (state.get("lifecycle", "task") != "task" or state.get("foreach") is not None
+                or state.get("max_entries", 1) != 1 or state.get("retries", 0) or "budget_ms" in state
+                or state.get("failure_policy", "fail_fast") != "fail_fast"):
+            raise ValueError(f"state {key!r}: this run path only supports one-shot task states")
+        subagent = state["subagent"]
+        if isinstance(subagent, str):
+            entry = harness.get("subagent", subagent)
+            if entry is None:
+                entry = next((row for row in harness.list("subagent") if row.title == subagent), None)
+            if entry is None or not entry.content.strip():
+                raise ValueError(f"state {key!r} has no usable subagent {subagent!r}")
+            metadata = entry.metadata if isinstance(entry.metadata, dict) else {}
+            subagent = {"prompt": entry.content, "model": metadata.get("model"),
+                        "thinking": metadata.get("thinking")}
+        for setting in ("model", "thinking"):
+            value = subagent.get(setting)
+            if value is not None and (not isinstance(value, str) or not value.strip()):
+                raise ValueError(f"state {key!r} subagent {setting} must be a non-empty string")
+        state["subagent"] = subagent
+    return states, structure
 
 
 class FactoryRuns:
@@ -269,7 +340,7 @@ class FactoryRuns:
         self, harness: HarnessState, spec_id: str, name: str | None, *,
         spawn: _Spawn, collect: _Collect, delete: _DeleteChild,
     ) -> dict[str, Any]:
-        states, machine = _prepare_dag(select_factory(spec_id, harness), harness)
+        states, machine = _prepare_machine(select_factory(spec_id, harness), harness)
         run = _Run(uuid4().hex, spec_id, name, machine, asyncio.get_running_loop().time())
         self._runs[run.run_id] = run
         run.worker = asyncio.create_task(self._execute(run, states, spawn, collect, delete))
@@ -297,6 +368,7 @@ class FactoryRuns:
                  for key, status in run.nodes.items()]
         return {**self.status(run_id), "machine": copy.deepcopy(run.machine), "nodes": nodes,
                 "active_nodes": [row["state_id"] for row in nodes if row["status"] == "running"],
+                "last_fired": copy.deepcopy(list(run.last_fired)),
                 "elapsed_ms": int(1000 * (asyncio.get_running_loop().time() - run.started_at))}
 
     async def watch(self, run_id: str, timeout: float = 0.0, *, compact: bool = False) -> dict[str, Any]:
@@ -312,7 +384,7 @@ class FactoryRuns:
                 changed = True
             except TimeoutError:
                 pass
-        # The serial snapshot has no answers or event history to compact.
+        # The snapshot omits answers and retains only recent fired edges.
         return {"changed": changed, **self.graph(run_id)}
 
     def resume(self, run_id: str) -> dict[str, Any]:
@@ -346,25 +418,24 @@ class FactoryRuns:
         outputs: dict[str, str] = {}
         transitions = 0
         transition_limit = run.machine["run"]["max_transitions"]
+        by_id = {state["id"]: state for state in states}
+        ready = deque(state["id"] for state in states if state.get("entry"))
+        entered = set(ready)
+        settled: set[str] = set()
+        outgoing: dict[str, list[tuple[dict[str, Any], set[str]]]] = {}
+        for edge in run.machine["transitions"]:
+            source = edge["from"]
+            sources = {source} if isinstance(source, str) else set(source)
+            for key in sources:
+                outgoing.setdefault(key, []).append((edge, sources))
         current = ""
+        index = 0
         cancelled: list[str] = []
         try:
-            for index, state in enumerate(states, start=1):
-                if run.state != "running":
-                    break
-                # Each non-entry DAG state has one compiled transition, even
-                # when that transition joins several predecessors.
-                if not state["entry"]:
-                    if transitions == transition_limit:
-                        # The same worker continues past the limit only after resume.
-                        run.state = "paused"
-                        run.pause_reason = "max_transitions exceeded"
-                        run.notify()
-                        await run.pause_released.wait()
-                        if run.state != "running":
-                            break
-                    transitions += 1
-                current = state["id"]
+            while ready and run.state == "running":
+                current = ready.popleft()
+                state = by_id[current]
+                index += 1
                 bindings = {}
                 for port in state.get("inputs") or []:
                     value = outputs.get(port["from"])
@@ -395,10 +466,37 @@ class FactoryRuns:
                     run.notify()
                     if result.status != "done" and run.state == "running":
                         raise RuntimeError(result.error or f"child settled with status {result.status!r}")
-                    if run.state == "running" and result.answer_text is not None:
-                        for name, value in _capture_outputs(result.answer_text, ports).items():
-                            outputs[f"{current}.{name}"] = value
                     break
+                if run.state != "running":
+                    break
+
+                captured = _capture_outputs(result.answer_text or "", ports)
+                outputs.update({f"{current}.{name}": value for name, value in captured.items()})
+                guard_values = {
+                    name: json.loads(captured[name]) if port["type"] == "json" else captured[name]
+                    for port in ports if (name := port["name"]) in captured
+                }
+                settled.add(current)
+                for edge, sources in outgoing.get(current, []):
+                    target = edge["to"]
+                    when = edge.get("when")
+                    if target in entered or not sources <= settled:
+                        continue
+                    if when is not None and not _guard_passes(when, guard_values):
+                        continue
+                    if transitions == transition_limit:
+                        run.state = "paused"
+                        run.pause_reason = "max_transitions exceeded"
+                        run.notify()
+                        await run.pause_released.wait()
+                        if run.state != "running":
+                            break
+                    transitions += 1
+                    run.last_fired.appendleft({"from": edge["from"], "to": target,
+                                               "seq": transitions, "when": when})
+                    entered.add(target)
+                    ready.append(target)
+                    run.notify()
         except Exception as exc:
             if run.state != "stopping" or run.active is None:
                 run.state = "error"

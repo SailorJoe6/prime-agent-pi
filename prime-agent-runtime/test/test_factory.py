@@ -436,3 +436,59 @@ class FactoryTest(unittest.IsolatedAsyncioTestCase):
                 else:
                     self.assertEqual(snapshot["state"], "done")
                     self.assertEqual(prompts[1:], [expected])
+
+    async def test_papi_13_explicit_guard_and_join_resume_without_replay(self):
+        self.settings.write_text('{"factory":{"enabled":true}}')
+        accept = {"output": "report", "path": "review.accept", "op": "eq", "value": True}
+        join = {"from": ["approved", "style"], "to": "format"}
+        spec = {
+            "states": [
+                {"id": "review", "entry": True, "subagent": {"prompt": "review"},
+                 "outputs": [{"name": "report", "type": "json"}]},
+                {"id": "style", "entry": True, "subagent": {"prompt": "style"},
+                 "outputs": [{"name": "tone", "type": "text"}]},
+                {"id": "approved", "subagent": {"prompt": "approved"},
+                 "outputs": [{"name": "word", "type": "text"}]},
+                {"id": "reject", "subagent": {"prompt": "reject"}},
+                {"id": "format", "subagent": {"prompt": "Format {word} in {tone} style"},
+                 "inputs": [{"name": "word", "type": "text", "from": "approved.word"},
+                            {"name": "tone", "type": "text", "from": "style.tone"}]},
+            ],
+            "transitions": [
+                {"from": "review", "to": "reject", "when": {**accept, "value": 1}},
+                {"from": "review", "to": "reject",
+                 "when": {**accept, "path": "review.nope", "op": "ne"}},
+                {"from": "review", "to": "approved", "when": accept},
+                join,
+            ],
+            "run": {"max_transitions": 1},
+        }
+        rlm.harness.save_factory("format", spec)
+        prompts = []
+        answers = ('{"report":{"review":{"accept":true}}}', 'plain', 'title', None)
+
+        async def host(kind, data):
+            if kind == "rlm.run":
+                prompts.append(data["prompt"])
+                return {"rlm_child_id": f"child-{len(prompts)}", "name": data["kwargs"]["name"],
+                        "session_dir": str(self.directory), "model": "fake"}
+            self.assertEqual(kind, "rlm.collect")
+            child = f"child-{len(prompts)}"
+            self.assertEqual(data["targets"], [child])
+            return {"results": [{"rlm_child_id": child, "status": "done", "settled": True,
+                                 "answer_preview": '{"report":{"review":{"accept":1}}}',
+                                 "answer_text": answers[len(prompts) - 1]}]}
+
+        with patch("rlm.host_request", side_effect=host), self.subTest("pause before join"):
+            run_id = (await rlm.factory.run("format"))["run_id"]
+            paused = await rlm.factory.watch(run_id, timeout=2)
+            self.assertEqual(paused["state"], "paused")
+            self.assertEqual(prompts, ["review", "style", "approved"])
+            approved = {"from": "review", "to": "approved", "seq": 1, "when": accept}
+            self.assertEqual(paused["last_fired"], [approved])
+            await rlm.factory.resume(run_id)
+            done = await rlm.factory.watch(run_id, timeout=2)
+            self.assertEqual(done["state"], "done")
+            self.assertEqual(prompts, ["review", "style", "approved", "Format title in plain style"])
+            self.assertEqual(done["last_fired"], [{**join, "seq": 2, "when": None}, approved])
+        self.assertEqual(rlm.harness.get_factory("format"), spec)

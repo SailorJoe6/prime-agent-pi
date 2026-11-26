@@ -3,3 +3,4 @@
 - Added opt-in Python controls to watch the live graph and stop the active child of one factory run.
 - Added a transition-limit pause and selected-run resume for named Python DAGs.
 - Added text and named JSON output bindings from settled child answers in Python factory DAGs.
+- Added guarded transitions and joins for one-shot explicit Python factory machines.
