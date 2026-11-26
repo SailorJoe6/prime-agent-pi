@@ -1,10 +1,10 @@
 ---
 id: PAPI-13
 title: Run and recover named machines from Python
-status: In Planning
+status: In Progress
 assignee: []
 created_date: '2026-11-22T22:17:00Z'
-updated_date: '2026-11-26T20:44:00Z'
+updated_date: '2026-11-26T20:48:00Z'
 labels: []
 milestone: m-0
 dependencies:
