@@ -4,7 +4,7 @@ title: Run and recover named machines from Python
 status: In Progress
 assignee: []
 created_date: '2026-11-22T22:17:00Z'
-updated_date: '2026-11-26T20:59:00Z'
+updated_date: '2026-11-26T21:02:00Z'
 labels: []
 milestone: m-0
 dependencies:
@@ -57,4 +57,6 @@ Slice published at code 83a98a79369a576492db249f3925e368c46f76cd: Python factory
 Next slice: exercise the public nonblocking named-run path offline with a bounded one-shot DAG, harness/library selection, declared text output handoff and distinct run/child identities. Add selected-run status for observation; broader graph semantics and watch/stop/resume remain open.
 
 Named text DAG slice published at code 15f1f266bf1fb5412b7a1c9b22714f6779bd2777. Opt-in run validates PAPI-12 harness-first/library lookup before scheduling, returns a run ID without waiting for child completion, checks child and transition counts, passes declared text from the exact child answer preview to successors, and exposes per-run status and child IDs. Offline Python test drives overlapping harness and library runs through the public Python API with fake host responses, tests selection and isolation, and confirms unchanged definitions. npm run check and 9 factory tests passed; focused order seeds 13, 421 and 2026 passed; output-binding and child-limit mutations were detected. This is a serial, one-shot text DAG subset, not full released parity or acceptance closure. General graph execution and watch/stop/resume remain open. Before final candidacy compare the two previously reported test_bash results against exact code base de7304377282d55d045a2ca98b13040dbf75f076 under matching native conditions; no unrelated test fixes.
+
+Next bounded slice: add selected-run watch and stop to the existing serial executor and verify exact child ownership offline, including stopping during child admission. Keep paused-run resume and the remaining graph/output work open.
 <!-- SECTION:NOTES:END -->
