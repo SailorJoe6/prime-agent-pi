@@ -4,7 +4,7 @@ title: Run and recover named machines from Python
 status: In Progress
 assignee: []
 created_date: '2026-11-22T22:17:00Z'
-updated_date: '2026-11-26T21:58:00Z'
+updated_date: '2026-11-26T22:01:00Z'
 labels: []
 milestone: m-0
 dependencies:
@@ -101,4 +101,6 @@ Next bounded slice: compare v0.10.0 (763094e1) named-run entry failure policies 
 Published named-run failure policies at code b84147659c3b35f9d880d4e4663068fe135e71eb. Compared v0.10.0 (763094e1) entry failure handling, resume, failed-settle binding and finalization. Run policy defaults to escalate; state overrides are honored. Escalate pauses only the selected run and leaves admitted siblings intact; selected resume evaluates the failed settlement without re-admission. Continue processes independent and eligible unguarded downstream work and finishes with Pi state error if any entry failed. Fail-fast admits no downstream work and cancels only exact active children of that run. Failed settles have no outputs: joins can use the settle, missing required input fails the dependent before admission, and optional input uses the missing value. Failed foreach entries skip pending items and discard partial output. Preserved supported child APIs, kernel-local controls and Pi error state spelling.
 
 Offline document fixtures cover all three policies, a state override, required and optional inputs and guarded edges, no replay or cross-run effects, exact cancellation and foreach admission failure. Passed 22 focused factory tests via `uv run --locked python -m unittest discover -s test -p 'test_factory*.py' -v`, FactoryTest shuffles 13/421/2026, `npm run check` including test-policy, and `git diff --check`. Five deliberate defects were caught: no escalation, no fail-fast, ignored override, partial failed-entry outputs, and admitting a queued item after its entry failed. No new full-suite or released-parity claim. Retries, budgets, residents, diagnostics, preview semantics and unnamed execution remain open; no later recovery, terminal UI, live providers, or lifecycle changes. Acceptance checkboxes unchanged; not merge-ready.
+
+Next bounded slice: adapt v0.10.0 (763094e1) per-state child retries and run/state budget_ms in the existing Python executor. Exercise exact retries of a rendered item without graph re-entry, retry exhaustion, the existing admission cap, successful settlements that exceed the state budget without retry, and a one-time run budget pause with selected resume and terminal stop. Use offline document fixtures and a controlled clock. Keep residents, diagnostics, preview semantics and unrelated behavior open.
 <!-- SECTION:NOTES:END -->
