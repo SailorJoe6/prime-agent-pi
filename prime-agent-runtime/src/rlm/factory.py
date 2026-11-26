@@ -18,7 +18,7 @@ from .harness import HarnessState, _agent_dir, _strip_scope_prefix
 from .machine_library import select_factory
 
 if TYPE_CHECKING:
-    from . import RLMChildResult, RLMSpawnHandle
+    from . import RLMChildResult, RLMSpawnHandle, RLMSubagent
 
 
 class _Spawn(Protocol):
@@ -30,6 +30,12 @@ class _Spawn(Protocol):
 class _Collect(Protocol):
     async def __call__(self, target: RLMSpawnHandle, /, *, timeout_ms: int) -> list[RLMChildResult]: ...
 
+
+class _DeleteChild(Protocol):
+    async def __call__(self, target: RLMSpawnHandle, /) -> RLMSubagent: ...
+
+
+WATCH_TIMEOUT_CAP_SECONDS = 60.0
 
 FACTORY_DISABLED_MESSAGE = (
     'the factory is disabled; set factory.enabled to true in your agent settings.json'
@@ -46,7 +52,9 @@ Opt in by adding {"factory": {"enabled": true}} to your agent settings.json.
 Use await rlm.factory.graph(name) to inspect a saved definition without
 starting children. Library files can be validated with rlm.machine_library.
 Run a one-shot text DAG with await rlm.factory.run(name) and inspect its
-returned run_id with await rlm.factory.status(run_id).
+returned run_id with await rlm.factory.status(run_id). Use
+await rlm.factory.watch(run_id, timeout=5) to wait for its graph to change,
+and await rlm.factory.stop(run_id) to stop its active work.
 """
 
 
@@ -75,6 +83,26 @@ def definition_graph(harness: HarnessState, ref: str | None) -> dict[str, Any]:
     else:
         machine = spec
 
+    structure = _machine_structure(machine)
+    spec_id, _ = _strip_scope_prefix(ref, False)
+    return {
+        "run_id": None,
+        "spec_id": spec_id,
+        "name": None,
+        "state": None,
+        "pause_reason": None,
+        "elapsed_ms": 0,
+        "machine": structure,
+        "nodes": [],
+        "active_nodes": [],
+        "last_fired": [],
+        "events": [],
+        "usage": None,
+        "budget": {"limit_ms": structure["run"].get("budget_ms"), "consumed_ms": 0},
+    }
+
+
+def _machine_structure(machine: dict[str, Any]) -> dict[str, Any]:
     authored = machine.get("run") or {}
     run = {
         "max_parallel": authored.get("max_parallel", schema.RUN_MAX_PARALLEL_DEFAULT),
@@ -112,23 +140,8 @@ def definition_graph(harness: HarnessState, ref: str | None) -> dict[str, Any]:
             edge["when"] = copy.deepcopy(transition["when"])
         transitions.append(edge)
 
-    spec_id, _ = _strip_scope_prefix(ref, False)
-    return {
-        "run_id": None,
-        "spec_id": spec_id,
-        "name": None,
-        "state": None,
-        "pause_reason": None,
-        "elapsed_ms": 0,
-        "machine": {"run": run, "states": states, "transitions": transitions,
-                    "order": [row["id"] for row in states]},
-        "nodes": [],
-        "active_nodes": [],
-        "last_fired": [],
-        "events": [],
-        "usage": None,
-        "budget": {"limit_ms": run.get("budget_ms"), "consumed_ms": 0},
-    }
+    return {"run": run, "states": states, "transitions": transitions,
+            "order": [row["id"] for row in states]}
 
 
 @dataclass
@@ -136,9 +149,19 @@ class _Run:
     run_id: str
     spec_id: str
     name: str | None
+    machine: dict[str, Any]
+    started_at: float
     state: str = "running"
     children: dict[str, str] = field(default_factory=dict)
+    nodes: dict[str, str] = field(default_factory=dict)
+    active: RLMSpawnHandle | None = None
+    worker: asyncio.Task[list[str]] | None = None
+    changed: asyncio.Event = field(default_factory=asyncio.Event)
     error: str | None = None
+
+    def notify(self) -> None:
+        event, self.changed = self.changed, asyncio.Event()
+        event.set()
 
 
 def _render_prompt(template: str, values: dict[str, str]) -> str:
@@ -157,7 +180,7 @@ def _render_prompt(template: str, values: dict[str, str]) -> str:
     return prompt + ("\n\n## Inputs\n" + "".join(extra) if extra else "")
 
 
-def _prepare_dag(spec: dict[str, Any], harness: HarnessState) -> list[dict[str, Any]]:
+def _prepare_dag(spec: dict[str, Any], harness: HarnessState) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     errors = schema.validate_factory_spec(spec)
     if errors:
         raise ValueError("invalid factory definition: " + "; ".join(errors))
@@ -165,6 +188,8 @@ def _prepare_dag(spec: dict[str, Any], harness: HarnessState) -> list[dict[str, 
         raise ValueError("named execution currently supports only one-shot DAGs (nodes)")
     machine, _ = schema.compile_factory_dag(spec)
     assert machine is not None
+    structure = _machine_structure(machine)
+    structure["run"]["max_parallel"] = 1
     states = machine["states"]
     limits = machine.get("run") or {}
     if "budget_ms" in limits or limits.get("failure_policy", "fail_fast") != "fail_fast":
@@ -206,36 +231,85 @@ def _prepare_dag(spec: dict[str, Any], harness: HarnessState) -> list[dict[str, 
                     raise ValueError(f"state {key!r} subagent {setting} must be a non-empty string")
             state["subagent"] = subagent
             ordered.append(state)
-    return ordered
+    return ordered, structure
 
 
 class FactoryRuns:
     def __init__(self) -> None:
         self._runs: dict[str, _Run] = {}
-        self._tasks: set[asyncio.Task[None]] = set()
 
-    def start(self, harness: HarnessState, spec_id: str, name: str | None, *, spawn: _Spawn, collect: _Collect) -> dict[str, Any]:
-        states = _prepare_dag(select_factory(spec_id, harness), harness)
-        run = _Run(uuid4().hex, spec_id, name)
+    def start(
+        self, harness: HarnessState, spec_id: str, name: str | None, *,
+        spawn: _Spawn, collect: _Collect, delete: _DeleteChild,
+    ) -> dict[str, Any]:
+        states, machine = _prepare_dag(select_factory(spec_id, harness), harness)
+        run = _Run(uuid4().hex, spec_id, name, machine, asyncio.get_running_loop().time())
         self._runs[run.run_id] = run
-        task = asyncio.create_task(self._execute(run, states, spawn, collect))
-        self._tasks.add(task)
-        task.add_done_callback(self._tasks.discard)
+        run.worker = asyncio.create_task(self._execute(run, states, spawn, collect, delete))
         return {"run_id": run.run_id, "spec_id": spec_id, "name": name,
                 "nodes": len(states), "max_parallel": 1}
 
-    def status(self, run_id: str) -> dict[str, Any]:
+    def contains(self, run_id: str) -> bool:
+        return run_id in self._runs
+
+    def _require_run(self, run_id: str) -> _Run:
         run = self._runs.get(run_id)
         if run is None:
             raise ValueError(f"unknown factory run {run_id!r}")
+        return run
+
+    def status(self, run_id: str) -> dict[str, Any]:
+        run = self._require_run(run_id)
         return {"run_id": run.run_id, "spec_id": run.spec_id, "name": run.name,
                 "state": run.state, "children": dict(run.children), "error": run.error}
 
-    async def _execute(self, run: _Run, states: list[dict[str, Any]], spawn: _Spawn, collect: _Collect) -> None:
+    def graph(self, run_id: str) -> dict[str, Any]:
+        run = self._require_run(run_id)
+        nodes = [{"state_id": key, "status": status, "rlm_child_id": run.children[key]}
+                 for key, status in run.nodes.items()]
+        return {**self.status(run_id), "machine": copy.deepcopy(run.machine), "nodes": nodes,
+                "active_nodes": [row["state_id"] for row in nodes if row["status"] == "running"],
+                "elapsed_ms": int(1000 * (asyncio.get_running_loop().time() - run.started_at))}
+
+    async def watch(self, run_id: str, timeout: float = 0.0, *, compact: bool = False) -> dict[str, Any]:
+        run = self._require_run(run_id)
+        if (isinstance(timeout, bool) or not isinstance(timeout, (int, float))
+                or timeout < 0 or timeout != timeout):
+            raise ValueError("timeout must be a non-negative number of seconds")
+        changed = False
+        if timeout:
+            try:
+                async with asyncio.timeout(min(timeout, WATCH_TIMEOUT_CAP_SECONDS)):
+                    await run.changed.wait()
+                changed = True
+            except TimeoutError:
+                pass
+        # The serial snapshot has no answers or event history to compact.
+        return {"changed": changed, **self.graph(run_id)}
+
+    async def stop(self, run_id: str) -> dict[str, Any]:
+        run = self._require_run(run_id)
+        cancelled: list[str] = []
+        if run.state == "running":
+            run.state = "stopping"
+            run.notify()
+            assert run.worker is not None
+            # The worker owns admission and remembers the exact handle even if
+            # stop was requested while spawn was returning it. Do not cancel it.
+            cancelled = await asyncio.shield(run.worker)
+        return {"run_id": run_id, "state": run.state, "cancelled": cancelled}
+
+    async def _execute(
+        self, run: _Run, states: list[dict[str, Any]], spawn: _Spawn, collect: _Collect,
+        delete: _DeleteChild,
+    ) -> list[str]:
         outputs: dict[str, str] = {}
         current = ""
+        cancelled: list[str] = []
         try:
             for index, state in enumerate(states, start=1):
+                if run.state != "running":
+                    break
                 current = state["id"]
                 bindings = {}
                 for port in state.get("inputs") or []:
@@ -248,21 +322,45 @@ class FactoryRuns:
                 prompt = _render_prompt(subagent["prompt"], bindings)
                 handle = await spawn(prompt, name=f"factory-{run.run_id}-{index}",
                                      model=subagent.get("model"), thinking=subagent.get("thinking"))
+                run.active = handle
                 run.children[current] = handle.rlm_child_id
-                while True:
+                run.nodes[current] = "running"
+                run.notify()
+                while run.state == "running":
                     results = await collect(handle, timeout_ms=1000)
                     if len(results) != 1 or results[0].rlm_child_id != handle.rlm_child_id:
                         raise RuntimeError("collect did not return the exact factory child")
                     result = results[0]
-                    if result.settled:
-                        break
-                if result.status != "done":
-                    raise RuntimeError(result.error or f"child settled with status {result.status!r}")
-                if result.answer_preview:
-                    for port in state.get("outputs") or []:
-                        outputs[f"{current}.{port['name']}"] = result.answer_preview
+                    if not result.settled:
+                        continue
+                    run.active = None
+                    run.nodes[current] = result.status
+                    run.notify()
+                    if result.status != "done" and run.state == "running":
+                        raise RuntimeError(result.error or f"child settled with status {result.status!r}")
+                    if result.answer_preview:
+                        for port in state.get("outputs") or []:
+                            outputs[f"{current}.{port['name']}"] = result.answer_preview
+                    break
         except Exception as exc:
-            run.state = "error"
-            run.error = f"{current}: {exc}"
-        else:
+            if run.state != "stopping" or run.active is None:
+                run.state = "error"
+                run.error = f"{current}: {exc}"
+        if run.state == "stopping":
+            try:
+                if run.active is not None:
+                    deleted = await delete(run.active)
+                    if deleted.rlm_child_id != run.active.rlm_child_id:
+                        raise RuntimeError("delete did not return the exact factory child")
+                    run.active = None
+                    run.nodes[current] = "cancelled"
+                    cancelled.append(current)
+            except Exception as exc:
+                run.state = "error"
+                run.error = f"{current}: stop failed: {exc}"
+            else:
+                run.state = "stopped"
+        elif run.state == "running":
             run.state = "done"
+        run.notify()
+        return cancelled

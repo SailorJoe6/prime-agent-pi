@@ -551,17 +551,29 @@ class _RLMFactoryNamespace:
 
     async def run(self, spec_id: str, *, name: str | None = None) -> dict[str, Any]:
         require_factory_enabled()
-        return self._runs.start(_harness_state._resolve(), spec_id, name, spawn=spawn, collect=collect)
+        return self._runs.start(
+            _harness_state._resolve(), spec_id, name, spawn=spawn, collect=collect, delete=delete_subagent,
+        )
 
     async def status(self, run_id: str) -> dict[str, Any]:
         require_factory_enabled()
         return self._runs.status(run_id)
+
+    async def watch(self, run_id: str, timeout: float = 0.0, *, compact: bool = False) -> dict[str, Any]:
+        require_factory_enabled()
+        return await self._runs.watch(run_id, timeout, compact=compact)
+
+    async def stop(self, run_id: str) -> dict[str, Any]:
+        require_factory_enabled()
+        return await self._runs.stop(run_id)
 
     def help(self) -> str:
         return FACTORY_HELP
 
     async def graph(self, ref: str | None = None) -> dict[str, Any]:
         require_factory_enabled()
+        if ref is not None and self._runs.contains(ref):
+            return self._runs.graph(ref)
         return definition_graph(_harness_state._resolve(), ref)
 
 

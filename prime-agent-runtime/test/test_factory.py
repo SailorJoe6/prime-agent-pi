@@ -165,3 +165,152 @@ class FactoryTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual({file: file.read_bytes() for file in library.glob("*/MACHINE.md")}, imports_before)
         self.assertEqual(rlm.harness.get_factory("from-harness"), self.text_dag("harness"))
         self.assertIsNone(rlm.harness.get_factory("from-library"))
+
+    async def test_papi_13_watch_and_stop_are_scoped_to_the_selected_run(self):
+        self.settings.write_text('{"factory":{"enabled":true}}')
+        rlm.harness.save_factory("color", self.text_dag("color"))
+        collecting = asyncio.Queue()
+        requested = []
+        deletions = []
+        results = {}
+        names = {}
+        reset = asyncio.Event()
+
+        async def host(kind, data):
+            if kind == "rlm.run":
+                child = f"child-{len(requested) + 1}"
+                requested.append((child, data["prompt"]))
+                names[child] = data["kwargs"]["name"]
+                return {"rlm_child_id": child, "name": names[child],
+                        "session_dir": str(self.directory), "model": "fake"}
+            if kind == "rlm.collect":
+                (child,) = data["targets"]
+                results[child] = asyncio.get_running_loop().create_future()
+                collecting.put_nowait(child)
+                result = await results[child]
+                return {"results": [{"rlm_child_id": child, **result}]}
+            self.assertEqual(kind, "rlm.delete_subagent")
+            child = data["target"]
+            deletions.append(child)
+            return {"subagent": {"rlm_child_id": child, "session_name": names[child],
+                                 "session_dir": str(self.directory), "status": "running"}}
+
+        async def watch(run_id, ready):
+            ready.set()
+            return await rlm.factory.watch(run_id, timeout=30)
+
+        async with asyncio.timeout(3):
+            self.enterContext(patch("rlm.host_request", side_effect=host))
+            a = (await rlm.factory.run("color"))["run_id"]
+            first = await collecting.get()
+            b = (await rlm.factory.run("color"))["run_id"]
+            other = await collecting.get()
+            self.assertFalse((await rlm.factory.watch(a))["changed"])
+            for invalid in (-1, float("nan"), "one", True):
+                with self.assertRaisesRegex(ValueError, "timeout"):
+                    await rlm.factory.watch(a, invalid)
+            with self.assertRaisesRegex(ValueError, "unknown factory run"):
+                await rlm.factory.stop("color")
+            a_watch = asyncio.create_task(watch(a, reset))
+            try:
+                await reset.wait()
+                results[other].set_result({"status": "done", "settled": True, "answer_preview": "blue"})
+                successor = await collecting.get()
+                self.assertEqual(requested[-1], (successor, "color: use blue"))
+                self.assertFalse(a_watch.done(), "another run woke the selected run's watcher")
+                stop = asyncio.create_task(rlm.factory.stop(a))
+                try:
+                    during = await a_watch
+                    self.assertTrue(during["changed"])
+                    self.assertEqual((during["run_id"], during["state"]), (a, "stopping"))
+                    self.assertEqual(during["active_nodes"], ["produce"])
+                    self.assertEqual((await rlm.factory.stop(a))["state"], "stopping")
+                    results[first].set_result({"status": "running", "settled": False})
+                    self.assertEqual(await stop, {"run_id": a, "state": "stopped", "cancelled": ["produce"]})
+                finally:
+                    stop.cancel()
+                    await asyncio.gather(stop, return_exceptions=True)
+            finally:
+                a_watch.cancel()
+                await asyncio.gather(a_watch, return_exceptions=True)
+            self.assertEqual(deletions, [first])
+            self.assertEqual((await rlm.factory.stop(a))["cancelled"], [])
+            self.assertEqual((await rlm.factory.status(b))["state"], "running")
+            self.assertEqual(len(requested), 3)
+            snap = await rlm.factory.watch(a)
+            self.assertEqual(snap["nodes"], [{"state_id": "produce", "status": "cancelled", "rlm_child_id": first}])
+            graph = await rlm.factory.graph(a)
+            self.assertEqual(snap["machine"], graph["machine"])
+            graph["machine"]["order"].clear()
+            self.assertEqual((await rlm.factory.graph(a))["machine"]["order"], ["consume", "produce"])
+            reset.clear()
+            b_watch = asyncio.create_task(watch(b, reset))
+            try:
+                await reset.wait()
+                results[successor].set_result({"status": "done", "settled": True})
+                self.assertEqual((await b_watch)["state"], "done")
+            finally:
+                b_watch.cancel()
+                await asyncio.gather(b_watch, return_exceptions=True)
+            self.assertEqual((await rlm.factory.stop(b))["state"], "done")
+            self.assertEqual(deletions, [first])
+
+    async def test_papi_13_stop_waits_for_the_exact_inflight_admission(self):
+        self.settings.write_text('{"factory":{"enabled":true}}')
+        rlm.harness.save_factory("color", self.text_dag("color"))
+        admitting = asyncio.Event()
+        release = asyncio.Event()
+        watching = asyncio.Event()
+        calls = []
+
+        async def host(kind, data):
+            calls.append((kind, data))
+            if kind == "rlm.run":
+                admitting.set()
+                await release.wait()
+                return {"rlm_child_id": "late-child", "name": data["kwargs"]["name"],
+                        "session_dir": str(self.directory), "model": "fake"}
+            self.assertEqual(kind, "rlm.delete_subagent")
+            return {"subagent": {"rlm_child_id": data["target"], "session_name": "color",
+                                 "session_dir": str(self.directory), "status": "running"}}
+
+        async def watch(run_id):
+            watching.set()
+            return await rlm.factory.watch(run_id, timeout=30)
+
+        async with asyncio.timeout(3):
+            self.enterContext(patch("rlm.host_request", side_effect=host))
+            run_id = (await rlm.factory.run("color"))["run_id"]
+            await admitting.wait()
+            waiter = asyncio.create_task(watch(run_id))
+            stop = None
+            try:
+                await watching.wait()
+                stop = asyncio.create_task(rlm.factory.stop(run_id))
+                self.assertEqual((await waiter)["state"], "stopping")
+                self.assertFalse(stop.done())
+                release.set()
+                self.assertEqual((await stop)["state"], "stopped")
+            finally:
+                release.set()
+                for task in (waiter, stop):
+                    if task is not None:
+                        task.cancel()
+                        await asyncio.gather(task, return_exceptions=True)
+            self.assertEqual(len(calls), 2)
+            self.assertEqual(calls[-1], ("rlm.delete_subagent", {"target": "late-child"}))
+
+    async def test_papi_13_watch_timeout_returns_the_current_graph(self):
+        self.settings.write_text('{"factory":{"enabled":true}}')
+        rlm.harness.save_factory("color", self.text_dag("color"))
+        with patch("rlm.host_request", side_effect=AssertionError("stop before admission")) as host:
+            run_id = (await rlm.factory.run("color"))["run_id"]
+            self.assertEqual((await rlm.factory.stop(run_id))["state"], "stopped")
+            with patch("rlm.factory.WATCH_TIMEOUT_CAP_SECONDS", 0):
+                async with asyncio.timeout(3):
+                    snap = await rlm.factory.watch(run_id, timeout=1000, compact=True)
+            self.assertFalse(snap.pop("changed"))
+            graph = await rlm.factory.graph(run_id)
+            self.assertEqual(snap.keys(), graph.keys())
+            self.assertEqual((snap["run_id"], snap["state"], snap["nodes"]), (run_id, "stopped", []))
+            host.assert_not_called()

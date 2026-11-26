@@ -136,7 +136,7 @@ The preview includes the declared state order, transitions, and run limits.
 It does not start children or edit the definition. Like the released v0.10.0
 static graph, it looks up saved harness definitions; a library file must first
 be saved as a harness definition to preview it here. `await rlm.factory.graph()`
-returns an empty run list; use the returned run ID with `status` to observe execution.
+returns an empty run list. Pass a run ID to `graph` to inspect that run instead.
 
 ## Run a named text DAG from Python
 
@@ -162,6 +162,30 @@ print(snapshot["state"], snapshot["children"])
 RLM answer preview, not a full transcript. Missing required output or child
 failure ends the run with an error. State machines, JSON ports, resident states,
 fan-out, retries, time budgets, and custom failure handling are not supported by
-this run path. Watch, stop, and resume are not yet available. Run records are
-kernel-local and do not survive a restart. Children are ordinary RLM children
-and remain visible through the existing child APIs.
+this run path. Run records are kernel-local and do not survive a restart.
+Children are ordinary RLM children and remain visible through the existing
+child APIs until deleted.
+
+### Watch or stop one run
+
+```python
+run_id = started["run_id"]
+update = await rlm.factory.watch(run_id, timeout=5)
+print(update["changed"], update["state"], update["active_nodes"])
+# If you decide to interrupt this run:
+result = await rlm.factory.stop(run_id)
+print(result["state"], result["cancelled"])
+```
+
+`watch` returns the same live graph as `graph(run_id)`, plus `changed`. It wakes
+for a change to the selected run, not for another run's progress. `timeout`
+is in seconds, defaults to zero (snapshot without waiting), and is capped at
+60. If nothing changes before the timeout, `changed` is false.
+
+`stop` prevents new states from starting in the selected run and asks the
+existing child API to delete its active child by exact ID. It does not delete
+children already observed to be settled or touch another run. A stop requested
+while child admission is in flight waits for that admission before acting;
+if a collect call is already in flight, stop checks its result first. Look for
+`stopped` in the result. If the stop fails, `status` reports the error. Stopping
+is not pausing; paused-run resume is not yet supported.
