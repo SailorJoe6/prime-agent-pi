@@ -4,7 +4,7 @@ title: Run and recover named machines from Python
 status: In Progress
 assignee: []
 created_date: '2026-11-22T22:17:00Z'
-updated_date: '2026-11-26T21:10:00Z'
+updated_date: '2026-11-26T21:14:00Z'
 labels: []
 milestone: m-0
 dependencies:
@@ -65,4 +65,6 @@ Selected-run watch/stop slice published at code 491ea1619256c845054ab3a7c86055ac
 Next bounded slice: adapt the released v0.10.0 max_transitions pause to the existing serial text DAG path. Resume only the selected paused run with settled outputs intact and keep stop terminal. Use deterministic two-run offline tests; other graph and output behavior and the Bash baseline comparison remain open.
 
 Transition-limit pause/resume slice published at code 99dc5306e7b76b26a57c4c8a09e3002d272d29db. Adapted released v0.10.0 factory.py transition evaluation and resume (763094e1): the next transition beyond max_transitions pauses the selected serial DAG before child admission; resume continues the same worker past that limit, retaining settled output bindings. Stop on a paused run is terminal. Offline two-run coverage exercised watch/status pause, selected resume without state replay, stop while paused, and stop immediately after resume before child admission. All 13 focused factory tests and npm run check passed; order seeds 13/421/2026 passed and two pause/stop mutations were caught. No live providers. Broader released graph and full-result/multiple-port behavior plus exact-base Bash comparison remain open. No acceptance criteria closed.
+
+Next bounded slice: use the existing exact-child collect path with opt-in settled answer text, preserving its default preview behavior, then bind released text/JSON and multiple declared outputs in the serial DAG. Exercise the host and Python paths offline; leave explicit graph behavior and the Bash baseline open.
 <!-- SECTION:NOTES:END -->
