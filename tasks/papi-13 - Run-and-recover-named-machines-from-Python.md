@@ -1,10 +1,10 @@
 ---
 id: PAPI-13
 title: Run and recover named machines from Python
-status: Ready for Merge
+status: In Progress
 assignee: []
 created_date: '2026-11-22T22:17:00Z'
-updated_date: '2026-11-26T22:55:00Z'
+updated_date: '2026-11-26T23:31:00Z'
 labels: []
 milestone: m-0
 dependencies:
@@ -130,3 +130,15 @@ Integration validation: merged exact clean, published main ae34152a989118c30e302
 
 Published the narrow child-limit correction at 543f7064d056ac5d0573866c441c5c1e9d525640 on refs/heads/JLanders/prime-agent-papi-13-episode-4d0a0038, based on integrated candidate f27762969d3bf008c5a4212793d8934f1883700a. Compared released v0.10.0 763094e1b6a7c17450ee8399b06cda1853847ca5, factory.py lines 2410–2427: max_children is a one-time pause milestone. After a selected resume, a refused admission under continue no longer causes another pause at the unchanged successful-admission count. Successful-admission accounting is unchanged. The existing public Python offline proofread fixture now refuses a child before the cap, pauses after the first successful admission, refuses a second child after one resume, and admits the next eligible state without replay. On the original executor the expanded test failed with a second paused state; on the revision it passed. Passed all 32 focused Python factory tests, FactoryTest shuffles 13/421/2026, npm run check (including test-policy), and git diff checks. No host change; no full-suite, packaged integration or live-provider tests. Verified clean, published primary main unchanged at ae34152a989118c30e3028dedbf6ab5261a09d33. Published for independent review; status and acceptance checkboxes unchanged.
 <!-- SECTION:NOTES:END -->
+
+## Comments
+
+<!-- COMMENTS:BEGIN -->
+created: 2026-11-26T23:31:00Z
+
+---
+
+Delegated merge review: 543f7064d056ac5d0573866c441c5c1e9d525640 is not authorized to merge. Existing simulated-host tests support both acceptance criteria; the missing evidence is one offline named run through the real Pi kernel-to-host path, successfully resolving a saved subagent and passing its child output to the next state. This is not a finding of a product defect. Use the project faux provider; report exact tested commit, command and result. No live providers, full suite, or broader review.
+
+---
+<!-- COMMENTS:END -->
