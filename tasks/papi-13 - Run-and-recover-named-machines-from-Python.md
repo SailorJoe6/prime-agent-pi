@@ -4,7 +4,7 @@ title: Run and recover named machines from Python
 status: In Progress
 assignee: []
 created_date: '2026-11-22T22:17:00Z'
-updated_date: '2026-11-26T20:50:00Z'
+updated_date: '2026-11-26T20:53:00Z'
 labels: []
 milestone: m-0
 dependencies:
@@ -17,6 +17,12 @@ references:
 documentation:
   - >-
     https://github.com/SailorJoe6/prime-agent-pi/blob/dfba53a40c277c8341930024b014ffbdaf7e1e68/docs/upstream-feature-inventory.md#factory-workflows-sessions-and-terminal-controls
+modified_files:
+  - docs/factory-definitions.md
+  - packages/coding-agent/.changes/papi-13-factory-preview.md
+  - prime-agent-runtime/src/rlm/__init__.py
+  - prime-agent-runtime/src/rlm/factory.py
+  - prime-agent-runtime/test/test_factory.py
 type: feature
 ordinal: 13000
 ---
@@ -45,4 +51,6 @@ Expose the upstream v0.10.0 baseline for opt-in named factory runs from Python, 
 
 <!-- SECTION:NOTES:BEGIN -->
 First execution slice: expose offline Python factory authoring help and the opt-in static graph preview. Verify the released v0.10.0 nested literal-boolean settings behavior and static graph shape. Use PAPI-12 lookup and validation; do not launch children in this slice. Run execution and lifecycle controls remain open.
+
+Slice published at code 83a98a79369a576492db249f3925e368c46f76cd: Python factory help works while off; opt-in saved-definition graph previews expose state order, joined edges, and run limits without spawning or editing. Comparison: released v0.10.0 (763094e1), factory.py factory_enabled and _spec_snapshot. Docs: docs/factory-definitions.md. npm run check passed; 7 focused factory tests passed via uv run --locked python -m unittest discover -s test -p "test_factory*.py"; opt-in and join mutations were detected. Broader Python run: 380 tests, one failure and one error in unchanged test_bash (test_windows_without_bash_raises_teaching_error and test_unconfigured_journal_stays_permissive); baseline not re-run. No acceptance criterion fully met: named execution, outputs, and run controls remain.
 <!-- SECTION:NOTES:END -->
