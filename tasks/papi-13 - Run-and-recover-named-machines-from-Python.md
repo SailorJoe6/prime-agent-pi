@@ -4,7 +4,7 @@ title: Run and recover named machines from Python
 status: In Progress
 assignee: []
 created_date: '2026-11-22T22:17:00Z'
-updated_date: '2026-11-26T20:48:00Z'
+updated_date: '2026-11-26T20:50:00Z'
 labels: []
 milestone: m-0
 dependencies:
@@ -40,3 +40,9 @@ Expose the upstream v0.10.0 baseline for opt-in named factory runs from Python, 
 2. Use a small Python run executor in the existing kernel lifecycle. Return a run ID without waiting for the graph to finish. Reuse ordinary scoped RLM child sessions and their completion/results. Bind each child by exact identity to its run; carry declared outputs to successors and apply the released graph's guard, join, fan-out, and run bounds. Keep run state local to its owning session/kernel. Observe only the selected run; stop affects only its active work; resume continues the selected paused run without replaying settled states. Use existing host lifecycle primitives where possible; add no second daemon, durable run store, or generic workflow engine. If a narrow host operation proves necessary, keep it scoped and follow Pi's compatibility rules. No later failed-entry/dead-worker recovery, loopback refinements, Python function states, or PAPI-14 terminal controls.
 3. Document opt-in, a short benign named-run example, the public run controls, and the kernel-lifetime limit. Exercise the public Python path offline with controlled child completions: disabled/no-spawn and unchanged definition use; output passage and graph bounds; concurrent run identity and child ownership; watch wakeup/timeout and isolated stop/resume. Use the project's test environment and completion signals, no live providers or fixed sleeps. Run changed tests directly, repeat ordering-sensitive cases with shuffle seeds where supported, and run the required code and test-policy checks. Add the user-visible changelog fragment; no version or release work.
 <!-- SECTION:PLAN:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+First execution slice: expose offline Python factory authoring help and the opt-in static graph preview. Verify the released v0.10.0 nested literal-boolean settings behavior and static graph shape. Use PAPI-12 lookup and validation; do not launch children in this slice. Run execution and lifecycle controls remain open.
+<!-- SECTION:NOTES:END -->
