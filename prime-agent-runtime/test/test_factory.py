@@ -1322,3 +1322,144 @@ class FactoryTest(unittest.IsolatedAsyncioTestCase):
                     status = await rlm.factory.watch(run, timeout=1)
             self.assertEqual(status["state"], "done")
             self.assertEqual(prompts, ["Check copy", "Check sources"])
+
+    async def test_papi_13_residents_survive_graph_completion_and_stop_by_run(self):
+        self.settings.write_text('{"factory":{"enabled":true}}')
+        for doc in ("manuscript", "appendix"):
+            rlm.harness.save_factory(doc, {
+                "run": {"max_parallel": 1, "max_children": 1},
+                "nodes": [
+                    {"id": "scan", "subagent": {"prompt": f"Scan {doc}"}},
+                    {"id": "watch", "depends_on": ["scan"], "lifecycle": "resident",
+                     "subagent": {"prompt": f"Watch {doc}"}},
+                ],
+            })
+        active = {}
+        deleted = []
+
+        async def host(kind, data):
+            if kind == "rlm.run":
+                child = data["prompt"]
+                self.assertNotIn(child, active)
+                active[child] = data["kwargs"]["name"]
+                return {"rlm_child_id": child, "name": active[child],
+                        "session_dir": str(self.directory), "model": "fake"}
+            if kind == "rlm.collect":
+                child, = data["targets"]
+                self.assertTrue(child.startswith("Scan "))
+                return {"results": [{"rlm_child_id": child, "status": "done", "settled": True}]}
+            self.assertEqual(kind, "rlm.delete_subagent")
+            child = data["target"]
+            deleted.append(child)
+            return {"subagent": {"rlm_child_id": child, "session_name": active.pop(child),
+                                 "session_dir": str(self.directory), "status": "running"}}
+
+        with patch("rlm.host_request", side_effect=host):
+            runs = [(await rlm.factory.run(doc))["run_id"] for doc in ("manuscript", "appendix")]
+            await rlm.factory.watch(runs[0], timeout=1)
+            for run, doc in zip(runs, ("manuscript", "appendix"), strict=True):
+                paused = await rlm.factory.graph(run)
+                self.assertEqual((paused["state"], paused["pause_reason"], paused["active_nodes"]),
+                                 ("paused", "max_children exceeded", []))
+                self.assertNotIn(f"Watch {doc}", active)
+                await rlm.factory.resume(run)
+                finished = await rlm.factory.watch(run, timeout=1)
+                self.assertEqual((finished["state"], finished["active_nodes"]), ("done", ["watch"]))
+                self.assertEqual(finished["children"]["watch"], f"Watch {doc}")
+            self.assertEqual(deleted, [])
+            stopped = await rlm.factory.stop(runs[0])
+            self.assertEqual((stopped["state"], stopped["cancelled"]), ("stopped", ["watch"]))
+            self.assertEqual((await rlm.factory.stop(runs[0]))["cancelled"], [])
+            self.assertEqual((await rlm.factory.graph(runs[0]))["active_nodes"], [])
+            unaffected = await rlm.factory.graph(runs[1])
+            self.assertEqual((unaffected["state"], unaffected["active_nodes"]), ("done", ["watch"]))
+            self.assertIn("Watch appendix", active)
+            self.assertEqual(deleted, ["Watch manuscript"])
+            self.assertEqual((await rlm.factory.stop(runs[1]))["state"], "stopped")
+        self.assertEqual(deleted, ["Watch manuscript", "Watch appendix"])
+
+    async def test_papi_13_resident_saturation_reports_error_and_retains_handle(self):
+        self.settings.write_text('{"factory":{"enabled":true}}')
+        rlm.harness.save_factory("saturated-manuscript", {
+            "run": {"max_parallel": 1},
+            "nodes": [
+                {"id": "watch", "lifecycle": "resident", "subagent": {"prompt": "Watch manuscript"}},
+                {"id": "index", "subagent": {"prompt": "Index manuscript"}},
+            ],
+        })
+        admitted, deleted = [], []
+
+        async def host(kind, data):
+            if kind == "rlm.run":
+                admitted.append(data["prompt"])
+                return {"rlm_child_id": data["prompt"], "name": data["kwargs"]["name"],
+                        "session_dir": str(self.directory), "model": "fake"}
+            self.assertEqual(kind, "rlm.delete_subagent")
+            deleted.append(data["target"])
+            return {"subagent": {"rlm_child_id": data["target"], "session_name": "watch",
+                                 "session_dir": str(self.directory), "status": "running"}}
+
+        with patch("rlm.host_request", side_effect=host):
+            run = (await rlm.factory.run("saturated-manuscript"))["run_id"]
+            failed = await rlm.factory.watch(run, timeout=1)
+            self.assertEqual((failed["state"], failed["active_nodes"]), ("error", ["watch"]))
+            self.assertIn("max_parallel 1", failed["error"])
+            self.assertEqual(admitted, ["Watch manuscript"])
+            self.assertEqual(deleted, [])
+            self.assertEqual((await rlm.factory.stop(run))["state"], "stopped")
+        self.assertEqual(deleted, ["Watch manuscript"])
+
+    async def test_papi_13_resident_sibling_obeys_failure_policy(self):
+        self.settings.write_text('{"factory":{"enabled":true}}')
+        for policy in ("continue", "fail_fast"):
+            with self.subTest(policy=policy):
+                rlm.harness.save_factory(f"manuscript-{policy}", {
+                    "run": {"failure_policy": policy, "max_parallel": 2},
+                    "states": [
+                        {"id": "watch", "entry": True, "lifecycle": "resident",
+                         "subagent": {"prompt": "Watch manuscript"}},
+                        {"id": "index", "entry": True, "subagent": {"prompt": "Index manuscript"}},
+                    ],
+                    "transitions": [],
+                })
+                resident_poll = asyncio.Event()
+                retired_poll = asyncio.Event()
+                deleted = []
+
+                async def host(kind, data):
+                    if kind == "rlm.run":
+                        return {"rlm_child_id": data["prompt"], "name": data["kwargs"]["name"],
+                                "session_dir": str(self.directory), "model": "fake"}
+                    if kind == "rlm.collect":
+                        child, = data["targets"]
+                        if child == "Watch manuscript":
+                            resident_poll.set()
+                            try:
+                                await asyncio.Future()
+                            finally:
+                                retired_poll.set()
+                        await resident_poll.wait()
+                        return {"results": [{"rlm_child_id": child, "status": "error", "settled": True,
+                                             "error": "index failed"}]}
+                    self.assertEqual(kind, "rlm.delete_subagent")
+                    deleted.append(data["target"])
+                    return {"subagent": {"rlm_child_id": data["target"], "session_name": "watch",
+                                         "session_dir": str(self.directory), "status": "running"}}
+
+                with patch("rlm.host_request", side_effect=host):
+                    run = (await rlm.factory.run(f"manuscript-{policy}"))["run_id"]
+                    await asyncio.wait_for(retired_poll.wait(), 1)
+                    failed = await rlm.factory.graph(run)
+                    if failed["state"] == "running" or (policy == "fail_fast" and failed["active_nodes"]):
+                        failed = await rlm.factory.watch(run, timeout=1)
+                        self.assertTrue(failed["changed"])
+                    self.assertEqual(failed["state"], "error")
+                    self.assertIn("index failed", failed["error"])
+                    if policy == "fail_fast":
+                        self.assertEqual(failed["active_nodes"], [])
+                        self.assertEqual(deleted, ["Watch manuscript"])
+                    else:
+                        self.assertEqual(failed["active_nodes"], ["watch"])
+                        self.assertEqual(deleted, [])
+                        self.assertEqual((await rlm.factory.stop(run))["state"], "stopped")
+                        self.assertEqual(deleted, ["Watch manuscript"])

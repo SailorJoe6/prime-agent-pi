@@ -224,8 +224,22 @@ observed settlement. A successful child observed after this budget fails the
 entry without publishing its answer or retrying. This is a settlement check,
 not a timer that cancels the child.
 
-Resident states are not supported. Run records are kernel-local and do not
-survive a restart.
+A named run may use `"lifecycle": "resident"` for a state or DAG node, for
+example a document watcher started after an indexing task. Residents cannot
+export outputs, use `foreach`, or trigger successors. A resident counts toward
+`run.max_children` and occupies a `run.max_parallel` slot while in flight.
+Queued residents must be admitted before the graph can finish. If residents
+hold every slot and more work is queued, the run reports an error instead of
+waiting indefinitely; use `stop(run_id)` to retire those residents.
+
+An admitted resident does not keep a graph from finishing. A finished run can
+still list its residents in `graph(run_id)["active_nodes"]`. Stop that exact
+run to delete them without touching another run's children. Fail-fast also
+retires resident siblings. Pi uses an ordinary parent-scoped RLM child, not a
+new service: it can finish its initial turn, and factory snapshots stop
+tracking its turn progress when the graph finishes. This does not keep a
+provider turn running, automatically restart a watcher, or persist a factory
+run ID across kernel restarts.
 Children are ordinary RLM children and remain visible through the existing
 child APIs until deleted. An inline subagent's optional `name` is used as a
 child label prefix, shortened if needed to fit the host limit. The runner adds

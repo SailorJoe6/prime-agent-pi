@@ -56,11 +56,12 @@ child per item of a bounded JSON list.
 Opt in by adding {"factory": {"enabled": true}} to your agent settings.json.
 Use await rlm.factory.graph(name) to inspect a saved definition without
 starting children. Library files can be validated with rlm.machine_library.
-Run a task machine or DAG with await rlm.factory.run(name) and inspect its
+Run a machine or DAG with await rlm.factory.run(name) and inspect its
 returned run_id with await rlm.factory.status(run_id). Use
 await rlm.factory.watch(run_id, timeout=5) to wait for its graph to change,
 await rlm.factory.resume(run_id) to continue a paused run, and
-await rlm.factory.stop(run_id) to stop it permanently.
+await rlm.factory.stop(run_id) to stop it permanently. Resident children can
+outlive graph completion; stop the run to retire them.
 """
 
 
@@ -174,6 +175,7 @@ class _Run:
     name: str | None
     machine: dict[str, Any]
     started_at: float
+    delete: _DeleteChild
     state: str = "running"
     children: dict[str, str] = field(default_factory=dict)
     nodes: dict[str, str] = field(default_factory=dict)
@@ -357,8 +359,6 @@ def _prepare_machine(spec: dict[str, Any], harness: HarnessState) -> tuple[list[
 
     for state in states:
         key = state["id"]
-        if state.get("lifecycle", "task") != "task":
-            raise ValueError(f"state {key!r}: this run path only supports task states")
         subagent = state["subagent"]
         if isinstance(subagent, str):
             entry = harness.get("subagent", subagent)
@@ -386,9 +386,9 @@ class FactoryRuns:
         spawn: _Spawn, collect: _Collect, delete: _DeleteChild,
     ) -> dict[str, Any]:
         states, machine = _prepare_machine(select_factory(spec_id, harness), harness)
-        run = _Run(uuid4().hex, spec_id, name, machine, monotonic())
+        run = _Run(uuid4().hex, spec_id, name, machine, monotonic(), delete)
         self._runs[run.run_id] = run
-        run.worker = asyncio.create_task(self._execute(run, states, spawn, collect, delete))
+        run.worker = asyncio.create_task(self._execute(run, states, spawn, collect))
         return {"run_id": run.run_id, "spec_id": spec_id, "name": name,
                 "nodes": len(states), "max_parallel": machine["run"]["max_parallel"]}
 
@@ -454,7 +454,36 @@ class FactoryRuns:
             # The worker owns admission and remembers the exact handle even if
             # stop was requested while spawn was returning it. Do not cancel it.
             cancelled = await asyncio.shield(run.worker)
+        elif run.state in ("done", "error") and run.active:
+            run.state = "stopping"
+            run.notify()
+            run.worker = asyncio.create_task(self._retire_children(run))
+            cancelled = await asyncio.shield(run.worker)
         return {"run_id": run_id, "state": run.state, "cancelled": cancelled}
+
+    async def _retire_children(self, run: _Run) -> list[str]:
+        cancelled: list[str] = []
+        failures = []
+        for admission, (key, handle) in list(run.active.items()):
+            try:
+                deleted = await run.delete(handle)
+                if deleted.rlm_child_id != handle.rlm_child_id:
+                    raise RuntimeError("delete did not return the exact factory child")
+                del run.active[admission]
+                if run.nodes.get(key) != "error" and run.children.get(key) == handle.rlm_child_id:
+                    run.nodes[key] = "cancelled"
+                if key not in cancelled:
+                    cancelled.append(key)
+            except Exception as exc:
+                failures.append(f"{key}: {exc}")
+        if failures:
+            detail = "; ".join(failures)
+            run.error = f"{run.error}; cleanup failed: {detail}" if run.error else f"stop failed: {detail}"
+            run.state = "error"
+        elif run.state == "stopping":
+            run.state = "stopped"
+        run.notify()
+        return cancelled
 
     async def _pause(self, run: _Run, reason: str) -> None:
         run.pause_released.clear()
@@ -483,7 +512,6 @@ class FactoryRuns:
 
     async def _execute(
         self, run: _Run, states: list[dict[str, Any]], spawn: _Spawn, collect: _Collect,
-        delete: _DeleteChild,
     ) -> list[str]:
         outputs: dict[str, dict[str, str]] = {}
         transitions = 0
@@ -493,6 +521,11 @@ class FactoryRuns:
         run_budget_ms = run.machine["run"].get("budget_ms")
         budget_reported = False
         by_id = {state["id"]: state for state in states}
+        residents = {key for key, state in by_id.items() if state.get("lifecycle") == "resident"}
+
+        def tasks_in_flight() -> bool:
+            return any(key not in residents for key, _ in run.active.values())
+
         ready = deque(state["id"] for state in states if state.get("entry"))
         entries = dict.fromkeys(ready, 1)
         max_entries = {row["id"]: row["max_entries"] for row in run.machine["states"]}
@@ -514,7 +547,7 @@ class FactoryRuns:
         pending: deque[tuple[_Entry, int, int]] = deque()
         instances: dict[int, tuple[_Entry, int, int, float]] = {}
         latest: dict[str, int] = {}
-        cancelled: list[str] = []
+        retire = False
         polls: dict[int, asyncio.Task[tuple[RLMChildResult, float]]] = {}
 
         async def check_run_budget() -> None:
@@ -570,6 +603,7 @@ class FactoryRuns:
                 run.notify()
 
         async def fail(entry: _Entry, reason: str) -> None:
+            nonlocal retire
             if entry.failed or run.state != "running":
                 return
             entry.failed = True
@@ -579,6 +613,7 @@ class FactoryRuns:
             run.error = run.error or detail
             policy = by_id[entry.key].get("failure_policy", run.machine["run"]["failure_policy"])
             if policy == "fail_fast":
+                retire = True
                 run.state = "error"
                 return
             if policy == "escalate":
@@ -592,7 +627,7 @@ class FactoryRuns:
                     if not pending:
                         # Let in-flight required sources settle before binding.
                         candidate = next((key for key in ready if required_sources[key] <= settled.keys()), None)
-                        if candidate is None and run.active:
+                        if candidate is None and tasks_in_flight():
                             break
                         current = candidate or ready[0]
                         ready.remove(current)
@@ -636,6 +671,18 @@ class FactoryRuns:
                 if run.state != "running" or not run.active:
                     break
 
+                has_tasks = tasks_in_flight()
+                completed_poll = next((number for number, poll in polls.items() if poll.done()), None)
+                if not has_tasks and completed_poll is None:
+                    if ready or pending:
+                        await check_run_budget()
+                        if run.state != "running":
+                            break
+                        # Only residents hold slots; queued work cannot be admitted.
+                        run.error = f"resident children hold every max_parallel {parallel_limit} slot"
+                        run.state = "error"
+                    break
+
                 await check_run_budget()
                 if run.state != "running":
                     break
@@ -645,13 +692,15 @@ class FactoryRuns:
                     admission, (current, handle) = next(iter(run.active.items()))
                     result, observed_at = await self._poll_child(collect, handle, bool(by_id[current].get("outputs")))
                 else:
-                    for admission, (key, handle) in run.active.items():
-                        if admission not in polls:
-                            polls[admission] = asyncio.create_task(
-                                self._poll_child(collect, handle, bool(by_id[key].get("outputs")))
-                            )
-                    await asyncio.wait(polls.values(), return_when=asyncio.FIRST_COMPLETED)
-                    admission = next(number for number, poll in polls.items() if poll.done())
+                    if completed_poll is None:
+                        for admission, (key, handle) in run.active.items():
+                            if admission not in polls:
+                                polls[admission] = asyncio.create_task(
+                                    self._poll_child(collect, handle, bool(by_id[key].get("outputs")))
+                                )
+                        await asyncio.wait(polls.values(), return_when=asyncio.FIRST_COMPLETED)
+                        completed_poll = next(number for number, poll in polls.items() if poll.done())
+                    admission = completed_poll
                     current, _ = run.active[admission]
                     result, observed_at = polls.pop(admission).result()
                 if not result.settled:
@@ -682,6 +731,7 @@ class FactoryRuns:
             if run.state != "stopping" or not run.active:
                 run.state = "error"
                 run.error = f"{current}: {exc}"
+                retire = True
         finally:
             for admission, poll in polls.items():
                 if not poll.done():
@@ -691,28 +741,9 @@ class FactoryRuns:
             if polls:
                 await asyncio.gather(*polls.values(), return_exceptions=True)
 
-        if run.state in ("stopping", "error"):
-            stopping = run.state == "stopping"
-            failures = []
-            for admission, (key, handle) in list(run.active.items()):
-                try:
-                    deleted = await delete(handle)
-                    if deleted.rlm_child_id != handle.rlm_child_id:
-                        raise RuntimeError("delete did not return the exact factory child")
-                    del run.active[admission]
-                    if run.nodes.get(key) != "error" and run.children.get(key) == handle.rlm_child_id:
-                        run.nodes[key] = "cancelled"
-                    if key not in cancelled:
-                        cancelled.append(key)
-                except Exception as exc:
-                    failures.append(f"{key}: {exc}")
-            if failures:
-                detail = "; ".join(failures)
-                run.error = f"{run.error}; cleanup failed: {detail}" if run.error else f"stop failed: {detail}"
-                run.state = "error"
-            elif stopping:
-                run.state = "stopped"
-        elif run.state == "running":
+        if run.state == "stopping" or retire:
+            return await self._retire_children(run)
+        if run.state == "running":
             run.state = "error" if run.error else "done"
         run.notify()
-        return cancelled
+        return []

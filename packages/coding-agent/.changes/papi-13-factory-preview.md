@@ -10,3 +10,4 @@
 - Fixed stale parallel output bindings, used authored factory child labels, and paused DAGs at the actual child-admission limit.
 - Added default escalation, continue, and fail-fast policies for named Python factory runs.
 - Added per-state child retries and run and state time budgets for named Python factory runs.
+- Added resident states and selected-run retirement after named Python factory graphs finish.
