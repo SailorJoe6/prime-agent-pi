@@ -127,6 +127,7 @@ def _machine_structure(machine: dict[str, Any]) -> dict[str, Any]:
             "lifecycle": state.get("lifecycle", schema.NODE_LIFECYCLE_DEFAULT),
             "max_entries": state.get("max_entries", schema.STATE_MAX_ENTRIES_DEFAULT),
             "retries": state.get("retries", schema.NODE_RETRIES_DEFAULT),
+            "failure_policy": state.get("failure_policy", run["failure_policy"]),
         }
         subagent = state["subagent"]
         if isinstance(subagent, str):
@@ -158,6 +159,7 @@ class _Entry:
     prompts: list[str]
     answers: list[str] = field(init=False)
     remaining: int = field(init=False)
+    failed: bool = False
 
     def __post_init__(self) -> None:
         self.remaining = len(self.prompts)
@@ -352,15 +354,14 @@ def _prepare_machine(spec: dict[str, Any], harness: HarnessState) -> tuple[list[
     structure = _machine_structure(machine)
     states = machine["states"]
     limits = machine.get("run") or {}
-    if "budget_ms" in limits or limits.get("failure_policy", "fail_fast") != "fail_fast":
-        raise ValueError("task execution does not support time budgets or custom failure handling")
+    if "budget_ms" in limits:
+        raise ValueError("task execution does not support time budgets")
 
     for state in states:
         key = state["id"]
         if (state.get("lifecycle", "task") != "task"
-                or state.get("retries", 0) or "budget_ms" in state
-                or state.get("failure_policy", "fail_fast") != "fail_fast"):
-            raise ValueError(f"state {key!r}: this run path only supports task states without retries, budgets, or custom failure handling")
+                or state.get("retries", 0) or "budget_ms" in state):
+            raise ValueError(f"state {key!r}: this run path only supports task states without retries or budgets")
         subagent = state["subagent"]
         if isinstance(subagent, str):
             entry = harness.get("subagent", subagent)
@@ -477,7 +478,7 @@ class FactoryRuns:
         run: _Run, admission: int, result: RLMChildResult, *, update_node: bool = True,
     ) -> None:
         key, handle = run.active.pop(admission)
-        if update_node and run.children.get(key) == handle.rlm_child_id:
+        if update_node and run.nodes.get(key) != "error" and run.children.get(key) == handle.rlm_child_id:
             run.nodes[key] = result.status
         run.notify()
 
@@ -520,7 +521,7 @@ class FactoryRuns:
             key = entry.key
             ports = by_id[key].get("outputs") or []
             answer = "\n\n".join(answer for answer in entry.answers if answer)
-            captured = _capture_outputs(answer, ports)
+            captured = {} if entry.failed else _capture_outputs(answer, ports)
             # Bind by entry order, not completion order. Guards still see this settle.
             if entry.sequence > settled.get(key, 0):
                 outputs[key] = captured
@@ -530,7 +531,7 @@ class FactoryRuns:
                 for port in ports if (name := port["name"]) in captured
             }
             if latest[key] == entry.sequence:
-                run.nodes[key] = "done"
+                run.nodes[key] = "error" if entry.failed else "done"
             run.notify()
             for edge_index, edge in outgoing.get(key, []):
                 target = edge["to"]
@@ -560,6 +561,23 @@ class FactoryRuns:
                 ready.append(target)
                 run.notify()
 
+        async def fail(entry: _Entry, reason: str) -> None:
+            if entry.failed or run.state != "running":
+                return
+            entry.failed = True
+            if latest[entry.key] == entry.sequence:
+                run.nodes[entry.key] = "error"
+            detail = f"{entry.key}: {reason}"
+            run.error = run.error or detail
+            policy = by_id[entry.key].get("failure_policy", run.machine["run"]["failure_policy"])
+            if policy == "fail_fast":
+                run.state = "error"
+                return
+            if policy == "escalate":
+                await self._pause(run, detail)
+            if run.state == "running":
+                await settle(entry)
+
         try:
             while (ready or pending or run.active) and run.state == "running":
                 while (ready or pending) and len(run.active) < parallel_limit and run.state == "running":
@@ -572,14 +590,20 @@ class FactoryRuns:
                         ready.remove(current)
                         state = by_id[current]
                         sequence += 1
-                        entry = _Entry(sequence, current, _entry_prompts(state, outputs))
-                        latest[current] = entry.sequence
+                        latest[current] = sequence
+                        try:
+                            entry = _Entry(sequence, current, _entry_prompts(state, outputs))
+                        except ValueError as exc:
+                            await fail(_Entry(sequence, current, []), str(exc))
+                            continue
                         if not entry.prompts:
                             run.children.pop(current, None)
                             await settle(entry)
                             continue
                         pending.extend((entry, item) for item in range(len(entry.prompts)))
                     entry, item = pending.popleft()
+                    if entry.failed:
+                        continue
                     current = entry.key
                     subagent = by_id[current]["subagent"]
                     if index == child_limit:
@@ -587,8 +611,12 @@ class FactoryRuns:
                         if run.state != "running":
                             break
                     index += 1
-                    handle = await spawn(entry.prompts[item], name=_child_label(subagent.get("name"), run.run_id, index),
-                                         model=subagent.get("model"), thinking=subagent.get("thinking"))
+                    try:
+                        handle = await spawn(entry.prompts[item], name=_child_label(subagent.get("name"), run.run_id, index),
+                                             model=subagent.get("model"), thinking=subagent.get("thinking"))
+                    except Exception as exc:
+                        await fail(entry, str(exc))
+                        continue
                     run.active[index] = (current, handle)
                     instances[index] = (entry, item)
                     run.children[current] = handle.rlm_child_id
@@ -614,11 +642,14 @@ class FactoryRuns:
                 if not result.settled:
                     continue
                 entry, item = instances.pop(admission)
-                self._record_settlement(run, admission, result, update_node=run.state != "running" or result.status != "done")
+                self._record_settlement(run, admission, result, update_node=run.state == "stopping")
                 if run.state != "running":
                     break
+                if entry.failed:
+                    continue
                 if result.status != "done":
-                    raise RuntimeError(result.error or f"child settled with status {result.status!r}")
+                    await fail(entry, result.error or f"child settled with status {result.status!r}")
+                    continue
                 entry.answers[item] = result.answer_text or ""
                 entry.remaining -= 1
                 if not entry.remaining:
@@ -645,7 +676,8 @@ class FactoryRuns:
                     if deleted.rlm_child_id != handle.rlm_child_id:
                         raise RuntimeError("delete did not return the exact factory child")
                     del run.active[admission]
-                    run.nodes[key] = "cancelled"
+                    if run.nodes.get(key) != "error" and run.children.get(key) == handle.rlm_child_id:
+                        run.nodes[key] = "cancelled"
                     if key not in cancelled:
                         cancelled.append(key)
                 except Exception as exc:
@@ -657,6 +689,6 @@ class FactoryRuns:
             elif stopping:
                 run.state = "stopped"
         elif run.state == "running":
-            run.state = "done"
+            run.state = "error" if run.error else "done"
         run.notify()
         return cancelled

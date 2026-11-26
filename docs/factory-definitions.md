@@ -166,8 +166,7 @@ text of the exact child's final assistant message, including line breaks.
 For JSON outputs, tell the child to return an object keyed by the declared port
 names. Each port uses the last fenced `json` object containing its key, or
 falls back to an object returned as the whole answer. A JSON `null` is a value.
-A missing required output or child failure ends the run with an error and
-cancels remaining active work in that run. Answers
+Answers
 larger than 256 KiB are unavailable for binding; they are never truncated.
 In an explicit machine, mark starting states with `entry: true`. A
 single-source transition can test settled output, for example:
@@ -193,12 +192,27 @@ output to an input named `chapter`. On the indexing state, set
 The runner starts one child per item, up to the first eight in this example.
 Each child counts toward `run.max_children` and shares the run's parallel
 limit. An empty array settles with no children or outputs. A non-array value
-fails the run. When all items finish, their available answers are joined with
+fails the entry. When all items finish successfully, their available answers are joined with
 blank lines in input order before declared text and JSON ports are captured.
 Use fenced JSON objects for named JSON outputs from multiple item answers.
 
-Resident states, retries, time budgets, and non-fail-fast failure policies
-are not supported. Run records are kernel-local
+An entry can fail during input binding, child admission, or child execution.
+Set `run.failure_policy` to choose what happens, or set `failure_policy` on
+an individual state to override it:
+
+- `escalate` (default): pause the run without cancelling admitted siblings.
+  Resume that run by ID to process the failure and continue without replay.
+- `continue`: keep processing eligible work without pausing or cancelling
+  siblings. The run finishes with `state: "error"` if any entry failed.
+- `fail_fast`: end the run with `state: "error"`, without starting downstream
+  work, and cancel only its remaining active children.
+
+A failed entry has no outputs. Unguarded transitions and joins can use its
+settlement after `continue` or resume, but a required input from that failure
+fails the dependent before admission. Optional inputs use the usual missing
+value. Failed `foreach` entries do not admit more items or publish partial outputs.
+
+Resident states, retries, and time budgets are not supported. Run records are kernel-local
 and do not survive a restart.
 Children are ordinary RLM children and remain visible through the existing
 child APIs until deleted. An inline subagent's optional `name` is used as a

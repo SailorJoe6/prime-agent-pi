@@ -8,3 +8,4 @@
 - Added per-run parallel task execution and exact-child stop for Python factory machines.
 - Added bounded Python factory `foreach` fan-out with outputs assembled in item order.
 - Fixed stale parallel output bindings, used authored factory child labels, and paused DAGs at the actual child-admission limit.
+- Added default escalation, continue, and fail-fast policies for named Python factory runs.

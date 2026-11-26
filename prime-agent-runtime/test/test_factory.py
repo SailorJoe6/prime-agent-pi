@@ -389,6 +389,7 @@ class FactoryTest(unittest.IsolatedAsyncioTestCase):
     async def test_papi_13_declared_ports_bind_exact_final_text_and_named_json(self):
         self.settings.write_text('{"factory":{"enabled":true}}')
         spec = self.text_dag("fixture")
+        spec["run"] = {"failure_policy": "fail_fast"}
         producer, consumer = spec["nodes"][1], spec["nodes"][0]
         for name in ("shape", "shade"):
             producer["outputs"].append({"name": name, "type": "json"})
@@ -582,7 +583,7 @@ class FactoryTest(unittest.IsolatedAsyncioTestCase):
                       "inputs": [{"name": key, "type": kind, "from": f"{key}.value"}
                                  for key, kind in (("title", "text"), ("style", "json"), ("summary", "text"))]}],
                 "transitions": [{"from": ["title", "style", "summary"], "to": "format"}],
-                "run": {"max_parallel": 2, "max_children": 3},
+                "run": {"max_parallel": 2, "max_children": 3, "failure_policy": "fail_fast"},
             })
         requests = {}
         collecting = asyncio.Queue()
@@ -703,7 +704,7 @@ class FactoryTest(unittest.IsolatedAsyncioTestCase):
                             {"name": "tag", "type": "json", "from": "index.tag", "optional": True}],
                  "depends_on": ["index"]},
             ],
-            "run": {"max_parallel": 2, "max_children": 3},
+            "run": {"max_parallel": 2, "max_children": 3, "failure_policy": "fail_fast"},
         })
         requests = {}
         waiting = asyncio.Queue()
@@ -959,3 +960,174 @@ class FactoryTest(unittest.IsolatedAsyncioTestCase):
                         answer.set_result("")
                 async with asyncio.timeout(3):
                     await rlm.factory.stop(a)
+
+    async def test_papi_13_document_failure_policies_scope_resume_and_cancellation(self):
+        self.settings.write_text('{"factory":{"enabled":true}}')
+        for mode in ("escalate", "continue", "fail_fast", "override"):
+            with self.subTest(mode=mode):
+                spec = {
+                    "states": [
+                        {"id": "draft", "entry": True, "subagent": {"prompt": "Read draft"},
+                         "outputs": [{"name": "title", "type": "text"}]},
+                        {"id": "style", "entry": True, "subagent": {"prompt": "Read style"}},
+                        {"id": "catalog", "subagent": {"prompt": "Catalog {title}"},
+                         "inputs": [{"name": "title", "type": "text", "from": "draft.title"}]},
+                        {"id": "note", "subagent": {"prompt": "Note missing draft {title}"},
+                         "inputs": [{"name": "title", "type": "text", "from": "draft.title", "optional": True}]},
+                        {"id": "approved", "subagent": {"prompt": "Use approved draft"}},
+                    ],
+                    "transitions": [
+                        {"from": "draft", "to": "catalog"},
+                        {"from": ["draft", "style"], "to": "note"},
+                        {"from": "draft", "to": "approved", "when": {"output": "title", "op": "exists"}},
+                    ],
+                    "run": {"max_parallel": 2},
+                }
+                if mode in ("continue", "fail_fast"):
+                    spec["run"]["failure_policy"] = mode
+                if mode == "override":
+                    spec["run"]["failure_policy"] = "fail_fast"
+                    for state in spec["states"][:1] + spec["states"][2:3]:
+                        state["failure_policy"] = "continue"
+                rlm.harness.save_factory("document-review", spec)
+                started = asyncio.Queue()
+                children = {}
+                deleted = []
+                runs = []
+
+                async def host(kind, data):
+                    if kind == "rlm.run":
+                        name = data["kwargs"]["name"]
+                        child = f"document-{len(children)}"
+                        children[child] = (name, asyncio.get_running_loop().create_future())
+                        started.put_nowait((child, data["prompt"]))
+                        return {"rlm_child_id": child, "name": name, "session_dir": str(self.directory), "model": "fake"}
+                    if kind == "rlm.collect":
+                        child, = data["targets"]
+                        return {"results": [{"rlm_child_id": child, **await asyncio.shield(children[child][1])}]}
+                    self.assertEqual(kind, "rlm.delete_subagent")
+                    child = data["target"]
+                    deleted.append(child)
+                    return {"subagent": {"rlm_child_id": child, "session_name": children[child][0],
+                                         "session_dir": str(self.directory), "status": "running"}}
+
+                async def next_child(run, prompt):
+                    child, actual = await started.get()
+                    self.assertEqual(actual, prompt)
+                    self.assertIn(f"-{run}-", children[child][0])
+                    return child
+
+                async def start():
+                    run = (await rlm.factory.run("document-review"))["run_id"]
+                    runs.append(run)
+                    return run, await next_child(run, "Read draft"), await next_child(run, "Read style")
+
+                def release(child, **fields):
+                    children[child][1].set_result({"settled": True, "status": "done", **fields})
+
+                with patch("rlm.host_request", side_effect=host):
+                    try:
+                        async with asyncio.timeout(3):
+                            a, draft, style = await start()
+                            b, other_draft, other_style = await start()
+                            release(draft, status="error", error="draft unavailable", answer_text="not a valid title")
+                            initial = await rlm.factory.watch(a, timeout=2)
+                            self.assertIn("draft unavailable", initial["error"])
+                            if mode == "fail_fast":
+                                self.assertEqual(initial["state"], "error")
+                                drained = await rlm.factory.watch(a, timeout=2) if initial["active_nodes"] else initial
+                                self.assertEqual(drained["active_nodes"], [])
+                                self.assertEqual(deleted, [style])
+                                self.assertEqual(drained["last_fired"], [])
+                            else:
+                                if mode == "escalate":
+                                    self.assertEqual(initial["state"], "paused")
+                                    self.assertEqual(initial["active_nodes"], ["style"])
+                                    self.assertIn("draft unavailable", initial["pause_reason"])
+                                    self.assertEqual(initial["last_fired"], [])
+                                    self.assertEqual(deleted, [])
+                                    self.assertTrue(started.empty())
+                                    with self.assertRaisesRegex(ValueError, "not paused"):
+                                        await rlm.factory.resume(b)
+                                    await rlm.factory.resume(a)
+                                    bind_failure = await rlm.factory.watch(a, timeout=2)
+                                    self.assertEqual(bind_failure["state"], "paused")
+                                    self.assertIn("draft.title", bind_failure["pause_reason"])
+                                    await rlm.factory.resume(a)
+                                else:
+                                    self.assertEqual(initial["state"], "running")
+                                self.assertEqual(deleted, [])
+                                self.assertTrue(started.empty())
+                                release(style)
+                                note = await next_child(a, "Note missing draft None")
+                                release(note)
+                                finished = await rlm.factory.watch(a, timeout=2)
+                                self.assertEqual(finished["state"], "error")
+                                self.assertEqual([edge["to"] for edge in finished["last_fired"]], ["note", "catalog"])
+                                self.assertEqual({node["state_id"]: node["status"] for node in finished["nodes"]},
+                                                 {"draft": "error", "catalog": "error", "style": "done", "note": "done"})
+                            with self.assertRaisesRegex(ValueError, "not paused"):
+                                await rlm.factory.resume(a)
+                            self.assertEqual((await rlm.factory.status(b))["children"],
+                                             {"draft": other_draft, "style": other_style})
+                            self.assertEqual((await rlm.factory.status(b))["state"], "running")
+                            stopped = asyncio.create_task(rlm.factory.stop(b))
+                            try:
+                                self.assertEqual((await rlm.factory.watch(b, timeout=2))["state"], "stopping")
+                                children[other_draft][1].set_result({"settled": False, "status": "running"})
+                                self.assertEqual((await stopped)["state"], "stopped")
+                            finally:
+                                stopped.cancel()
+                                await asyncio.gather(stopped, return_exceptions=True)
+                            self.assertCountEqual(deleted, [other_draft, other_style] + ([style] if mode == "fail_fast" else []))
+                            self.assertEqual(len(children), 4 if mode == "fail_fast" else 5)
+                            self.assertTrue(started.empty())
+                    finally:
+                        for _, response in children.values():
+                            if not response.done():
+                                response.set_result({"settled": False, "status": "running"})
+                        async with asyncio.timeout(3):
+                            await asyncio.gather(*(rlm.factory.stop(run) for run in runs))
+
+    async def test_papi_13_failed_foreach_admission_drops_pending_items_and_partial_outputs(self):
+        self.settings.write_text('{"factory":{"enabled":true}}')
+        rlm.harness.save_factory("chapter-index", {
+            "nodes": [
+                {"id": "list", "subagent": {"prompt": "List chapters"},
+                 "outputs": [{"name": "chapters", "type": "json"}]},
+                {"id": "index", "subagent": {"prompt": "Index {chapter}"},
+                 "inputs": [{"name": "chapter", "type": "json", "from": "list.chapters"}],
+                 "foreach": {"over": "chapter", "max": 3},
+                 "outputs": [{"name": "index", "type": "text"}]},
+                {"id": "publish", "subagent": {"prompt": "Publish {index}"}, "depends_on": ["index"],
+                 "inputs": [{"name": "index", "type": "text", "from": "index.index", "optional": True}]},
+            ],
+            "run": {"max_parallel": 1, "failure_policy": "continue"},
+        })
+        prompts = []
+        answers = {}
+
+        async def host(kind, data):
+            if kind == "rlm.run":
+                prompt = data["prompt"]
+                prompts.append(prompt)
+                if prompt == "Index appendix":
+                    raise RuntimeError("appendix admission refused")
+                child = f"chapter-{len(prompts)}"
+                answers[child] = {
+                    "List chapters": '{"chapters":["intro","appendix","glossary"]}',
+                    "Index intro": "partial index",
+                }.get(prompt)
+                return {"rlm_child_id": child, "name": data["kwargs"]["name"],
+                        "session_dir": str(self.directory), "model": "fake"}
+            self.assertEqual(kind, "rlm.collect")
+            child, = data["targets"]
+            return {"results": [{"rlm_child_id": child, "status": "done", "settled": True,
+                                 "answer_text": answers[child]}]}
+
+        with patch("rlm.host_request", side_effect=host):
+            run = (await rlm.factory.run("chapter-index"))["run_id"]
+            result = await rlm.factory.watch(run, timeout=2)
+        self.assertEqual((result["state"], result["active_nodes"]), ("error", []))
+        self.assertIn("appendix admission refused", result["error"])
+        self.assertEqual(prompts, ["List chapters", "Index intro", "Index appendix", "Publish None"])
