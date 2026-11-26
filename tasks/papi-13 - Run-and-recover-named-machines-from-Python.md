@@ -4,7 +4,7 @@ title: Run and recover named machines from Python
 status: In Progress
 assignee: []
 created_date: '2026-11-22T22:17:00Z'
-updated_date: '2026-11-26T21:21:00Z'
+updated_date: '2026-11-26T21:24:00Z'
 labels: []
 milestone: m-0
 dependencies:
@@ -71,4 +71,6 @@ Next bounded slice: use the existing exact-child collect path with opt-in settle
 Declared-output slice published at code 2c8303918272e12266fae886db77057defb82835. Adapted v0.10.0 (763094e1) declared text and named JSON capture: multiple ports bind from settled child text; JSON prefers the last fenced object containing the port and falls back to a whole-answer object. JSON null is distinct from a missing port. Pi requests the exact child’s settled final assistant text through the existing kernel collect route instead of a preview. Default collect is unchanged; answers over 256 KiB are unavailable, not truncated. Offline validation: npm run check, 14 Python factory tests, 9 TypeScript collect tests, shuffle seeds 13/421/2026 for both focused suites, and three caught preview/order mutations. Existing run isolation, pause and stop tests passed. No live providers or acceptance closure. Remaining bounded explicit-machine/graph behavior and exact-base Bash comparison stay open.
 
 Next bounded slice: run one-shot explicit task machines serially in the existing executor. Compare v0.10.0 settled-output guard and join semantics; verify filtered branches, exact input handoff and a transition-limit pause at the join with deterministic offline fixtures. Bounded re-entry, parallel and item fan-out, and the exact-base Bash comparison remain open.
+
+Guard/join slice published at code 9ca3e485144c8e592a0d45c667d388e5fd2bbb01. Compared released v0.10.0 (763094e1) guard evaluation and settled-transition scheduling. The existing Python executor now accepts one-shot explicit task machines: evaluates guards on settled text/JSON, waits for all join sources, admits each state at most once, and exposes recent fired transitions in graph/watch. A pause at a join resumes without replay; default collect and exact child ownership are unchanged. Offline: npm run check, 15 factory tests via uv run --locked python -m unittest discover -s test -p test_factory*.py, three shuffled FactoryTest runs (13/421/2026), and three detected mutations (partial join, bool/number equality, missing path passing ne). No live providers or acceptance closure. Bounded re-entry, parallel and foreach fan-out, and the exact-base Bash comparison remain open.
 <!-- SECTION:NOTES:END -->
