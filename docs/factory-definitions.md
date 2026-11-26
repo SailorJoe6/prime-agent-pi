@@ -178,7 +178,9 @@ single-source transition can test settled output, for example:
 
 A missing port or path does not pass a guard. A joined transition such as
 `{"from":["outline","style"],"to":"format"}` waits for every source to settle
-and can fire again when a source settles a new entry. Each state can be entered
+and can fire again when a source's newest settled entry changes. If an older
+parallel entry finishes late, it still evaluates its own guards, but does not
+replace the newer binding or cause the same join to fire again. Each state can be entered
 up to its `max_entries` (default `1`), including its initial entry. Transitions
 to a state at its limit do not queue another child. Each entry binds from the
 latest settled outputs of its input sources. If that settle omitted a port,
@@ -199,7 +201,10 @@ Resident states, retries, time budgets, and non-fail-fast failure policies
 are not supported. Run records are kernel-local
 and do not survive a restart.
 Children are ordinary RLM children and remain visible through the existing
-child APIs until deleted.
+child APIs until deleted. An inline subagent's optional `name` is used as a
+child label prefix, shortened if needed to fit the host limit. The runner adds
+run and admission suffixes so repeated or overlapping runs have distinct names;
+run controls still target exact child IDs.
 
 ### Watch, resume, or stop one run
 
@@ -231,6 +236,8 @@ pauses before starting the next child. `status`, `graph`, and `watch` report
 limit. It keeps settled outputs and does not restart completed states. This
 transition limit pauses a run at most once. A run can also pause
 once before exceeding `run.max_children`, with `pause_reason: "max_children exceeded"`.
+This counts actual child admissions in both DAGs and explicit machines, not the
+number of states in a definition.
 Children already in flight may finish while the run is paused. Resume
 authorizes that run to continue past the reported limit; it does not
 raise a state's `max_entries`. You can also stop a paused run. Stopping is

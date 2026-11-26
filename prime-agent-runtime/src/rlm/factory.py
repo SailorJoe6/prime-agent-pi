@@ -330,6 +330,15 @@ def _entry_prompts(state: dict[str, Any], outputs: dict[str, dict[str, str]]) ->
             for item in items]
 
 
+def _child_label(configured: str | None, run_id: str, admission: int) -> str:
+    suffix = f"-{run_id}-{admission}"
+    base = configured.strip() if configured is not None else "factory"
+    # The Pi host counts UTF-16 code units; leave room for the full unique suffix.
+    room = schema.SUBAGENT_NAME_MAX_LENGTH - len(suffix)
+    prefix = base.encode("utf-16-le")[:2 * room].decode("utf-16-le", errors="ignore")
+    return prefix + suffix
+
+
 def _prepare_machine(spec: dict[str, Any], harness: HarnessState) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     errors = schema.validate_factory_spec(spec)
     if errors:
@@ -345,8 +354,6 @@ def _prepare_machine(spec: dict[str, Any], harness: HarnessState) -> tuple[list[
     limits = machine.get("run") or {}
     if "budget_ms" in limits or limits.get("failure_policy", "fail_fast") != "fail_fast":
         raise ValueError("task execution does not support time budgets or custom failure handling")
-    if "nodes" in spec and len(states) > structure["run"]["max_children"]:
-        raise ValueError("machine exceeds run.max_children")
 
     for state in states:
         key = state["id"]
@@ -514,12 +521,14 @@ class FactoryRuns:
             ports = by_id[key].get("outputs") or []
             answer = "\n\n".join(answer for answer in entry.answers if answer)
             captured = _capture_outputs(answer, ports)
-            outputs[key] = captured
+            # Bind by entry order, not completion order. Guards still see this settle.
+            if entry.sequence > settled.get(key, 0):
+                outputs[key] = captured
+                settled[key] = entry.sequence
             guard_values = {
                 name: json.loads(captured[name]) if port["type"] == "json" else captured[name]
                 for port in ports if (name := port["name"]) in captured
             }
-            settled[key] = entry.sequence
             if latest[key] == entry.sequence:
                 run.nodes[key] = "done"
             run.notify()
@@ -578,7 +587,7 @@ class FactoryRuns:
                         if run.state != "running":
                             break
                     index += 1
-                    handle = await spawn(entry.prompts[item], name=f"factory-{run.run_id}-{index}",
+                    handle = await spawn(entry.prompts[item], name=_child_label(subagent.get("name"), run.run_id, index),
                                          model=subagent.get("model"), thinking=subagent.get("thinking"))
                     run.active[index] = (current, handle)
                     instances[index] = (entry, item)

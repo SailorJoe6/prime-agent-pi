@@ -86,11 +86,6 @@ class FactoryTest(unittest.IsolatedAsyncioTestCase):
             self.settings.write_text('{"factory":{"enabled":true}}')
             with self.assertRaises(ValueError):
                 await rlm.factory.run("unknown")
-            spec = self.text_dag("limited")
-            spec["run"] = {"max_children": 1}
-            rlm.harness.save_factory("limited", spec)
-            with self.assertRaisesRegex(ValueError, "max_children"):
-                await rlm.factory.run("limited")
             spec = self.text_dag("unresolved")
             spec["nodes"][0]["subagent"] = "unknown-subagent"
             rlm.harness.save_factory("unresolved", spec)
@@ -811,3 +806,156 @@ class FactoryTest(unittest.IsolatedAsyncioTestCase):
                         gate.set_result({"settled": False, "status": "running"})
                 async with asyncio.timeout(3):
                     await asyncio.gather(*stops)
+
+    async def test_papi_13_late_review_guards_cannot_regress_bindings_or_joins(self):
+        self.settings.write_text('{"factory":{"enabled":true}}')
+        label = "editor" + "é" * 10 + "😀" * 20
+        rlm.harness.save_factory("review-manuscript", {
+            "states": [
+                {"id": "draft", "entry": True, "subagent": {"prompt": "Open draft"}},
+                {"id": "revision", "entry": True, "subagent": {"prompt": "Open revision"}},
+                {"id": "review", "max_entries": 2, "subagent": {"name": label, "prompt": "Review manuscript"},
+                 "outputs": [{"name": "note", "type": "json"}, {"name": "flag", "type": "json"}]},
+                {"id": "index", "max_entries": 2, "subagent": {"prompt": "Index {note}"},
+                 "inputs": [{"name": "note", "type": "json", "from": "review.note"}]},
+                {"id": "audit", "subagent": {"prompt": "Audit current {note}"},
+                 "inputs": [{"name": "note", "type": "json", "from": "review.note"}]},
+            ],
+            "transitions": [
+                {"from": "draft", "to": "review"}, {"from": "revision", "to": "review"},
+                {"from": ["draft", "review"], "to": "index"},
+                {"from": "review", "to": "audit", "when": {"output": "flag", "op": "eq", "value": True}},
+            ],
+            "run": {"max_parallel": 3},
+        })
+        admitted = asyncio.Queue()
+        children = {}
+        names = set()
+        deleted = []
+
+        async def host(kind, data):
+            if kind == "rlm.run":
+                name = data["kwargs"]["name"]
+                self.assertNotIn(name, names)
+                self.assertLessEqual(len(name.encode("utf-16-le")) // 2, 64)
+                names.add(name)
+                child = f"opaque-{len(names)}"
+                children[child] = (name, asyncio.get_running_loop().create_future())
+                admitted.put_nowait((child, data["prompt"]))
+                return {"rlm_child_id": child, "name": name, "session_dir": str(self.directory), "model": "fake"}
+            if kind == "rlm.collect":
+                child, = data["targets"]
+                answer = await children[child][1]
+                return {"results": [{"rlm_child_id": child, "settled": answer is not None,
+                                     "status": "running" if answer is None else "done", "answer_text": answer}]}
+            self.assertEqual(kind, "rlm.delete_subagent")
+            child = data["target"]
+            deleted.append(child)
+            return {"subagent": {"rlm_child_id": child, "session_name": children[child][0],
+                                 "session_dir": str(self.directory), "status": "running"}}
+
+        async def next_child(run, prompt, *, authored=False):
+            child, actual = await admitted.get()
+            self.assertEqual(actual, prompt)
+            name = children[child][0]
+            self.assertIn(f"-{run}-", name)
+            if authored:
+                prefix = name.split(f"-{run}-")[0]
+                self.assertTrue(prefix.startswith("editoré"))
+                self.assertTrue(label.startswith(prefix))
+            return child
+
+        def release(child, answer=""):
+            children[child][1].set_result(answer)
+
+        runs = []
+        with patch("rlm.host_request", side_effect=host):
+            try:
+                async with asyncio.timeout(3):
+                    async def start():
+                        run = (await rlm.factory.run("review-manuscript"))["run_id"]
+                        runs.append(run)
+                        draft = await next_child(run, "Open draft")
+                        revision = await next_child(run, "Open revision")
+                        release(draft)
+                        older = await next_child(run, "Review manuscript", authored=True)
+                        release(revision)
+                        newer = await next_child(run, "Review manuscript", authored=True)
+                        return run, older, newer
+
+                    a, older, newer = await start()
+                    b, b_older, b_newer = await start()
+                    release(newer, '{"note":"final","flag":false}')
+                    index = await next_child(a, 'Index "final"')
+                    release(older, '{"note":"draft","flag":true}')
+                    audit = await next_child(a, 'Audit current "final"')
+                    self.assertEqual([edge["to"] for edge in (await rlm.factory.graph(a))["last_fired"]],
+                                     ["audit", "index", "review", "review"])
+                    stop = asyncio.create_task(rlm.factory.stop(b))
+                    try:
+                        self.assertEqual((await rlm.factory.watch(b, timeout=2))["state"], "stopping")
+                        release(b_newer, None)
+                        self.assertEqual((await stop)["state"], "stopped")
+                    finally:
+                        stop.cancel()
+                        await asyncio.gather(stop, return_exceptions=True)
+                    self.assertCountEqual(deleted, [b_older, b_newer])
+                    self.assertEqual((await rlm.factory.status(a))["children"]["review"], newer)
+                    self.assertEqual((await rlm.factory.status(a))["state"], "running")
+                    release(index)
+                    indexed = await rlm.factory.watch(a, timeout=2)
+                    self.assertEqual(indexed["active_nodes"], ["audit"])
+                    release(audit)
+                    self.assertEqual((await rlm.factory.watch(a, timeout=2))["state"], "done")
+                    self.assertTrue(admitted.empty())
+            finally:
+                for _, gate in children.values():
+                    if not gate.done():
+                        gate.set_result(None)
+                async with asyncio.timeout(3):
+                    await asyncio.gather(*(rlm.factory.stop(run) for run in runs))
+
+    async def test_papi_13_dag_counts_admissions_and_resumes_selected_run(self):
+        self.settings.write_text('{"factory":{"enabled":true}}')
+        spec = self.text_dag("archive")
+        spec["run"] = {"max_children": 1}
+        rlm.harness.save_factory("archive-draft", spec)
+        started = asyncio.Queue()
+        answers = {}
+
+        async def host(kind, data):
+            if kind == "rlm.run":
+                child = f"document-{len(answers)}"
+                answers[child] = asyncio.get_running_loop().create_future()
+                started.put_nowait((child, data["prompt"]))
+                return {"rlm_child_id": child, "name": data["kwargs"]["name"],
+                        "session_dir": str(self.directory), "model": "fake"}
+            self.assertEqual(kind, "rlm.collect")
+            child, = data["targets"]
+            return {"results": [{"rlm_child_id": child, "status": "done", "settled": True,
+                                 "answer_text": await answers[child]}]}
+
+        with patch("rlm.host_request", side_effect=host):
+            a = (await rlm.factory.run("archive-draft"))["run_id"]
+            try:
+                async with asyncio.timeout(3):
+                    child, prompt = await started.get()
+                    self.assertEqual(prompt, "archive: produce one short word")
+                    answers[child].set_result("preface")
+                    paused = await rlm.factory.watch(a, timeout=2)
+                    self.assertEqual((paused["state"], paused["pause_reason"]), ("paused", "max_children exceeded"))
+                    self.assertEqual(paused["children"], {"produce": child})
+                    self.assertTrue(started.empty())
+                    await rlm.factory.resume(a)
+                    consumer, prompt = await started.get()
+                    self.assertEqual(prompt, "archive: use preface")
+                    self.assertNotEqual(consumer, child)
+                    answers[consumer].set_result("")
+                    self.assertEqual((await rlm.factory.watch(a, timeout=2))["state"], "done")
+                    self.assertEqual(len(answers), 2)
+            finally:
+                for answer in answers.values():
+                    if not answer.done():
+                        answer.set_result("")
+                async with asyncio.timeout(3):
+                    await rlm.factory.stop(a)
