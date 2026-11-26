@@ -4,7 +4,7 @@ title: Run and recover named machines from Python
 status: In Progress
 assignee: []
 created_date: '2026-11-22T22:17:00Z'
-updated_date: '2026-11-26T21:39:00Z'
+updated_date: '2026-11-26T21:42:00Z'
 labels: []
 milestone: m-0
 dependencies:
@@ -83,4 +83,10 @@ Next bounded slice: adapt v0.10.0 run.max_parallel for plain task entries in the
 Parallel plain-task slice published at code b740bc1e67c11c5644c0a5dcb29b3ddb41b7d6c3. Compared released v0.10.0 (763094e1) task admission, max_parallel, exact-child settlement, total child limits, and fail-fast/stop cleanup. The same Python executor now honors the per-run concurrency bound while successors consume exact settled text/JSON, not previews. Offline document fixtures cover independent slots refilling out of order, no early join, the total-admission pause and selected resume without replay, exact multi-child stop and fail-fast cleanup, and no cross-run effects. npm run check, git diff --check, 17 focused factory tests via uv run --locked python -m unittest discover -s test -p test_factory*.py, and three shuffled FactoryTest runs (13/421/2026) passed; five deliberate faults were caught. Foreach item expansion and the exact-base Bash comparison remain open. No live providers or acceptance closure.
 
 Next slice: adapt released foreach expansion and ordered answer aggregation in the existing runner, verifying bounded item and child admission, stop and run isolation with offline document fixtures. Compare the two Bash failures at the exact base and assess both acceptance criteria and remaining released gaps separately.
+
+Bounded foreach published at code 3186cc4d40a2fea2d44f6b77d5812e8574e82d66. Adapted released v0.10.0 (763094e1) item expansion and aggregate answer capture: first max items, one child per item with per-run bounds, empty array settles without children, non-arrays fail, and exact settled answers are joined in item order before text/JSON binding. Offline chapter-index runs cover out-of-order completion with no early successor, per-child admission pause and selected resume without replay, exact multi-child stop with queued items not started, and cross-run isolation.
+
+Checks passed: npm run check (including check:test-policy), git diff --check, 18 Python factory tests, 9 TypeScript collect tests, FactoryTest shuffles 13/421/2026, and four caught deliberate foreach faults. On native macOS arm64, CPython 3.11.11, matching inherited test conditions, `uv run --locked python -m unittest discover -s test -p test_bash.py -v -k windows_without_bash_raises_teaching_error -k unconfigured_journal_stays_permissive` reproduced both results on exact base de7304377282d55d045a2ca98b13040dbf75f076 and the Episode: expected RuntimeError absent for Windows shell discovery; orphan-journal enrollment RuntimeError in the permissive case. No Bash changes; no full-suite pass claimed.
+
+Acceptance assessment: AC1 has direct offline evidence for ungated help, disabled no-spawn, and enabled named runs passing declared settled outputs under supported task, entry, transition, concurrency and item bounds. AC2 has direct offline evidence for distinct run/child IDs, selected status/watch, and scoped stop and paused resume. This supports both literal criteria on the implemented bounded task path, not full released parity. Material released differences remain: resident states, retries, run/state time budgets, continue and escalate (released default) failure behavior, and the released inline run_machine and richer graph/watch diagnostics. DAG preflight still rejects a node count above max_children rather than admitting to that bound and pausing. No terminal UI, later recovery, live providers, or lifecycle changes. Leave acceptance checkboxes unchanged pending owner review of the remaining baseline gaps.
 <!-- SECTION:NOTES:END -->
