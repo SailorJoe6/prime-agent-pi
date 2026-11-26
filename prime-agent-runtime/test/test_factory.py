@@ -492,3 +492,85 @@ class FactoryTest(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(prompts, ["review", "style", "approved", "Format title in plain style"])
             self.assertEqual(done["last_fired"], [{**join, "seq": 2, "when": None}, approved])
         self.assertEqual(rlm.harness.get_factory("format"), spec)
+
+    async def test_papi_13_bounded_document_reentry_uses_latest_settle(self):
+        self.settings.write_text('{"factory":{"enabled":true}}')
+        spec = {
+            "states": [
+                {"id": "style", "entry": True, "subagent": {"prompt": "Style for atlas"},
+                 "outputs": [{"name": "tone", "type": "text"}]},
+                {"id": "review", "max_entries": 2,
+                 "subagent": {"prompt": "Review {revision}"},
+                 "inputs": [{"name": "revision", "type": "text", "from": "edit.revision", "optional": True}],
+                 "outputs": [{"name": "edit", "type": "json"}, {"name": "note", "type": "json"}]},
+                {"id": "edit", "max_entries": 2, "subagent": {"prompt": "Edit document"},
+                 "outputs": [{"name": "revision", "type": "text"}]},
+                {"id": "label", "max_entries": 3, "subagent": {"prompt": "Label in {tone} style: {note}"},
+                 "inputs": [{"name": "tone", "type": "text", "from": "style.tone"},
+                            {"name": "note", "type": "json", "from": "review.note", "optional": True}]},
+            ],
+            "transitions": [
+                {"from": "style", "to": "review"},
+                {"from": "review", "to": "edit", "when": {"output": "edit", "op": "eq", "value": True}},
+                {"from": ["review", "style"], "to": "label"},
+                {"from": "edit", "to": "review"},
+            ],
+            "run": {"max_transitions": 3, "max_children": 3},
+        }
+        for label in ("atlas", "garden"):
+            spec["states"][0]["subagent"] = {"prompt": f"Style for {label}"}
+            rlm.harness.save_factory(label, spec)
+        scripts = {
+            label: [(f"Style for {label}", label), ("Review None", '{"edit":true,"note":"draft"}'),
+                    ("Edit document", f"revised {label}"), (f'Label in {label} style: "draft"', None),
+                    (f"Review revised {label}", '{"edit":true}'), ("Edit document", f"final {label}"),
+                    (f"Label in {label} style: null", None)]
+            for label in ("atlas", "garden")
+        }
+        labels = {}
+        spawns = {label: [] for label in scripts}
+        answers = {}
+
+        async def host(kind, data):
+            if kind == "rlm.run":
+                name = data["kwargs"]["name"]
+                _, run_id, _ = name.split("-")
+                label = labels[run_id]
+                offset = len(spawns[label])
+                self.assertLess(offset, len(scripts[label]), "unexpected child admission")
+                prompt, answer = scripts[label][offset]
+                self.assertEqual(data["prompt"], prompt)
+                child = f"child-{label}-{offset}"
+                answers[child] = answer
+                spawns[label].append(child)
+                return {"rlm_child_id": child, "name": name, "session_dir": str(self.directory), "model": "fake"}
+            self.assertEqual(kind, "rlm.collect")
+            child, = data["targets"]
+            self.assertIn(child, answers)
+            return {"results": [{"rlm_child_id": child, "status": "done", "settled": True,
+                                 "answer_preview": "not the settled output", "answer_text": answers.pop(child)}]}
+
+        with patch("rlm.host_request", side_effect=host):
+            atlas = (await rlm.factory.run("atlas"))["run_id"]
+            labels[atlas] = "atlas"
+            garden = (await rlm.factory.run("garden"))["run_id"]
+            labels[garden] = "garden"
+            self.assertNotEqual(atlas, garden)
+            await rlm.factory.watch(atlas, timeout=2)
+            for run_id in (atlas, garden):
+                self.assertEqual((await rlm.factory.status(run_id))["pause_reason"], "max_transitions exceeded")
+            await rlm.factory.resume(atlas)
+            self.assertEqual((await rlm.factory.watch(atlas, timeout=2))["pause_reason"], "max_children exceeded")
+            self.assertEqual([len(spawns[label]) for label in scripts], [3, 3])
+            self.assertEqual((await rlm.factory.status(garden))["pause_reason"], "max_transitions exceeded")
+            self.assertEqual((await rlm.factory.stop(garden))["state"], "stopped")
+            with self.assertRaisesRegex(ValueError, "not paused"):
+                await rlm.factory.resume(garden)
+            await rlm.factory.resume(atlas)
+            done = await rlm.factory.watch(atlas, timeout=2)
+            self.assertEqual((done["state"], done["error"]), ("done", None))
+            self.assertEqual(done["children"]["review"], "child-atlas-4")
+            self.assertEqual([edge["to"] for edge in reversed(done["last_fired"])],
+                             ["review", "edit", "label", "review", "edit", "label"])
+            self.assertEqual([len(spawns[label]) for label in scripts], [7, 3])
+            self.assertFalse(answers)

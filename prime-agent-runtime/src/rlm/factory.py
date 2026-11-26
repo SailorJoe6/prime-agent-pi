@@ -54,7 +54,7 @@ max_entries and set run limits in the run block.
 Opt in by adding {"factory": {"enabled": true}} to your agent settings.json.
 Use await rlm.factory.graph(name) to inspect a saved definition without
 starting children. Library files can be validated with rlm.machine_library.
-Run a one-shot machine or DAG with await rlm.factory.run(name) and inspect its
+Run a task machine or DAG with await rlm.factory.run(name) and inspect its
 returned run_id with await rlm.factory.status(run_id). Use
 await rlm.factory.watch(run_id, timeout=5) to wait for its graph to change,
 await rlm.factory.resume(run_id) to continue a paused run, and
@@ -304,16 +304,16 @@ def _prepare_machine(spec: dict[str, Any], harness: HarnessState) -> tuple[list[
     states = machine["states"]
     limits = machine.get("run") or {}
     if "budget_ms" in limits or limits.get("failure_policy", "fail_fast") != "fail_fast":
-        raise ValueError("one-shot execution does not support time budgets or custom failure handling")
-    if len(states) > limits.get("max_children", schema.RUN_MAX_CHILDREN_DEFAULT):
+        raise ValueError("task execution does not support time budgets or custom failure handling")
+    if "nodes" in spec and len(states) > structure["run"]["max_children"]:
         raise ValueError("machine exceeds run.max_children")
 
     for state in states:
         key = state["id"]
         if (state.get("lifecycle", "task") != "task" or state.get("foreach") is not None
-                or state.get("max_entries", 1) != 1 or state.get("retries", 0) or "budget_ms" in state
+                or state.get("retries", 0) or "budget_ms" in state
                 or state.get("failure_policy", "fail_fast") != "fail_fast"):
-            raise ValueError(f"state {key!r}: this run path only supports one-shot task states")
+            raise ValueError(f"state {key!r}: this run path only supports task states without retries, budgets, or custom failure handling")
         subagent = state["subagent"]
         if isinstance(subagent, str):
             entry = harness.get("subagent", subagent)
@@ -411,34 +411,51 @@ class FactoryRuns:
             cancelled = await asyncio.shield(run.worker)
         return {"run_id": run_id, "state": run.state, "cancelled": cancelled}
 
+    async def _pause(self, run: _Run, reason: str) -> None:
+        run.pause_released.clear()
+        run.state = "paused"
+        run.pause_reason = reason
+        run.notify()
+        await run.pause_released.wait()
+
     async def _execute(
         self, run: _Run, states: list[dict[str, Any]], spawn: _Spawn, collect: _Collect,
         delete: _DeleteChild,
     ) -> list[str]:
-        outputs: dict[str, str] = {}
+        outputs: dict[str, dict[str, str]] = {}
         transitions = 0
         transition_limit = run.machine["run"]["max_transitions"]
+        child_limit = run.machine["run"]["max_children"]
         by_id = {state["id"]: state for state in states}
         ready = deque(state["id"] for state in states if state.get("entry"))
-        entered = set(ready)
-        settled: set[str] = set()
-        outgoing: dict[str, list[tuple[dict[str, Any], set[str]]]] = {}
-        for edge in run.machine["transitions"]:
+        entries = dict.fromkeys(ready, 1)
+        max_entries = {row["id"]: row["max_entries"] for row in run.machine["states"]}
+        settled: dict[str, int] = {}
+        outgoing: dict[str, list[tuple[int, dict[str, Any]]]] = {}
+        joined: dict[int, tuple[int, ...]] = {}
+        for edge_index, edge in enumerate(run.machine["transitions"]):
             source = edge["from"]
-            sources = {source} if isinstance(source, str) else set(source)
-            for key in sources:
-                outgoing.setdefault(key, []).append((edge, sources))
+            for key in dict.fromkeys([source] if isinstance(source, str) else source):
+                outgoing.setdefault(key, []).append((edge_index, edge))
+        required_sources = {
+            key: {port["from"].partition(".")[0] for port in state.get("inputs") or []
+                  if not port.get("optional")}
+            for key, state in by_id.items()
+        }
         current = ""
         index = 0
         cancelled: list[str] = []
         try:
             while ready and run.state == "running":
-                current = ready.popleft()
+                # Leave entries with unsettled required inputs queued while another
+                # entry can make progress. With no such entry, report the missing input.
+                current = next((key for key in ready if required_sources[key] <= settled.keys()), ready[0])
+                ready.remove(current)
                 state = by_id[current]
-                index += 1
                 bindings = {}
                 for port in state.get("inputs") or []:
-                    value = outputs.get(port["from"])
+                    source, _, output = port["from"].partition(".")
+                    value = outputs.get(source, {}).get(output)
                     if value is not None:
                         bindings[port["name"]] = value
                     elif port.get("optional"):
@@ -447,6 +464,11 @@ class FactoryRuns:
                         raise ValueError(f"missing {port['type']} output {port['from']!r}")
                 subagent = state["subagent"]
                 prompt = _render_prompt(subagent["prompt"], bindings)
+                if index == child_limit:
+                    await self._pause(run, "max_children exceeded")
+                    if run.state != "running":
+                        break
+                index += 1
                 handle = await spawn(prompt, name=f"factory-{run.run_id}-{index}",
                                      model=subagent.get("model"), thinking=subagent.get("thinking"))
                 run.active = handle
@@ -471,30 +493,37 @@ class FactoryRuns:
                     break
 
                 captured = _capture_outputs(result.answer_text or "", ports)
-                outputs.update({f"{current}.{name}": value for name, value in captured.items()})
+                outputs[current] = captured
                 guard_values = {
                     name: json.loads(captured[name]) if port["type"] == "json" else captured[name]
                     for port in ports if (name := port["name"]) in captured
                 }
-                settled.add(current)
-                for edge, sources in outgoing.get(current, []):
+                settled[current] = index
+                for edge_index, edge in outgoing.get(current, []):
                     target = edge["to"]
                     when = edge.get("when")
-                    if target in entered or not sources <= settled:
-                        continue
+                    source = edge["from"]
+                    signature = None
+                    if isinstance(source, list):
+                        if any(key not in settled for key in source):
+                            continue
+                        signature = tuple(settled[key] for key in source)
+                        if joined.get(edge_index) == signature:
+                            continue
                     if when is not None and not _guard_passes(when, guard_values):
                         continue
+                    if entries.get(target, 0) >= max_entries[target]:
+                        continue
                     if transitions == transition_limit:
-                        run.state = "paused"
-                        run.pause_reason = "max_transitions exceeded"
-                        run.notify()
-                        await run.pause_released.wait()
+                        await self._pause(run, "max_transitions exceeded")
                         if run.state != "running":
                             break
+                    if signature is not None:
+                        joined[edge_index] = signature
                     transitions += 1
                     run.last_fired.appendleft({"from": edge["from"], "to": target,
                                                "seq": transitions, "when": when})
-                    entered.add(target)
+                    entries[target] = entries.get(target, 0) + 1
                     ready.append(target)
                     run.notify()
         except Exception as exc:

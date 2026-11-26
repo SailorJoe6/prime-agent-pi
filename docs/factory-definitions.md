@@ -141,10 +141,11 @@ returns an empty run list. Pass a run ID to `graph` to inspect that run instead.
 ## Run a named machine from Python
 
 With `factory.enabled` set to `true`, `run` first checks the harness and then
-looks in the machine library. It does not edit either definition. This run path accepts one-shot DAGs and
-explicit task machines with text and JSON ports. It runs one child at a time
-per run. It checks `max_children` before starting and applies `max_transitions`
-as the run proceeds.
+looks in the machine library. It does not edit either definition. This run path
+accepts one-shot DAGs and explicit task machines with text and JSON ports. It
+runs one child at a time per run. A DAG with more nodes than `max_children`
+is rejected before launch. An explicit machine counts actual child admissions,
+including re-entries, against `max_children`.
 
 ```python
 rlm.harness.save_factory("color-label", {"nodes": [
@@ -174,13 +175,16 @@ single-source transition can test settled output, for example:
 ```
 
 A missing port or path does not pass a guard. A joined transition such as
-`{"from":["outline","style"],"to":"format"}` waits for every source to settle.
-Multiple passing transitions can queue different targets, but each state
-starts at most once. `graph` and `watch` show recent fired edges in
-`last_fired`, newest first, including their guards when present.
+`{"from":["outline","style"],"to":"format"}` waits for every source to settle
+and can fire again when a source settles a new entry. Each state can be entered
+up to its `max_entries` (default `1`), including its initial entry. Transitions
+to a state at its limit do not queue another child. Each entry binds from the
+latest settled outputs of its input sources. If that settle omitted a port,
+an earlier value is not reused. `status` shows the latest child ID per state;
+`graph` and `watch` show recent fired edges in `last_fired`, newest first.
 
-Re-entry, resident states, parallel or `foreach` fan-out, retries, time budgets,
-and custom failure handling are not supported. Run records are kernel-local
+Resident states, parallel or `foreach` fan-out, retries, time budgets, and
+custom failure handling are not supported. Run records are kernel-local
 and do not survive a restart.
 Children are ordinary RLM children and remain visible through the existing
 child APIs until deleted.
@@ -213,5 +217,8 @@ pauses before starting the next child. `status`, `graph`, and `watch` report
 `state: "paused"` and `pause_reason: "max_transitions exceeded"`. Call
 `await rlm.factory.resume(run_id)` to authorize that run to continue past the
 limit. It keeps settled outputs and does not restart completed states. This
-transition limit pauses a run at most once. You can also stop a paused run;
-stopping is terminal, and `resume` rejects any run that is not paused.
+transition limit pauses a run at most once. An explicit machine can also pause
+once before exceeding `run.max_children`, with `pause_reason: "max_children exceeded"`.
+Resume authorizes that run to continue past the reported limit; it does not
+raise a state's `max_entries`. You can also stop a paused run. Stopping is
+terminal, and `resume` rejects any run that is not paused.
