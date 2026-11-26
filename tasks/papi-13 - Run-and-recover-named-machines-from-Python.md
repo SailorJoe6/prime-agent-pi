@@ -4,7 +4,7 @@ title: Run and recover named machines from Python
 status: In Progress
 assignee: []
 created_date: '2026-11-22T22:17:00Z'
-updated_date: '2026-11-26T22:08:00Z'
+updated_date: '2026-11-26T22:11:00Z'
 labels: []
 milestone: m-0
 dependencies:
@@ -109,4 +109,8 @@ Published named-run retries and time budgets at code ddd835a9c3680a9ccae8375e27b
 Passed 26 focused offline tests via `uv run --locked python -m unittest discover -s test -p 'test_factory*.py' -v`, FactoryTest shuffles 13/421/2026, `npm run check` including test-policy, and `git diff --check`. Controlled-clock manuscript fixtures cover state budget boundary, admission timing, pause between admissions and during active work, selected resume, and terminal stop with two overlapping runs. Retry fixtures cover a foreach item, fresh child identity, admission cap, output order and exhaustion. Seven deliberate regressions were caught. No full-suite or released-parity claim; residents, Python diagnostics, released preview behavior and unnamed execution remain open. Acceptance checkboxes and lifecycle unchanged; not merge-ready.
 
 Next bounded slice: adapt v0.10.0 (763094e1) resident admission, graph completion, bounds and failure, and exact selected-run stop after completion using the existing Pi child lifecycle. Validate with offline document fixtures and overlapping runs. No new host service or persistence; diagnostics, preview and unnamed execution remain outside this slice.
+
+Published named-run residents at code 678becd394133447e59087ee99e47c08de9cc92a. Adapted resident lifecycle from exact v0.10.0 763094e1b6a7c17450ee8399b06cda1853847ca5. Residents use the existing Pi rlm.spawn and exact delete_subagent handle; admission consumes the same max_children and max_parallel bounds. Queued residents count as unfinished work. Once only admitted residents remain, graph completion does not wait on them. Saturation fails instead of wedging and retains residents for selected stop; fail-fast retires only that run’s live children, while continue can end in error with a resident still attached. Pi uses parent-scoped one-turn child sessions: the initial turn may settle, and the graph does not monitor or restart it after completion. No provider liveness guarantee, new service, persistence, or restart recovery.
+
+29 focused offline factory tests passed via `uv run --locked python -m unittest discover -s test -p 'test_factory*.py' -v`; FactoryTest shuffles 13/421/2026, `npm run check` (including test-policy), and `git diff --check` passed. Document fixtures cover queued resident admission at the child cap, normal completion and exact selected stop with another resident run untouched, resident-held parallel cap, and continue vs fail-fast with a resident sibling. Four deliberate regressions caught. No full-suite or full-parity claim. Diagnostics, released preview, and unnamed execution remain open. Acceptance checkboxes and lifecycle unchanged; not merge-ready.
 <!-- SECTION:NOTES:END -->
