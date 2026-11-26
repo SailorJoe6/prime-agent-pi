@@ -4,7 +4,7 @@ title: Run and recover named machines from Python
 status: In Progress
 assignee: []
 created_date: '2026-11-22T22:17:00Z'
-updated_date: '2026-11-26T22:04:00Z'
+updated_date: '2026-11-26T22:08:00Z'
 labels: []
 milestone: m-0
 dependencies:
@@ -107,4 +107,6 @@ Next bounded slice: adapt v0.10.0 (763094e1) per-state child retries and run/sta
 Published named-run retries and time budgets at code ddd835a9c3680a9ccae8375e27bb6d043f052e62. Compared v0.10.0 (763094e1) admission, settlement, retry and budget behavior. A settled child failure retries the same rendered item with a fresh exact handle and counts toward the run-wide child cap, without graph re-entry or early output binding. Exhaustion uses the existing failure policy; input/admission errors are not retried. Pi does not add provider-specific admission backoff in this slice. Successful attempts observed beyond state budget_ms fail through that policy, with no output or retry; timing starts after admission. Run budget_ms pauses the selected run once before further admission or between collects, without interrupting host calls or deleting children. Selected resume continues without replay and stop stays terminal with exact-child cleanup.
 
 Passed 26 focused offline tests via `uv run --locked python -m unittest discover -s test -p 'test_factory*.py' -v`, FactoryTest shuffles 13/421/2026, `npm run check` including test-policy, and `git diff --check`. Controlled-clock manuscript fixtures cover state budget boundary, admission timing, pause between admissions and during active work, selected resume, and terminal stop with two overlapping runs. Retry fixtures cover a foreach item, fresh child identity, admission cap, output order and exhaustion. Seven deliberate regressions were caught. No full-suite or released-parity claim; residents, Python diagnostics, released preview behavior and unnamed execution remain open. Acceptance checkboxes and lifecycle unchanged; not merge-ready.
+
+Next bounded slice: adapt v0.10.0 (763094e1) resident admission, graph completion, bounds and failure, and exact selected-run stop after completion using the existing Pi child lifecycle. Validate with offline document fixtures and overlapping runs. No new host service or persistence; diagnostics, preview and unnamed execution remain outside this slice.
 <!-- SECTION:NOTES:END -->
