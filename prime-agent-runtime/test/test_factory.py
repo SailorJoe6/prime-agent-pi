@@ -22,6 +22,8 @@ class FactoryTest(unittest.IsolatedAsyncioTestCase):
         self.assertIn("rlm.factory.graph", rlm.factory.help())
         with self.assertRaisesRegex(ValueError, "factory is disabled"):
             await rlm.factory.graph("unknown")
+        with self.assertRaisesRegex(ValueError, "factory is disabled"):
+            await rlm.factory.resume("unknown")
         for content in (b"{", b"\xff", b"null", b"[]", b'{"factory":true}',
                         b'{"factory.enabled":true}', b'{"factory":{"enabled":1}}',
                         b'{"factory":{"enabled":"true"},"factory.enabled":true}'):
@@ -84,13 +86,11 @@ class FactoryTest(unittest.IsolatedAsyncioTestCase):
             self.settings.write_text('{"factory":{"enabled":true}}')
             with self.assertRaises(ValueError):
                 await rlm.factory.run("unknown")
-            for key in ("max_children", "max_transitions"):
-                spec = self.text_dag("limited")
-                spec["nodes"].append({"id": "third", "depends_on": ["consume"], "subagent": {"prompt": "Third"}})
-                spec["run"] = {key: 1}
-                rlm.harness.save_factory("limited", spec)
-                with self.assertRaisesRegex(ValueError, key):
-                    await rlm.factory.run("limited")
+            spec = self.text_dag("limited")
+            spec["run"] = {"max_children": 1}
+            rlm.harness.save_factory("limited", spec)
+            with self.assertRaisesRegex(ValueError, "max_children"):
+                await rlm.factory.run("limited")
             spec = self.text_dag("unresolved")
             spec["nodes"][0]["subagent"] = "unknown-subagent"
             rlm.harness.save_factory("unresolved", spec)
@@ -314,3 +314,79 @@ class FactoryTest(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(snap.keys(), graph.keys())
             self.assertEqual((snap["run_id"], snap["state"], snap["nodes"]), (run_id, "stopped", []))
             host.assert_not_called()
+
+    async def test_papi_13_transition_pause_resume_and_stop_are_scoped(self):
+        self.settings.write_text('{"factory":{"enabled":true}}')
+        for label in ("A", "B"):
+            spec = self.text_dag(label)
+            spec["run"] = {"max_transitions": 1}
+            spec["nodes"].extend([
+                {"id": "label", "depends_on": ["consume"], "subagent": {"prompt": f"{label}: label {{word}}"},
+                 "inputs": [{"name": "word", "type": "text", "from": "produce.word"}]},
+                {"id": "finish", "depends_on": ["label"], "subagent": {"prompt": f"{label}: finish"}},
+            ])
+            rlm.harness.save_factory(label, spec)
+
+        for resume_before_stop in (False, True):
+            with self.subTest(resume_before_stop=resume_before_stop):
+                requests = []
+                collecting = asyncio.Queue()
+                replies = {}
+                run_ids = []
+
+                async def host(kind, data):
+                    if kind == "rlm.run":
+                        child = f"child-{len(requests) + 1}"
+                        requests.append(data["prompt"])
+                        return {"rlm_child_id": child, "name": data["kwargs"]["name"],
+                                "session_dir": str(self.directory), "model": "fake"}
+                    self.assertEqual(kind, "rlm.collect", "no settled child should be deleted")
+                    (child,) = data["targets"]
+                    replies[child] = asyncio.get_running_loop().create_future()
+                    collecting.put_nowait(child)
+                    return {"results": [{"rlm_child_id": child, **await replies[child]}]}
+
+                def settle(child, answer=None):
+                    replies[child].set_result({"status": "done", "settled": True, "answer_preview": answer})
+
+                with patch("rlm.host_request", side_effect=host):
+                    try:
+                        async with asyncio.timeout(3):
+                            for label, word in (("A", "red"), ("B", "blue")):
+                                run_id = (await rlm.factory.run(label))["run_id"]
+                                run_ids.append(run_id)
+                                produce = await collecting.get()
+                                settle(produce, word)
+                                consume = await collecting.get()
+                                self.assertEqual(requests[-2:], [f"{label}: produce one short word", f"{label}: use {word}"])
+                                settle(consume)
+                                snapshot = await rlm.factory.watch(run_id, timeout=30)
+                                self.assertTrue(snapshot["changed"])
+                                self.assertEqual((snapshot["state"], snapshot["pause_reason"]),
+                                                 ("paused", "max_transitions exceeded"))
+                                self.assertEqual(snapshot["children"], {"produce": produce, "consume": consume})
+                                self.assertEqual(snapshot["active_nodes"], [])
+                                self.assertEqual((await rlm.factory.status(run_id))["pause_reason"], snapshot["pause_reason"])
+                            a, b = run_ids
+                            self.assertEqual((await rlm.factory.resume(a))["state"], "running")
+                            self.assertEqual((await rlm.factory.graph(b))["state"], "paused")
+                            if resume_before_stop:
+                                # Same turn of the event loop: stop wins before the resumed worker starts a child.
+                                await rlm.factory.resume(b)
+                            self.assertEqual(await rlm.factory.stop(b), {"run_id": b, "state": "stopped", "cancelled": []})
+                            with self.assertRaisesRegex(ValueError, "not paused"):
+                                await rlm.factory.resume(b)
+                            settle(await collecting.get())
+                            settle(await collecting.get())
+                            final = await rlm.factory.watch(a, timeout=30)
+                            self.assertEqual((final["state"], final["pause_reason"]), ("done", None))
+                            self.assertEqual(requests, ["A: produce one short word", "A: use red",
+                                                        "B: produce one short word", "B: use blue",
+                                                        "A: label red", "A: finish"])
+                    finally:
+                        for child, reply in replies.items():
+                            if not reply.done():
+                                settle(child)
+                        async with asyncio.timeout(3):
+                            for run_id in run_ids:
+                                await rlm.factory.stop(run_id)

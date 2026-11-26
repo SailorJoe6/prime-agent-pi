@@ -563,6 +563,10 @@ class _RLMFactoryNamespace:
         require_factory_enabled()
         return await self._runs.watch(run_id, timeout, compact=compact)
 
+    async def resume(self, run_id: str) -> dict[str, Any]:
+        require_factory_enabled()
+        return self._runs.resume(run_id)
+
     async def stop(self, run_id: str) -> dict[str, Any]:
         require_factory_enabled()
         return await self._runs.stop(run_id)

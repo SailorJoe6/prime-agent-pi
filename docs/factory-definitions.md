@@ -143,7 +143,8 @@ returns an empty run list. Pass a run ID to `graph` to inspect that run instead.
 With `factory.enabled` set to `true`, `run` first checks the harness and then
 looks in the machine library. It does not edit either definition. This initial
 run path accepts one-shot DAGs with text ports and runs one child at a time per
-run. It checks `max_children` and `max_transitions` before starting.
+run. It checks `max_children` before starting and applies `max_transitions`
+as the run proceeds.
 
 ```python
 rlm.harness.save_factory("color-label", {"nodes": [
@@ -166,7 +167,7 @@ this run path. Run records are kernel-local and do not survive a restart.
 Children are ordinary RLM children and remain visible through the existing
 child APIs until deleted.
 
-### Watch or stop one run
+### Watch, resume, or stop one run
 
 ```python
 run_id = started["run_id"]
@@ -187,5 +188,12 @@ existing child API to delete its active child by exact ID. It does not delete
 children already observed to be settled or touch another run. A stop requested
 while child admission is in flight waits for that admission before acting;
 if a collect call is already in flight, stop checks its result first. Look for
-`stopped` in the result. If the stop fails, `status` reports the error. Stopping
-is not pausing; paused-run resume is not yet supported.
+`stopped` in the result. If the stop fails, `status` reports the error.
+
+If firing the next transition would exceed `run.max_transitions`, the run
+pauses before starting the next child. `status`, `graph`, and `watch` report
+`state: "paused"` and `pause_reason: "max_transitions exceeded"`. Call
+`await rlm.factory.resume(run_id)` to authorize that run to continue past the
+limit. It keeps settled outputs and does not restart completed states. This
+transition limit pauses a run at most once. You can also stop a paused run;
+stopping is terminal, and `resume` rejects any run that is not paused.

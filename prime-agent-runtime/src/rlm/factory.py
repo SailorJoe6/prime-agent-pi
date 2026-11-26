@@ -54,7 +54,8 @@ starting children. Library files can be validated with rlm.machine_library.
 Run a one-shot text DAG with await rlm.factory.run(name) and inspect its
 returned run_id with await rlm.factory.status(run_id). Use
 await rlm.factory.watch(run_id, timeout=5) to wait for its graph to change,
-and await rlm.factory.stop(run_id) to stop its active work.
+await rlm.factory.resume(run_id) to continue a paused run, and
+await rlm.factory.stop(run_id) to stop it permanently.
 """
 
 
@@ -158,6 +159,8 @@ class _Run:
     worker: asyncio.Task[list[str]] | None = None
     changed: asyncio.Event = field(default_factory=asyncio.Event)
     error: str | None = None
+    pause_reason: str | None = None
+    pause_released: asyncio.Event = field(default_factory=asyncio.Event)
 
     def notify(self) -> None:
         event, self.changed = self.changed, asyncio.Event()
@@ -196,8 +199,6 @@ def _prepare_dag(spec: dict[str, Any], harness: HarnessState) -> tuple[list[dict
         raise ValueError("named DAG execution does not yet support time budgets or custom failure handling")
     if len(states) > limits.get("max_children", schema.RUN_MAX_CHILDREN_DEFAULT):
         raise ValueError("DAG exceeds run.max_children")
-    if len(machine["transitions"]) > limits.get("max_transitions", schema.MAX_TRANSITIONS_CAP):
-        raise ValueError("DAG exceeds run.max_transitions")
 
     deps = {edge["to"]: {edge["from"]} if isinstance(edge["from"], str) else set(edge["from"])
             for edge in machine["transitions"]}
@@ -261,7 +262,8 @@ class FactoryRuns:
     def status(self, run_id: str) -> dict[str, Any]:
         run = self._require_run(run_id)
         return {"run_id": run.run_id, "spec_id": run.spec_id, "name": run.name,
-                "state": run.state, "children": dict(run.children), "error": run.error}
+                "state": run.state, "children": dict(run.children), "error": run.error,
+                "pause_reason": run.pause_reason}
 
     def graph(self, run_id: str) -> dict[str, Any]:
         run = self._require_run(run_id)
@@ -287,11 +289,23 @@ class FactoryRuns:
         # The serial snapshot has no answers or event history to compact.
         return {"changed": changed, **self.graph(run_id)}
 
+    def resume(self, run_id: str) -> dict[str, Any]:
+        run = self._require_run(run_id)
+        if run.state != "paused":
+            raise ValueError(f"factory run {run_id!r} is {run.state!r}, not paused")
+        run.state = "running"
+        run.pause_reason = None
+        run.pause_released.set()
+        run.notify()
+        return {"run_id": run_id, "state": run.state}
+
     async def stop(self, run_id: str) -> dict[str, Any]:
         run = self._require_run(run_id)
         cancelled: list[str] = []
-        if run.state == "running":
+        if run.state in ("running", "paused"):
             run.state = "stopping"
+            run.pause_reason = None
+            run.pause_released.set()
             run.notify()
             assert run.worker is not None
             # The worker owns admission and remembers the exact handle even if
@@ -304,12 +318,26 @@ class FactoryRuns:
         delete: _DeleteChild,
     ) -> list[str]:
         outputs: dict[str, str] = {}
+        transitions = 0
+        transition_limit = run.machine["run"]["max_transitions"]
         current = ""
         cancelled: list[str] = []
         try:
             for index, state in enumerate(states, start=1):
                 if run.state != "running":
                     break
+                # Each non-entry DAG state has one compiled transition, even
+                # when that transition joins several predecessors.
+                if not state["entry"]:
+                    if transitions == transition_limit:
+                        # The same worker continues past the limit only after resume.
+                        run.state = "paused"
+                        run.pause_reason = "max_transitions exceeded"
+                        run.notify()
+                        await run.pause_released.wait()
+                        if run.state != "running":
+                            break
+                    transitions += 1
                 current = state["id"]
                 bindings = {}
                 for port in state.get("inputs") or []:

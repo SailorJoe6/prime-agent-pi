@@ -1,3 +1,4 @@
 - Added Python factory help and opt-in graph previews for saved factory definitions.
 - Added opt-in named Python runs for one-shot text DAGs, with isolated child handles and per-run status.
 - Added opt-in Python controls to watch the live graph and stop the active child of one factory run.
+- Added a transition-limit pause and selected-run resume for named Python DAGs.
