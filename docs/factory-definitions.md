@@ -185,8 +185,18 @@ latest settled outputs of its input sources. If that settle omitted a port,
 an earlier value is not reused. `status` shows the latest child ID per state;
 `graph` and `watch` show recent fired edges in `last_fired`, newest first.
 
-Resident states, `foreach` item fan-out, retries, time budgets, and custom
-failure handling are not supported. Run records are kernel-local
+To index several chapters, have one state emit a JSON array and bind that
+output to an input named `chapter`. On the indexing state, set
+`"foreach": {"over": "chapter", "max": 8}` and use `{chapter}` in its prompt.
+The runner starts one child per item, up to the first eight in this example.
+Each child counts toward `run.max_children` and shares the run's parallel
+limit. An empty array settles with no children or outputs. A non-array value
+fails the run. When all items finish, their available answers are joined with
+blank lines in input order before declared text and JSON ports are captured.
+Use fenced JSON objects for named JSON outputs from multiple item answers.
+
+Resident states, retries, time budgets, and non-fail-fast failure policies
+are not supported. Run records are kernel-local
 and do not survive a restart.
 Children are ordinary RLM children and remain visible through the existing
 child APIs until deleted.
@@ -219,7 +229,7 @@ pauses before starting the next child. `status`, `graph`, and `watch` report
 `state: "paused"` and `pause_reason: "max_transitions exceeded"`. Call
 `await rlm.factory.resume(run_id)` to authorize that run to continue past the
 limit. It keeps settled outputs and does not restart completed states. This
-transition limit pauses a run at most once. An explicit machine can also pause
+transition limit pauses a run at most once. A run can also pause
 once before exceeding `run.max_children`, with `pause_reason: "max_children exceeded"`.
 Children already in flight may finish while the run is paused. Resume
 authorizes that run to continue past the reported limit; it does not

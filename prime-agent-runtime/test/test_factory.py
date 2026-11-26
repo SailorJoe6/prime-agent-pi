@@ -692,3 +692,122 @@ class FactoryTest(unittest.IsolatedAsyncioTestCase):
                         gate.set_result({"settled": False, "status": "running"})
                 async with asyncio.timeout(3):
                     await asyncio.gather(*stops)
+
+    async def test_papi_13_foreach_documents_keep_item_order_and_exact_stop(self):
+        self.settings.write_text('{"factory":{"enabled":true}}')
+        rlm.harness.save_factory("chapter-index", {
+            "nodes": [
+                {"id": "list", "subagent": {"prompt": "List chapters"},
+                 "outputs": [{"name": "chapters", "type": "json"}]},
+                {"id": "index", "subagent": {"prompt": "Index {chapter}"},
+                 "inputs": [{"name": "chapter", "type": "json", "from": "list.chapters"}],
+                 "foreach": {"over": "chapter", "max": 3},
+                 "outputs": [{"name": "index", "type": "text"}, {"name": "tag", "type": "json"}]},
+                {"id": "publish", "subagent": {"prompt": "Publish {index}|{tag}"},
+                 "inputs": [{"name": "index", "type": "text", "from": "index.index", "optional": True},
+                            {"name": "tag", "type": "json", "from": "index.tag", "optional": True}],
+                 "depends_on": ["index"]},
+            ],
+            "run": {"max_parallel": 2, "max_children": 3},
+        })
+        requests = {}
+        waiting = asyncio.Queue()
+        gates = {}
+        deleted = []
+        run_ids = []
+
+        async def host(kind, data):
+            if kind == "rlm.run":
+                name = data["kwargs"]["name"]
+                child = f"id-{name}"
+                self.assertNotIn(child, requests)
+                requests[child] = (name, data["prompt"])
+                return {"rlm_child_id": child, "name": name, "session_dir": str(self.directory), "model": "fake"}
+            if kind == "rlm.collect":
+                child, = data["targets"]
+                gates[child] = asyncio.get_running_loop().create_future()
+                waiting.put_nowait(child)
+                return {"results": [{"rlm_child_id": child, "answer_preview": "preview", **await gates[child]}]}
+            self.assertEqual(kind, "rlm.delete_subagent")
+            child = data["target"]
+            deleted.append(child)
+            return {"subagent": {"rlm_child_id": child, "session_name": requests[child][0],
+                                 "session_dir": str(self.directory), "status": "running"}}
+
+        def settle(child, answer=""):
+            gates[child].set_result({"settled": True, "status": "done", "answer_text": answer})
+
+        async def next_child(run, prompt):
+            child = await waiting.get()
+            name, actual = requests[child]
+            self.assertTrue(name.startswith(f"factory-{run}-"))
+            self.assertEqual(actual, prompt)
+            return child
+
+        async def until(run, state):
+            while (snapshot := await rlm.factory.graph(run))["state"] != state:
+                self.assertNotIn(snapshot["state"], ("done", "error", "stopped"), snapshot)
+                await rlm.factory.watch(run, timeout=30)
+            return snapshot
+
+        async def start(chapters):
+            run = (await rlm.factory.run("chapter-index"))["run_id"]
+            run_ids.append(run)
+            settle(await next_child(run, "List chapters"), chapters)
+            return run
+
+        with patch("rlm.host_request", side_effect=host):
+            try:
+                async with asyncio.timeout(3):
+                    a = await start('{"chapters":["Preface",{"section":2},"Appendix","Discarded"]}')
+                    a1 = await next_child(a, "Index Preface")
+                    a2 = await next_child(a, 'Index {"section": 2}')
+                    b = await start('{"chapters":["Garden","Pond","Paths"]}')
+                    b1 = await next_child(b, "Index Garden")
+                    b2 = await next_child(b, "Index Pond")
+                    self.assertEqual(len(requests), 6)
+                    second = '```json\n{"tag": "section"}\n```'
+                    settle(a2, second)
+                    paused = await until(a, "paused")
+                    self.assertEqual(paused["pause_reason"], "max_children exceeded")
+                    self.assertEqual(paused["active_nodes"], ["index"])
+                    self.assertEqual([edge["to"] for edge in paused["last_fired"]], ["index"])
+                    self.assertEqual(len(requests), 6)
+                    stopping = asyncio.create_task(rlm.factory.stop(b))
+                    try:
+                        await until(b, "stopping")
+                        gates[b1].set_result({"settled": False, "status": "running"})
+                        self.assertEqual((await stopping)["state"], "stopped")
+                    finally:
+                        stopping.cancel()
+                        await asyncio.gather(stopping, return_exceptions=True)
+                    self.assertCountEqual(deleted, [b1, b2])
+                    self.assertEqual((await rlm.factory.status(a))["state"], "paused")
+                    await rlm.factory.resume(a)
+                    a3 = await next_child(a, "Index Appendix")
+                    third = '```json\n{"tag": "appendix"}\n```'
+                    settle(a3, third)
+                    partial = await rlm.factory.watch(a, timeout=30)
+                    self.assertTrue(partial["changed"])
+                    self.assertEqual(partial["active_nodes"], ["index"])
+                    self.assertEqual([edge["to"] for edge in partial["last_fired"]], ["index"])
+                    settle(a1, "Opening notes")
+                    publish = await next_child(a, f'Publish Opening notes\n\n{second}\n\n{third}|"appendix"')
+                    settle(publish)
+                    await until(a, "done")
+                    self.assertEqual(len(requests), 8)
+                    self.assertCountEqual(deleted, [b1, b2])
+                    empty = await start('{"chapters":[]}')
+                    settle(await next_child(empty, "Publish None|null"))
+                    snapshot = await until(empty, "done")
+                    self.assertNotIn("index", snapshot["children"])
+                    invalid = await start('{"chapters":"not a list"}')
+                    self.assertIn("not a JSON list", (await until(invalid, "error"))["error"])
+                    self.assertEqual(len(requests), 11)
+            finally:
+                stops = [asyncio.create_task(rlm.factory.stop(run)) for run in run_ids]
+                for gate in gates.values():
+                    if not gate.done():
+                        gate.set_result({"settled": False, "status": "running"})
+                async with asyncio.timeout(3):
+                    await asyncio.gather(*stops)

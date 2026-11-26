@@ -49,7 +49,8 @@ Save a definition with rlm.harness.save_factory(name, spec). Use states and
 transitions, or use nodes for a DAG. Mark machine entry states with entry=true.
 Transitions can join multiple sources or guard a single source's output.
 Declare text or JSON ports to connect outputs to inputs. Bound loops with
-max_entries and set run limits in the run block.
+max_entries and set run limits in the run block. Use foreach to run one
+child per item of a bounded JSON list.
 
 Opt in by adding {"factory": {"enabled": true}} to your agent settings.json.
 Use await rlm.factory.graph(name) to inspect a saved definition without
@@ -136,6 +137,8 @@ def _machine_structure(machine: dict[str, Any]) -> dict[str, Any]:
             for key in ("model", "thinking"):
                 if subagent.get(key) is not None:
                     row[key] = subagent[key]
+        if "foreach" in state:
+            row["foreach"] = copy.deepcopy(state["foreach"])
         states.append(row)
     transitions = []
     for transition in machine.get("transitions") or []:
@@ -146,6 +149,19 @@ def _machine_structure(machine: dict[str, Any]) -> dict[str, Any]:
 
     return {"run": run, "states": states, "transitions": transitions,
             "order": [row["id"] for row in states]}
+
+
+@dataclass
+class _Entry:
+    sequence: int
+    key: str
+    prompts: list[str]
+    answers: list[str] = field(init=False)
+    remaining: int = field(init=False)
+
+    def __post_init__(self) -> None:
+        self.remaining = len(self.prompts)
+        self.answers = [""] * self.remaining
 
 
 @dataclass
@@ -289,6 +305,31 @@ def _render_prompt(template: str, values: dict[str, str]) -> str:
     return prompt + ("\n\n## Inputs\n" + "".join(extra) if extra else "")
 
 
+def _entry_prompts(state: dict[str, Any], outputs: dict[str, dict[str, str]]) -> list[str]:
+    bindings: dict[str, str] = {}
+    foreach = state.get("foreach")
+    over = foreach["over"] if foreach is not None else None
+    items: list[Any] = []
+    for port in state.get("inputs") or []:
+        source, _, output = port["from"].partition(".")
+        name = port["name"]
+        value = outputs.get(source, {}).get(output)
+        if value is None and not port.get("optional"):
+            raise ValueError(f"missing {port['type']} output {port['from']!r}")
+        if name == over:
+            parsed = json.loads(value) if value is not None else []
+            if not isinstance(parsed, list):
+                raise ValueError(f"foreach.over input {over!r} is not a JSON list")
+            items = parsed[:foreach["max"]]
+        else:
+            bindings[name] = value if value is not None else ("null" if port["type"] == "json" else "None")
+    template = state["subagent"]["prompt"]
+    if over is None:
+        return [_render_prompt(template, bindings)]
+    return [_render_prompt(template, {**bindings, over: item if isinstance(item, str) else json.dumps(item)})
+            for item in items]
+
+
 def _prepare_machine(spec: dict[str, Any], harness: HarnessState) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     errors = schema.validate_factory_spec(spec)
     if errors:
@@ -309,7 +350,7 @@ def _prepare_machine(spec: dict[str, Any], harness: HarnessState) -> tuple[list[
 
     for state in states:
         key = state["id"]
-        if (state.get("lifecycle", "task") != "task" or state.get("foreach") is not None
+        if (state.get("lifecycle", "task") != "task"
                 or state.get("retries", 0) or "budget_ms" in state
                 or state.get("failure_policy", "fail_fast") != "fail_fast"):
             raise ValueError(f"state {key!r}: this run path only supports task states without retries, budgets, or custom failure handling")
@@ -363,7 +404,7 @@ class FactoryRuns:
 
     def graph(self, run_id: str) -> dict[str, Any]:
         run = self._require_run(run_id)
-        nodes = [{"state_id": key, "status": status, "rlm_child_id": run.children[key]}
+        nodes = [{"state_id": key, "status": status, "rlm_child_id": run.children.get(key)}
                  for key, status in run.nodes.items()]
         return {**self.status(run_id), "machine": copy.deepcopy(run.machine), "nodes": nodes,
                 "active_nodes": list(dict.fromkeys(key for key, _ in run.active.values())),
@@ -425,9 +466,11 @@ class FactoryRuns:
         return results[0]
 
     @staticmethod
-    def _record_settlement(run: _Run, admission: int, result: RLMChildResult) -> None:
+    def _record_settlement(
+        run: _Run, admission: int, result: RLMChildResult, *, update_node: bool = True,
+    ) -> None:
         key, handle = run.active.pop(admission)
-        if run.children[key] == handle.rlm_child_id:
+        if update_node and run.children.get(key) == handle.rlm_child_id:
             run.nodes[key] = result.status
         run.notify()
 
@@ -458,39 +501,87 @@ class FactoryRuns:
         }
         current = ""
         index = 0
+        sequence = 0
+        pending: deque[tuple[_Entry, int]] = deque()
+        instances: dict[int, tuple[_Entry, int]] = {}
+        latest: dict[str, int] = {}
         cancelled: list[str] = []
         polls: dict[int, asyncio.Task[RLMChildResult]] = {}
-        try:
-            while (ready or run.active) and run.state == "running":
-                while ready and len(run.active) < parallel_limit and run.state == "running":
-                    # A required source may still be in flight. If no work can
-                    # settle, fall through to the ordinary missing-input error.
-                    candidate = next((key for key in ready if required_sources[key] <= settled.keys()), None)
-                    if candidate is None and run.active:
+
+        async def settle(entry: _Entry) -> None:
+            nonlocal transitions
+            key = entry.key
+            ports = by_id[key].get("outputs") or []
+            answer = "\n\n".join(answer for answer in entry.answers if answer)
+            captured = _capture_outputs(answer, ports)
+            outputs[key] = captured
+            guard_values = {
+                name: json.loads(captured[name]) if port["type"] == "json" else captured[name]
+                for port in ports if (name := port["name"]) in captured
+            }
+            settled[key] = entry.sequence
+            if latest[key] == entry.sequence:
+                run.nodes[key] = "done"
+            run.notify()
+            for edge_index, edge in outgoing.get(key, []):
+                target = edge["to"]
+                when = edge.get("when")
+                source = edge["from"]
+                signature = None
+                if isinstance(source, list):
+                    if any(key not in settled for key in source):
+                        continue
+                    signature = tuple(settled[key] for key in source)
+                    if joined.get(edge_index) == signature:
+                        continue
+                if when is not None and not _guard_passes(when, guard_values):
+                    continue
+                if entries.get(target, 0) >= max_entries[target]:
+                    continue
+                if transitions == transition_limit:
+                    await self._pause(run, "max_transitions exceeded")
+                    if run.state != "running":
                         break
-                    current = candidate or ready[0]
-                    ready.remove(current)
-                    state = by_id[current]
-                    bindings = {}
-                    for port in state.get("inputs") or []:
-                        source, _, output = port["from"].partition(".")
-                        value = outputs.get(source, {}).get(output)
-                        if value is not None:
-                            bindings[port["name"]] = value
-                        elif port.get("optional"):
-                            bindings[port["name"]] = "null" if port["type"] == "json" else "None"
-                        else:
-                            raise ValueError(f"missing {port['type']} output {port['from']!r}")
-                    subagent = state["subagent"]
-                    prompt = _render_prompt(subagent["prompt"], bindings)
+                if signature is not None:
+                    joined[edge_index] = signature
+                transitions += 1
+                run.last_fired.appendleft({"from": edge["from"], "to": target,
+                                           "seq": transitions, "when": when})
+                entries[target] = entries.get(target, 0) + 1
+                ready.append(target)
+                run.notify()
+
+        try:
+            while (ready or pending or run.active) and run.state == "running":
+                while (ready or pending) and len(run.active) < parallel_limit and run.state == "running":
+                    if not pending:
+                        # Let in-flight required sources settle before binding.
+                        candidate = next((key for key in ready if required_sources[key] <= settled.keys()), None)
+                        if candidate is None and run.active:
+                            break
+                        current = candidate or ready[0]
+                        ready.remove(current)
+                        state = by_id[current]
+                        sequence += 1
+                        entry = _Entry(sequence, current, _entry_prompts(state, outputs))
+                        latest[current] = entry.sequence
+                        if not entry.prompts:
+                            run.children.pop(current, None)
+                            await settle(entry)
+                            continue
+                        pending.extend((entry, item) for item in range(len(entry.prompts)))
+                    entry, item = pending.popleft()
+                    current = entry.key
+                    subagent = by_id[current]["subagent"]
                     if index == child_limit:
                         await self._pause(run, "max_children exceeded")
                         if run.state != "running":
                             break
                     index += 1
-                    handle = await spawn(prompt, name=f"factory-{run.run_id}-{index}",
+                    handle = await spawn(entry.prompts[item], name=f"factory-{run.run_id}-{index}",
                                          model=subagent.get("model"), thinking=subagent.get("thinking"))
                     run.active[index] = (current, handle)
+                    instances[index] = (entry, item)
                     run.children[current] = handle.rlm_child_id
                     run.nodes[current] = "running"
                     run.notify()
@@ -513,47 +604,16 @@ class FactoryRuns:
                     result = polls.pop(admission).result()
                 if not result.settled:
                     continue
-                self._record_settlement(run, admission, result)
+                entry, item = instances.pop(admission)
+                self._record_settlement(run, admission, result, update_node=run.state != "running" or result.status != "done")
                 if run.state != "running":
                     break
                 if result.status != "done":
                     raise RuntimeError(result.error or f"child settled with status {result.status!r}")
-                ports = by_id[current].get("outputs") or []
-
-                captured = _capture_outputs(result.answer_text or "", ports)
-                outputs[current] = captured
-                guard_values = {
-                    name: json.loads(captured[name]) if port["type"] == "json" else captured[name]
-                    for port in ports if (name := port["name"]) in captured
-                }
-                settled[current] = admission
-                for edge_index, edge in outgoing.get(current, []):
-                    target = edge["to"]
-                    when = edge.get("when")
-                    source = edge["from"]
-                    signature = None
-                    if isinstance(source, list):
-                        if any(key not in settled for key in source):
-                            continue
-                        signature = tuple(settled[key] for key in source)
-                        if joined.get(edge_index) == signature:
-                            continue
-                    if when is not None and not _guard_passes(when, guard_values):
-                        continue
-                    if entries.get(target, 0) >= max_entries[target]:
-                        continue
-                    if transitions == transition_limit:
-                        await self._pause(run, "max_transitions exceeded")
-                        if run.state != "running":
-                            break
-                    if signature is not None:
-                        joined[edge_index] = signature
-                    transitions += 1
-                    run.last_fired.appendleft({"from": edge["from"], "to": target,
-                                               "seq": transitions, "when": when})
-                    entries[target] = entries.get(target, 0) + 1
-                    ready.append(target)
-                    run.notify()
+                entry.answers[item] = result.answer_text or ""
+                entry.remaining -= 1
+                if not entry.remaining:
+                    await settle(entry)
         except Exception as exc:
             if run.state != "stopping" or not run.active:
                 run.state = "error"
@@ -576,8 +636,7 @@ class FactoryRuns:
                     if deleted.rlm_child_id != handle.rlm_child_id:
                         raise RuntimeError("delete did not return the exact factory child")
                     del run.active[admission]
-                    if run.children[key] == handle.rlm_child_id:
-                        run.nodes[key] = "cancelled"
+                    run.nodes[key] = "cancelled"
                     if key not in cancelled:
                         cancelled.append(key)
                 except Exception as exc:
