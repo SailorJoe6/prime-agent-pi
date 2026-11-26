@@ -4,7 +4,7 @@ title: Run and recover named machines from Python
 status: In Progress
 assignee: []
 created_date: '2026-11-22T22:17:00Z'
-updated_date: '2026-11-26T21:27:00Z'
+updated_date: '2026-11-26T21:29:00Z'
 labels: []
 milestone: m-0
 dependencies:
@@ -75,4 +75,6 @@ Next bounded slice: run one-shot explicit task machines serially in the existing
 Guard/join slice published at code 9ca3e485144c8e592a0d45c667d388e5fd2bbb01. Compared released v0.10.0 (763094e1) guard evaluation and settled-transition scheduling. The existing Python executor now accepts one-shot explicit task machines: evaluates guards on settled text/JSON, waits for all join sources, admits each state at most once, and exposes recent fired transitions in graph/watch. A pause at a join resumes without replay; default collect and exact child ownership are unchanged. Offline: npm run check, 15 factory tests via uv run --locked python -m unittest discover -s test -p test_factory*.py, three shuffled FactoryTest runs (13/421/2026), and three detected mutations (partial join, bool/number equality, missing path passing ne). No live providers or acceptance closure. Bounded re-entry, parallel and foreach fan-out, and the exact-base Bash comparison remain open.
 
 Next bounded slice: adapt released v0.10.0 serial task re-entry in the same executor. Count reserved entries per state, evaluate per-settle guards and join combinations, bind the latest settled outputs without stale fallback, and account for repeated child admissions. Verify with overlapping offline document-processing runs and pause/resume without replay. Leave parallel/foreach and the Bash baseline open.
+
+Bounded serial re-entry slice published at code 3e18f054d6845d41311cabdbcf9dcadc01899e7f. Compared released v0.10.0 (763094e1) entry caps, settle-driven transitions and joins, latest settled input binding, and total child-admission pause/resume. Re-entries use fresh exact child identities; missing ports never fall back to earlier values. Offline document fixtures overlap two runs, prove per-state entry bounds and repeated join output selection, resume one run past transition and child limits without replay, and stop the other without cross-run effects. npm run check and git diff --check passed; 16 focused factory tests via uv run --locked python -m unittest discover -s test -p test_factory*.py, three shuffled FactoryTest runs (13/421/2026), and five caught mutations. Parallel and foreach fan-out and the exact-base Bash comparison remain open. No live providers or acceptance closure.
 <!-- SECTION:NOTES:END -->
