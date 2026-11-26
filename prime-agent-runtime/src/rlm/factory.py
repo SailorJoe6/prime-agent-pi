@@ -11,6 +11,7 @@ import json
 import re
 from collections import deque
 from dataclasses import dataclass, field
+from time import monotonic
 from typing import TYPE_CHECKING, Any, Protocol
 from uuid import uuid4
 
@@ -353,15 +354,11 @@ def _prepare_machine(spec: dict[str, Any], harness: HarnessState) -> tuple[list[
 
     structure = _machine_structure(machine)
     states = machine["states"]
-    limits = machine.get("run") or {}
-    if "budget_ms" in limits:
-        raise ValueError("task execution does not support time budgets")
 
     for state in states:
         key = state["id"]
-        if (state.get("lifecycle", "task") != "task"
-                or state.get("retries", 0) or "budget_ms" in state):
-            raise ValueError(f"state {key!r}: this run path only supports task states without retries or budgets")
+        if state.get("lifecycle", "task") != "task":
+            raise ValueError(f"state {key!r}: this run path only supports task states")
         subagent = state["subagent"]
         if isinstance(subagent, str):
             entry = harness.get("subagent", subagent)
@@ -389,7 +386,7 @@ class FactoryRuns:
         spawn: _Spawn, collect: _Collect, delete: _DeleteChild,
     ) -> dict[str, Any]:
         states, machine = _prepare_machine(select_factory(spec_id, harness), harness)
-        run = _Run(uuid4().hex, spec_id, name, machine, asyncio.get_running_loop().time())
+        run = _Run(uuid4().hex, spec_id, name, machine, monotonic())
         self._runs[run.run_id] = run
         run.worker = asyncio.create_task(self._execute(run, states, spawn, collect, delete))
         return {"run_id": run.run_id, "spec_id": spec_id, "name": name,
@@ -417,7 +414,7 @@ class FactoryRuns:
         return {**self.status(run_id), "machine": copy.deepcopy(run.machine), "nodes": nodes,
                 "active_nodes": list(dict.fromkeys(key for key, _ in run.active.values())),
                 "last_fired": copy.deepcopy(list(run.last_fired)),
-                "elapsed_ms": int(1000 * (asyncio.get_running_loop().time() - run.started_at))}
+                "elapsed_ms": int(1000 * (monotonic() - run.started_at))}
 
     async def watch(self, run_id: str, timeout: float = 0.0, *, compact: bool = False) -> dict[str, Any]:
         run = self._require_run(run_id)
@@ -467,11 +464,13 @@ class FactoryRuns:
         await run.pause_released.wait()
 
     @staticmethod
-    async def _poll_child(collect: _Collect, handle: RLMSpawnHandle, include_answer: bool) -> RLMChildResult:
+    async def _poll_child(
+        collect: _Collect, handle: RLMSpawnHandle, include_answer: bool,
+    ) -> tuple[RLMChildResult, float]:
         results = await collect(handle, timeout_ms=1000, include_answer=include_answer)
         if len(results) != 1 or results[0].rlm_child_id != handle.rlm_child_id:
             raise RuntimeError("collect did not return the exact factory child")
-        return results[0]
+        return results[0], monotonic()
 
     @staticmethod
     def _record_settlement(
@@ -491,6 +490,8 @@ class FactoryRuns:
         transition_limit = run.machine["run"]["max_transitions"]
         child_limit = run.machine["run"]["max_children"]
         parallel_limit = run.machine["run"]["max_parallel"]
+        run_budget_ms = run.machine["run"].get("budget_ms")
+        budget_reported = False
         by_id = {state["id"]: state for state in states}
         ready = deque(state["id"] for state in states if state.get("entry"))
         entries = dict.fromkeys(ready, 1)
@@ -510,11 +511,18 @@ class FactoryRuns:
         current = ""
         index = 0
         sequence = 0
-        pending: deque[tuple[_Entry, int]] = deque()
-        instances: dict[int, tuple[_Entry, int]] = {}
+        pending: deque[tuple[_Entry, int, int]] = deque()
+        instances: dict[int, tuple[_Entry, int, int, float]] = {}
         latest: dict[str, int] = {}
         cancelled: list[str] = []
-        polls: dict[int, asyncio.Task[RLMChildResult]] = {}
+        polls: dict[int, asyncio.Task[tuple[RLMChildResult, float]]] = {}
+
+        async def check_run_budget() -> None:
+            nonlocal budget_reported
+            if (run_budget_ms is not None and not budget_reported
+                    and (monotonic() - run.started_at) * 1000 > run_budget_ms):
+                budget_reported = True
+                await self._pause(run, "run budget exceeded")
 
         async def settle(entry: _Entry) -> None:
             nonlocal transitions
@@ -600,8 +608,8 @@ class FactoryRuns:
                             run.children.pop(current, None)
                             await settle(entry)
                             continue
-                        pending.extend((entry, item) for item in range(len(entry.prompts)))
-                    entry, item = pending.popleft()
+                        pending.extend((entry, item, 1) for item in range(len(entry.prompts)))
+                    entry, item, attempt = pending.popleft()
                     if entry.failed:
                         continue
                     current = entry.key
@@ -610,6 +618,9 @@ class FactoryRuns:
                         await self._pause(run, "max_children exceeded")
                         if run.state != "running":
                             break
+                    await check_run_budget()
+                    if run.state != "running":
+                        break
                     index += 1
                     try:
                         handle = await spawn(entry.prompts[item], name=_child_label(subagent.get("name"), run.run_id, index),
@@ -618,17 +629,21 @@ class FactoryRuns:
                         await fail(entry, str(exc))
                         continue
                     run.active[index] = (current, handle)
-                    instances[index] = (entry, item)
+                    instances[index] = (entry, item, attempt, monotonic())
                     run.children[current] = handle.rlm_child_id
                     run.nodes[current] = "running"
                     run.notify()
                 if run.state != "running" or not run.active:
                     break
 
+                await check_run_budget()
+                if run.state != "running":
+                    break
+
                 # Answer capture only supports a single exact child per request.
                 if len(run.active) == 1 and not polls:
                     admission, (current, handle) = next(iter(run.active.items()))
-                    result = await self._poll_child(collect, handle, bool(by_id[current].get("outputs")))
+                    result, observed_at = await self._poll_child(collect, handle, bool(by_id[current].get("outputs")))
                 else:
                     for admission, (key, handle) in run.active.items():
                         if admission not in polls:
@@ -638,17 +653,26 @@ class FactoryRuns:
                     await asyncio.wait(polls.values(), return_when=asyncio.FIRST_COMPLETED)
                     admission = next(number for number, poll in polls.items() if poll.done())
                     current, _ = run.active[admission]
-                    result = polls.pop(admission).result()
+                    result, observed_at = polls.pop(admission).result()
                 if not result.settled:
                     continue
-                entry, item = instances.pop(admission)
+                entry, item, attempt, admitted_at = instances.pop(admission)
                 self._record_settlement(run, admission, result, update_node=run.state == "stopping")
                 if run.state != "running":
                     break
                 if entry.failed:
                     continue
                 if result.status != "done":
-                    await fail(entry, result.error or f"child settled with status {result.status!r}")
+                    if attempt <= by_id[current].get("retries", schema.NODE_RETRIES_DEFAULT):
+                        # Retry this rendered item, not its graph entry or its siblings.
+                        pending.appendleft((entry, item, attempt + 1))
+                    else:
+                        await fail(entry, result.error or f"child settled with status {result.status!r}")
+                    continue
+                state_budget_ms = by_id[current].get("budget_ms")
+                elapsed_ms = (observed_at - admitted_at) * 1000
+                if state_budget_ms is not None and elapsed_ms > state_budget_ms:
+                    await fail(entry, f"state budget_ms {state_budget_ms} exceeded ({int(elapsed_ms)}ms)")
                     continue
                 entry.answers[item] = result.answer_text or ""
                 entry.remaining -= 1
@@ -662,8 +686,8 @@ class FactoryRuns:
             for admission, poll in polls.items():
                 if not poll.done():
                     poll.cancel()
-                elif not poll.cancelled() and poll.exception() is None and poll.result().settled:
-                    self._record_settlement(run, admission, poll.result())
+                elif not poll.cancelled() and poll.exception() is None and poll.result()[0].settled:
+                    self._record_settlement(run, admission, poll.result()[0])
             if polls:
                 await asyncio.gather(*polls.values(), return_exceptions=True)
 

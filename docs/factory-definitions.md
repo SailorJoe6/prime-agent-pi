@@ -212,8 +212,20 @@ settlement after `continue` or resume, but a required input from that failure
 fails the dependent before admission. Optional inputs use the usual missing
 value. Failed `foreach` entries do not admit more items or publish partial outputs.
 
-Resident states, retries, and time budgets are not supported. Run records are kernel-local
-and do not survive a restart.
+Set `retries` on a state to allow extra attempts after a child settles with
+an error or is cancelled. Each retry uses a fresh child and counts toward
+`run.max_children`, but it uses the same rendered prompt and graph entry.
+For `foreach`, only the failed item is retried. Input binding and admission
+errors are not retried. Once attempts are exhausted, the entry’s failure
+policy applies.
+
+A state’s `budget_ms` measures each attempt from successful admission to
+observed settlement. A successful child observed after this budget fails the
+entry without publishing its answer or retrying. This is a settlement check,
+not a timer that cancels the child.
+
+Resident states are not supported. Run records are kernel-local and do not
+survive a restart.
 Children are ordinary RLM children and remain visible through the existing
 child APIs until deleted. An inline subagent's optional `name` is used as a
 child label prefix, shortened if needed to fit the host limit. The runner adds
@@ -251,7 +263,11 @@ limit. It keeps settled outputs and does not restart completed states. This
 transition limit pauses a run at most once. A run can also pause
 once before exceeding `run.max_children`, with `pause_reason: "max_children exceeded"`.
 This counts actual child admissions in both DAGs and explicit machines, not the
-number of states in a definition.
+number of states in a definition. `run.budget_ms` measures wall time from run
+start. If the executor observes that the budget has been exceeded while work
+remains, it pauses that run once with `pause_reason: "run budget exceeded"`.
+Budget checks happen before admissions and between collect waits; they do not
+interrupt an in-flight host call.
 Children already in flight may finish while the run is paused. Resume
 authorizes that run to continue past the reported limit; it does not
 raise a state's `max_entries`. You can also stop a paused run. Stopping is

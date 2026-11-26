@@ -1131,3 +1131,194 @@ class FactoryTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual((result["state"], result["active_nodes"]), ("error", []))
         self.assertIn("appendix admission refused", result["error"])
         self.assertEqual(prompts, ["List chapters", "Index intro", "Index appendix", "Publish None"])
+
+    async def test_papi_13_retry_keeps_item_and_entry_and_counts_child_admissions(self):
+        self.settings.write_text('{"factory":{"enabled":true}}')
+        rlm.harness.save_factory("retry-index", {
+            "run": {"max_children": 3, "max_parallel": 1},
+            "nodes": [
+                {"id": "list", "subagent": {"prompt": "List chapters"},
+                 "outputs": [{"name": "chapters", "type": "json"}]},
+                {"id": "index", "retries": 1, "subagent": {"prompt": "Index {chapter}"},
+                 "inputs": [{"name": "chapter", "type": "json", "from": "list.chapters"}],
+                 "foreach": {"over": "chapter", "max": 2}, "outputs": [{"name": "index", "type": "text"}]},
+                {"id": "publish", "subagent": {"prompt": "Publish {index}"},
+                 "inputs": [{"name": "index", "type": "text", "from": "index.index"}]},
+            ],
+        })
+        for exhausted in (False, True):
+            with self.subTest(exhausted=exhausted):
+                prompts, collected, labels = [], [], []
+
+                async def host(kind, data):
+                    if kind == "rlm.run":
+                        prompts.append(data["prompt"])
+                        labels.append(data["kwargs"]["name"])
+                        return {"rlm_child_id": f"chapter-{len(prompts)}", "name": labels[-1],
+                                "session_dir": str(self.directory), "model": "fake"}
+                    self.assertEqual(kind, "rlm.collect")
+                    child, = data["targets"]
+                    collected.append(child)
+                    attempt = int(child.split("-")[1])
+                    failed = attempt == 3 or (attempt == 4 and exhausted)
+                    return {"results": [{"rlm_child_id": child, "status": "error" if failed else "done",
+                                         "settled": True, "error": "index failed" if failed else None,
+                                         "answer_text": {1: '{"chapters":["intro","appendix"]}',
+                                                         2: "intro index", 4: "appendix index"}.get(attempt)}]}
+
+                with patch("rlm.host_request", side_effect=host):
+                    run = (await rlm.factory.run("retry-index"))["run_id"]
+                    paused = await rlm.factory.watch(run, timeout=2)
+                    self.assertEqual((paused["state"], paused["pause_reason"], paused["error"]),
+                                     ("paused", "max_children exceeded", None))
+                    self.assertEqual(prompts, ["List chapters", "Index intro", "Index appendix"])
+                    await rlm.factory.resume(run)
+                    result = await rlm.factory.watch(run, timeout=2)
+                    expected = ["List chapters", "Index intro", "Index appendix", "Index appendix"]
+                    if exhausted:
+                        self.assertEqual(result["state"], "paused")
+                        self.assertIn("index failed", result["error"])
+                        self.assertEqual((await rlm.factory.stop(run))["state"], "stopped")
+                    else:
+                        self.assertEqual((result["state"], result["error"]), ("done", None))
+                        expected.append("Publish intro index\n\nappendix index")
+                    self.assertEqual(prompts, expected)
+                    self.assertEqual(collected, [f"chapter-{n}" for n in range(1, len(expected) + 1)])
+                    self.assertEqual(len(set(labels)), len(expected))
+
+    async def test_papi_13_state_budget_fails_late_success_without_retry(self):
+        self.settings.write_text('{"factory":{"enabled":true}}')
+        rlm.harness.save_factory("timed-review", {
+            "run": {"failure_policy": "continue"},
+            "nodes": [
+                {"id": "review", "budget_ms": 125, "retries": 2, "subagent": {"prompt": "Review manuscript"},
+                 "outputs": [{"name": "review", "type": "text"}]},
+                {"id": "publish", "subagent": {"prompt": "Publish {review}"},
+                 "inputs": [{"name": "review", "type": "text", "from": "review.review", "optional": True}]},
+            ],
+        })
+        for elapsed, expected_state, expected_input in ((0.125, "done", "review text"), (0.25, "error", "None")):
+            with self.subTest(elapsed=elapsed):
+                clock = 0.0
+                prompts = []
+
+                async def host(kind, data):
+                    nonlocal clock
+                    if kind == "rlm.run":
+                        prompts.append(data["prompt"])
+                        clock += 0.5  # Admission itself is not part of the state budget.
+                        return {"rlm_child_id": f"review-{len(prompts)}", "name": data["kwargs"]["name"],
+                                "session_dir": str(self.directory), "model": "fake"}
+                    self.assertEqual(kind, "rlm.collect")
+                    child, = data["targets"]
+                    if child == "review-1":
+                        clock += elapsed
+                    return {"results": [{"rlm_child_id": child, "status": "done", "settled": True,
+                                         "answer_text": "review text"}]}
+
+                with patch("rlm.factory.monotonic", side_effect=lambda: clock), patch("rlm.host_request", side_effect=host):
+                    run = (await rlm.factory.run("timed-review"))["run_id"]
+                    result = await rlm.factory.watch(run, timeout=2)
+                self.assertEqual(result["state"], expected_state)
+                self.assertEqual(prompts, ["Review manuscript", f"Publish {expected_input}"])
+                if expected_state == "error":
+                    self.assertIn("state budget_ms 125 exceeded", result["error"])
+
+    async def test_papi_13_run_budget_resume_and_terminal_stop_are_isolated(self):
+        self.settings.write_text('{"factory":{"enabled":true}}')
+        for name in ("manuscript", "appendix"):
+            spec = self.text_dag(name)
+            spec["run"] = {"budget_ms": 125}
+            rlm.harness.save_factory(name, spec)
+        clock = 0.0
+        spawned, deleted = {}, []
+        collecting = asyncio.Queue()
+        release = {}
+
+        async def host(kind, data):
+            if kind == "rlm.run":
+                child = f"doc-{len(spawned) + 1}"
+                spawned[child] = data["prompt"]
+                return {"rlm_child_id": child, "name": data["kwargs"]["name"],
+                        "session_dir": str(self.directory), "model": "fake"}
+            if kind == "rlm.collect":
+                child, = data["targets"]
+                if child not in release and len(release) < 2:
+                    release[child] = asyncio.Event()
+                    collecting.put_nowait(child)
+                    await release[child].wait()
+                    return {"results": [{"rlm_child_id": child, "status": "running", "settled": False}]}
+                return {"results": [{"rlm_child_id": child, "status": "done", "settled": True,
+                                     "answer_text": "settled chapter"}]}
+            self.assertEqual(kind, "rlm.delete_subagent")
+            child = data["target"]
+            deleted.append(child)
+            return {"subagent": {"rlm_child_id": child, "session_name": "document",
+                                 "session_dir": str(self.directory), "status": "running"}}
+
+        with patch("rlm.factory.monotonic", side_effect=lambda: clock), patch("rlm.host_request", side_effect=host):
+            a = (await rlm.factory.run("manuscript"))["run_id"]
+            b = (await rlm.factory.run("appendix"))["run_id"]
+            for _ in range(2):
+                await asyncio.wait_for(collecting.get(), 2)
+            a_child, = (await rlm.factory.status(a))["children"].values()
+            b_child, = (await rlm.factory.status(b))["children"].values()
+            clock = 0.25
+            for event in release.values():
+                event.set()
+            for run in (a, b):
+                paused = await rlm.factory.watch(run, timeout=0)
+                if paused["state"] == "running":
+                    paused = await rlm.factory.watch(run, timeout=2)
+                self.assertEqual((paused["state"], paused["pause_reason"]), ("paused", "run budget exceeded"))
+                self.assertTrue(paused["active_nodes"])
+            self.assertEqual(len(spawned), 2)
+            self.assertEqual(deleted, [])
+            await rlm.factory.resume(a)
+            self.assertEqual((await rlm.factory.watch(a, timeout=2))["state"], "done")
+            self.assertEqual((await rlm.factory.status(b))["state"], "paused")
+            stopped = await rlm.factory.stop(b)
+            self.assertEqual(stopped["state"], "stopped")
+            with self.assertRaisesRegex(ValueError, "not paused"):
+                await rlm.factory.resume(b)
+        self.assertNotEqual(a_child, b_child)
+        self.assertEqual(deleted, [b_child])
+        self.assertEqual(len(spawned), 3)
+        self.assertIn("settled chapter", list(spawned.values())[-1])
+
+    async def test_papi_13_run_budget_checks_between_parallel_admissions(self):
+        self.settings.write_text('{"factory":{"enabled":true}}')
+        rlm.harness.save_factory("timed-checks", {
+            "run": {"budget_ms": 125, "max_parallel": 2},
+            "nodes": [
+                {"id": "copy", "subagent": {"prompt": "Check copy"}},
+                {"id": "sources", "subagent": {"prompt": "Check sources"}},
+            ],
+        })
+        clock = 0.0
+        prompts = []
+
+        async def host(kind, data):
+            nonlocal clock
+            if kind == "rlm.run":
+                prompts.append(data["prompt"])
+                clock += 0.25
+                return {"rlm_child_id": f"check-{len(prompts)}", "name": data["kwargs"]["name"],
+                        "session_dir": str(self.directory), "model": "fake"}
+            self.assertEqual(kind, "rlm.collect")
+            child, = data["targets"]
+            return {"results": [{"rlm_child_id": child, "status": "done", "settled": True}]}
+
+        with patch("rlm.factory.monotonic", side_effect=lambda: clock), patch("rlm.host_request", side_effect=host):
+            run = (await rlm.factory.run("timed-checks"))["run_id"]
+            paused = await rlm.factory.watch(run, timeout=2)
+            self.assertEqual((paused["state"], paused["pause_reason"]), ("paused", "run budget exceeded"))
+            self.assertEqual(prompts, ["Check copy"])
+            await rlm.factory.resume(run)
+            # Parallel polls may notify before the run completes.
+            async with asyncio.timeout(2):
+                status = await rlm.factory.status(run)
+                while status["state"] == "running":
+                    status = await rlm.factory.watch(run, timeout=1)
+            self.assertEqual(status["state"], "done")
+            self.assertEqual(prompts, ["Check copy", "Check sources"])
