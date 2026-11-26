@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from .bash import BashHandle, BashResult, bash
+from .factory import FACTORY_HELP, definition_graph, require_factory_enabled
 from .harness import HarnessEntry, HarnessScope, HarnessState, RefinementEvent, get_harness_state
 
 _NOT_CALLABLE_MESSAGE = "'rlm' is not callable; spawn a child with: handle = await rlm.spawn('sub-task', name='worker')"
@@ -545,7 +546,17 @@ class _HarnessProxy:
 _harness_state = _HarnessProxy()
 
 
+class _RLMFactoryNamespace:
+    def help(self) -> str:
+        return FACTORY_HELP
+
+    async def graph(self, ref: str | None = None) -> dict[str, Any]:
+        require_factory_enabled()
+        return definition_graph(_harness_state._resolve(), ref)
+
+
 class _RLMNamespace:
+    factory = _RLMFactoryNamespace()
     harness = _harness_state
     get_harness_state = staticmethod(get_harness_state)
 

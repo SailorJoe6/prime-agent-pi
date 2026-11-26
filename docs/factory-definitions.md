@@ -115,3 +115,25 @@ explicitly to work with other roots.
   falls back to the library without writing a harness entry.
 
 These APIs do not evaluate prompts or guards, start agents, or run machines.
+
+## Preview a saved machine from Python
+
+`rlm.factory.help()` works without opting in. To preview a saved definition,
+merge `{"factory": {"enabled": true}}` into your agent directory's
+`settings.json`. Use the JSON boolean `true`; missing, invalid, or unreadable
+settings leave previews disabled. This setting does not gate the existing
+save, list, import, or export commands.
+
+```python
+rlm.harness.save_factory("format-document", {
+    "nodes": [{"id": "format", "subagent": {"prompt": "Format the example text."}}],
+})
+snapshot = await rlm.factory.graph("format-document")
+print(snapshot["machine"]["order"])
+```
+
+The preview includes the declared state order, transitions, and run limits.
+It does not start children or edit the definition. Like the released v0.10.0
+static graph, it looks up saved harness definitions; a library file must first
+be saved as a harness definition to preview it here. `await rlm.factory.graph()`
+returns an empty run list. This preview does not support starting or controlling runs.
