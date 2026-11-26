@@ -4,7 +4,7 @@ title: Run and recover named machines from Python
 status: In Progress
 assignee: []
 created_date: '2026-11-22T22:17:00Z'
-updated_date: '2026-11-26T21:42:00Z'
+updated_date: '2026-11-26T21:48:00Z'
 labels: []
 milestone: m-0
 dependencies:
@@ -89,4 +89,6 @@ Bounded foreach published at code 3186cc4d40a2fea2d44f6b77d5812e8574e82d66. Adap
 Checks passed: npm run check (including check:test-policy), git diff --check, 18 Python factory tests, 9 TypeScript collect tests, FactoryTest shuffles 13/421/2026, and four caught deliberate foreach faults. On native macOS arm64, CPython 3.11.11, matching inherited test conditions, `uv run --locked python -m unittest discover -s test -p test_bash.py -v -k windows_without_bash_raises_teaching_error -k unconfigured_journal_stays_permissive` reproduced both results on exact base de7304377282d55d045a2ca98b13040dbf75f076 and the Episode: expected RuntimeError absent for Windows shell discovery; orphan-journal enrollment RuntimeError in the permissive case. No Bash changes; no full-suite pass claimed.
 
 Acceptance assessment: AC1 has direct offline evidence for ungated help, disabled no-spawn, and enabled named runs passing declared settled outputs under supported task, entry, transition, concurrency and item bounds. AC2 has direct offline evidence for distinct run/child IDs, selected status/watch, and scoped stop and paused resume. This supports both literal criteria on the implemented bounded task path, not full released parity. Material released differences remain: resident states, retries, run/state time budgets, continue and escalate (released default) failure behavior, and the released inline run_machine and richer graph/watch diagnostics. DAG preflight still rejects a node count above max_children rather than admitting to that bound and pausing. No terminal UI, later recovery, live providers, or lifecycle changes. Leave acceptance checkboxes unchanged pending owner review of the remaining baseline gaps.
+
+Astra-reviewed bounded named-run revision against released v0.10.0 (763094e1): keep newer settled bindings when older parallel entries finish late without repeating an unchanged join; still evaluate each settle’s guards. Preserve authored child names with unique per-run/admission suffixes and exact handle ownership. Remove DAG-only upfront child-count refusal; exercise actual admission pause and selected resume with offline document fixtures. Other released gaps remain open.
 <!-- SECTION:NOTES:END -->
