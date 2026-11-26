@@ -4,7 +4,7 @@ title: Build and validate the Prime Agent Pi packaging and release pipeline
 status: In Progress
 assignee: []
 created_date: '2026-11-24T00:57:00Z'
-updated_date: '2026-11-26T20:33:00Z'
+updated_date: '2026-11-26T20:39:00Z'
 labels: []
 dependencies: []
 documentation:
@@ -616,6 +616,10 @@ All eight exact GitHub ZIP → receipt → archive → executable chains verifie
 The previous candidate `754fcebacac241d56aa5824aeddfa2ae23922d2e` passed exact artifact-only run 45707847912 and the scoped validations above. Joe approved landing that reviewed fast-forward, but preflight found published main advanced from `60b6cf70dc7b207f6ec6c98ae599a876a6a7b2fb` to `de7304377282d55d045a2ca98b13040dbf75f076` (PAPI-20), which is not an ancestor of the reviewed tip. That approval and the prior exact-SHA validation do not transfer to a new candidate. Owner returned PAPI-61 to In Progress at published Backlog `8a1c2da9b58dbcd2b27f741d19365a4eff8cde30`.
 
 The next canonical execute must verify current published main and integrate it into this existing Episode only, retaining PAPI-20 rename behavior, Pi-only updates, and the verified Intel test-only correction. Keep the exact standalone `Legacy-Publication: skip` line on the actual final tip. Audit writer exclusion while retaining ordinary CI. Reconcile and run exact-candidate nonpublishing CI and relevant exact-byte artifact verification and probes; reuse only matching evidence and parallelize independent work where appropriate. Report the verified main/candidate tuple with scoped results or a concrete blocker. No main push, writer invocation, release, tag, bump, live installation or activation, parity, or PAPI-62.
+
+### PAPI-20 integrated; exact artifact-only validation pending
+
+Published Episode `ae34152a989118c30e3028dedbf6ab5261a09d33` cleanly merges PAPI-20 main `de7304377282d55d045a2ca98b13040dbf75f076` into previously reviewed `754fcebacac241d56aa5824aeddfa2ae23922d2e`; final tip retains the standalone `Legacy-Publication: skip` marker. Main unchanged. Independent writer audit: unchanged workflow tree `130bc14013ee2c9ffcaa392e46a3f39aeecf34c2`; marked main pushes exclude legacy publication; artifact-only dispatch remains read-only without catalog PAT; ordinary CI and explicit tag/manual release routes retained. Installer and Intel fixture unchanged. Repository/pre-commit checks and 362 focused TypeScript tests passed. Full local Python suite ran 378 tests with two failures in unchanged Bash tests under inherited host configuration; both passed in a two-test clean-environment diagnostic. This does not substitute for exact hosted runtime/Intel/aggregate checks. No merge to main or release.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
