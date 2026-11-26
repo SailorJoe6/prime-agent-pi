@@ -4,7 +4,7 @@ title: Run and recover named machines from Python
 status: In Progress
 assignee: []
 created_date: '2026-11-22T22:17:00Z'
-updated_date: '2026-11-26T21:33:00Z'
+updated_date: '2026-11-26T21:36:00Z'
 labels: []
 milestone: m-0
 dependencies:
@@ -79,4 +79,6 @@ Next bounded slice: adapt released v0.10.0 serial task re-entry in the same exec
 Bounded serial re-entry slice published at code 3e18f054d6845d41311cabdbcf9dcadc01899e7f. Compared released v0.10.0 (763094e1) entry caps, settle-driven transitions and joins, latest settled input binding, and total child-admission pause/resume. Re-entries use fresh exact child identities; missing ports never fall back to earlier values. Offline document fixtures overlap two runs, prove per-state entry bounds and repeated join output selection, resume one run past transition and child limits without replay, and stop the other without cross-run effects. npm run check and git diff --check passed; 16 focused factory tests via uv run --locked python -m unittest discover -s test -p test_factory*.py, three shuffled FactoryTest runs (13/421/2026), and five caught mutations. Parallel and foreach fan-out and the exact-base Bash comparison remain open. No live providers or acceptance closure.
 
 Next bounded slice: adapt v0.10.0 run.max_parallel for plain task entries in the same Python executor. Check independent admissions, settlement-driven output binding and joins, total-admission pause, and exact-child stop across overlapping offline document runs. Leave foreach item expansion and the exact-base Bash comparison open.
+
+Parallel plain-task slice published at code b740bc1e67c11c5644c0a5dcb29b3ddb41b7d6c3. Compared released v0.10.0 (763094e1) task admission, max_parallel, exact-child settlement, total child limits, and fail-fast/stop cleanup. The same Python executor now honors the per-run concurrency bound while successors consume exact settled text/JSON, not previews. Offline document fixtures cover independent slots refilling out of order, no early join, the total-admission pause and selected resume without replay, exact multi-child stop and fail-fast cleanup, and no cross-run effects. npm run check, git diff --check, 17 focused factory tests via uv run --locked python -m unittest discover -s test -p test_factory*.py, and three shuffled FactoryTest runs (13/421/2026) passed; five deliberate faults were caught. Foreach item expansion and the exact-base Bash comparison remain open. No live providers or acceptance closure.
 <!-- SECTION:NOTES:END -->
