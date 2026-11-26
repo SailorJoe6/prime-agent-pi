@@ -4,7 +4,7 @@ title: Build and validate the Prime Agent Pi packaging and release pipeline
 status: In Progress
 assignee: []
 created_date: '2026-11-24T00:57:00Z'
-updated_date: '2026-11-26T20:39:00Z'
+updated_date: '2026-11-26T20:59:00Z'
 labels: []
 dependencies: []
 documentation:
@@ -620,6 +620,12 @@ The next canonical execute must verify current published main and integrate it i
 ### PAPI-20 integrated; exact artifact-only validation pending
 
 Published Episode `ae34152a989118c30e3028dedbf6ab5261a09d33` cleanly merges PAPI-20 main `de7304377282d55d045a2ca98b13040dbf75f076` into previously reviewed `754fcebacac241d56aa5824aeddfa2ae23922d2e`; final tip retains the standalone `Legacy-Publication: skip` marker. Main unchanged. Independent writer audit: unchanged workflow tree `130bc14013ee2c9ffcaa392e46a3f39aeecf34c2`; marked main pushes exclude legacy publication; artifact-only dispatch remains read-only without catalog PAT; ordinary CI and explicit tag/manual release routes retained. Installer and Intel fixture unchanged. Repository/pre-commit checks and 362 focused TypeScript tests passed. Full local Python suite ran 378 tests with two failures in unchanged Bash tests under inherited host configuration; both passed in a two-test clean-environment diagnostic. This does not substitute for exact hosted runtime/Intel/aggregate checks. No merge to main or release.
+
+### PAPI-20 integration validated for owner review (no release)
+
+Published Episode `ae34152a989118c30e3028dedbf6ab5261a09d33` is a clean fast-forward from unchanged published main `de7304377282d55d045a2ca98b13040dbf75f076` and retains the exact standalone `Legacy-Publication: skip` marker. The workflow audit and 362 focused tests above apply to this exact commit. [Artifact-only CI 45892651367](https://github.com/SailorJoe6/prime-agent-pi/actions/runs/45892651367), attempt 1, suite 124163139228, passed all 28 jobs, including the hosted Python runtime suite, Intel legacy smoke `140158874421` and aggregate `140163719785`. The Intel smoke settled in about 24 s with unchanged deadlines, all nine skills, both cells, exit and close 0, and fixture removal. No rerun.
+
+Verified all eight Pi hosted ZIP/receipt/archive/executable chains (catalog `01f4d46dd5157ec73f8faf440214088237c81d59`), legacy Intel sidecar, and exact-source installer SHA-256 `a275549947442ba8765833335e29fc76033e1dd1e464c3508b4f52efc1f1472e`. Two identical offline rehearsals (SHA-256 `fbda02e6ceb1cd682906884ac6d4a9c2c16aeaa40c3dff6033ca32f3503b899e`) denied stable publication with `missing-or-mismatched-stable-bump`. The exact Linux ARM64/musl artifact `15152755675`, archive `a1f2e683cc31d9b5c8320295a3aa80307c7d7b60be2536a3aac9814b8cc62934`, executable `ada774512659048d4288cd96dede612d970339fd29d1b116a565989677a3bbb9`, passed CLI and real PTY install, update, and offline rollback on pinned cached Alpine 3.21.10 with synthetic state retained. Preview selection survived stable fallback and rollback; no actual preview archive was installed. Graceful daemon shutdown remains unverified. Evidence: `/var/folders/4_/twy0wz3s1mq650wnqzn1b8rr0000gq/T/papi61-45892651367-8tauwmzw` and `/tmp/papi61-offline-45892651367-y2iy7t_4`. This is scoped nonpublishing integration evidence, not live-feed, broader lifecycle, parity or release qualification. No main push, tag, release writer invocation, live install or activation. Task status unchanged.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
