@@ -1,6 +1,11 @@
-import { fauxAssistantMessage } from "@earendil-works/pi-ai";
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { homedir, tmpdir } from "node:os";
+import { join } from "node:path";
+import { fauxAssistantMessage, fauxToolCall } from "@earendil-works/pi-ai";
 import { describe, expect, it, vi } from "vitest";
-import { createHarness } from "./harness.js";
+import { ENV_AGENT_DIR } from "../../src/config.js";
+import { getKernelVenvDir, kernelVenvPython } from "../../src/core/kernel/bootstrap.js";
+import { createHarness, getMessageText } from "./harness.js";
 
 const provider = "faux-eng-subagent-default-model";
 
@@ -146,4 +151,79 @@ describe("subagent default model setting", () => {
 			harness.cleanup();
 		}
 	});
+});
+
+it("PAPI-13 passes output from a saved subagent to the next named machine step through IPython", async () => {
+	// CI provisions this interpreter before Vitest; never bootstrap it inside the test.
+	const python =
+		process.env.PRIME_AGENT_KERNEL_PYTHON ||
+		[
+			kernelVenvPython(getKernelVenvDir()),
+			kernelVenvPython(
+				join(process.env.XDG_DATA_HOME || join(homedir(), ".local", "share"), "prime/agent/kernel-venv"),
+			),
+		].find((candidate) => existsSync(candidate));
+	if (!python) throw new Error("Run the test:ci kernel bootstrap first or set PRIME_AGENT_KERNEL_PYTHON.");
+	const agentDir = mkdtempSync(join(tmpdir(), "pi-suite-factory-"));
+	vi.stubEnv(ENV_AGENT_DIR, agentDir);
+	vi.stubEnv("PRIME_AGENT_KERNEL_PYTHON", python);
+	try {
+		writeFileSync(join(agentDir, "settings.json"), JSON.stringify({ factory: { enabled: true } }));
+		const harness = await createHarness({ provider: "faux-named-factory", persistSession: true });
+		try {
+			const childPrompts: string[] = [];
+			const savedPrompt = "Choose a title for the sample document.";
+			const title = "Cobalt Meadow";
+			const code = `
+import asyncio
+from rlm import rlm
+
+rlm.harness.create_subagent("Title chooser", ${JSON.stringify(savedPrompt)}, id="title-chooser")
+rlm.harness.save_factory("format-document", {
+    "nodes": [
+        {"id": "choose", "subagent": "title-chooser", "outputs": [{"name": "title", "type": "text"}]},
+        {"id": "label", "subagent": {"prompt": "Label this document: {title}"},
+         "inputs": [{"name": "title", "type": "text", "from": "choose.title"}]},
+    ],
+})
+run_id = (await rlm.factory.run("format-document"))["run_id"]
+async with asyncio.timeout(12):
+    result = await rlm.factory.watch(run_id)
+    while result["state"] == "running":
+        result = await rlm.factory.watch(run_id, timeout=12)
+        assert result["changed"], result
+assert result["state"] == "done", result
+print("named machine finished")
+`;
+			harness.session.setActiveToolsByName(["ipython"]);
+			harness.setResponses([
+				fauxAssistantMessage(fauxToolCall("ipython", { code }), { stopReason: "toolUse" }),
+				(context) => {
+					childPrompts.push(getMessageText(context.messages.filter((message) => message.role === "user").at(-1)));
+					return fauxAssistantMessage(title);
+				},
+				(context) => {
+					childPrompts.push(getMessageText(context.messages.filter((message) => message.role === "user").at(-1)));
+					return fauxAssistantMessage("Document labeled");
+				},
+				fauxAssistantMessage("Finished"),
+			]);
+
+			await harness.session.promptAndWait("Run the sample document machine.");
+
+			expect(
+				harness.session.messages.filter((message) => message.role === "toolResult").map(getMessageText),
+			).toEqual([expect.stringContaining("named machine finished")]);
+			expect(childPrompts.map((prompt) => prompt.split("\n").at(-1))).toEqual([
+				savedPrompt,
+				`Label this document: ${title}`,
+			]);
+		} finally {
+			await harness.session.disposeAsync({ kernelSnapshot: false });
+			harness.cleanup();
+		}
+	} finally {
+		vi.unstubAllEnvs();
+		rmSync(agentDir, { recursive: true, force: true });
+	}
 });
