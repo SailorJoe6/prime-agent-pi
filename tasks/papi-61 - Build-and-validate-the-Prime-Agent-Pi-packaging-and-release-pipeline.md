@@ -4,7 +4,7 @@ title: Build and validate the Prime Agent Pi packaging and release pipeline
 status: In Progress
 assignee: []
 created_date: '2026-11-24T00:57:00Z'
-updated_date: '2026-11-26T20:32:00Z'
+updated_date: '2026-11-26T20:33:00Z'
 labels: []
 dependencies: []
 documentation:
@@ -610,6 +610,12 @@ Episode `754fcebacac241d56aa5824aeddfa2ae23922d2e` adds only the Intel legacy st
 Exact Episode `754fcebacac241d56aa5824aeddfa2ae23922d2e` is a clean fast-forward from current published main `60b6cf70dc7b207f6ec6c98ae599a876a6a7b2fb` and retains the exact standalone `Legacy-Publication: skip` marker. The Intel correction touches only the existing standalone fixture: release writer and CI caller unchanged, artifact mode still read-only and Pi-only packaging and PAPI-18 retained. Exact artifact-only CI 45707847912 attempt 1 passed all 28 jobs, including required Intel and aggregate. No rerun. Local unrelated rollback-timeout PID receipt failure retained above; corresponding hosted Intel tests passed.
 
 All eight exact GitHub ZIP → receipt → archive → executable chains verified (catalog `01f4d46dd5157ec73f8faf440214088237c81d59`); installer from exact source SHA-256 `a275549947442ba8765833335e29fc76033e1dd1e464c3508b4f52efc1f1472e`. Nonpublishing rehearsals were byte-identical SHA-256 `71e2cc8e968cfec86355ba662ae228b1db063b5519983cf72d99634f303bea79` and rejected stable with `missing-or-mismatched-stable-bump`. Exact ARM64/musl artifact 15066471226 passed CLI and real PTY install/update/offline rollback with preserved synthetic state; archive `664f495d11224afa07b0a9273c2342c893538a148b7001ee4f2d48ec72c87dd8`, executable `3c15f640cfddbd32c7a0f0d93a27fbd0268b4e1abe05bdf672abe21a7d5ee375`. Preview decline was a no-op, stable fallback worked, app quit 0; graceful daemon shutdown remains unverified. Evidence: `/var/folders/4_/twy0wz3s1mq650wnqzn1b8rr0000gq/T/papi61-hosted-intel-jg6qgotq` and `/tmp/papi61-offline-45707847912-c53sajo1`. This is scoped exact-byte evidence, not live-feed, cross-platform lifecycle, parity, or release qualification. Ready for owner review of the nonpublishing integration. No merge, tag, version bump, writer invocation, activation or lifecycle status change.
+
+### Owner continuation: integrate advanced main (PAPI-20) before landing review
+
+The previous candidate `754fcebacac241d56aa5824aeddfa2ae23922d2e` passed exact artifact-only run 45707847912 and the scoped validations above. Joe approved landing that reviewed fast-forward, but preflight found published main advanced from `60b6cf70dc7b207f6ec6c98ae599a876a6a7b2fb` to `de7304377282d55d045a2ca98b13040dbf75f076` (PAPI-20), which is not an ancestor of the reviewed tip. That approval and the prior exact-SHA validation do not transfer to a new candidate. Owner returned PAPI-61 to In Progress at published Backlog `8a1c2da9b58dbcd2b27f741d19365a4eff8cde30`.
+
+The next canonical execute must verify current published main and integrate it into this existing Episode only, retaining PAPI-20 rename behavior, Pi-only updates, and the verified Intel test-only correction. Keep the exact standalone `Legacy-Publication: skip` line on the actual final tip. Audit writer exclusion while retaining ordinary CI. Reconcile and run exact-candidate nonpublishing CI and relevant exact-byte artifact verification and probes; reuse only matching evidence and parallelize independent work where appropriate. Report the verified main/candidate tuple with scoped results or a concrete blocker. No main push, writer invocation, release, tag, bump, live installation or activation, parity, or PAPI-62.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
