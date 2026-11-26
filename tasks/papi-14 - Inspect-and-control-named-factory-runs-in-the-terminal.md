@@ -1,10 +1,10 @@
 ---
 id: PAPI-14
 title: Inspect and control named factory runs in the terminal
-status: In Planning
+status: In Progress
 assignee: []
 created_date: '2026-11-22T22:17:00Z'
-updated_date: '2026-11-26T23:53:00Z'
+updated_date: '2026-11-26T23:58:00Z'
 labels: []
 milestone: m-0
 dependencies:
