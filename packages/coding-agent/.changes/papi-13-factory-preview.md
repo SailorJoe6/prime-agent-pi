@@ -1,1 +1,2 @@
 - Added Python factory help and opt-in graph previews for saved factory definitions.
+- Added opt-in named Python runs for one-shot text DAGs, with isolated child handles and per-run status.

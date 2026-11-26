@@ -136,4 +136,32 @@ The preview includes the declared state order, transitions, and run limits.
 It does not start children or edit the definition. Like the released v0.10.0
 static graph, it looks up saved harness definitions; a library file must first
 be saved as a harness definition to preview it here. `await rlm.factory.graph()`
-returns an empty run list. This preview does not support starting or controlling runs.
+returns an empty run list; use the returned run ID with `status` to observe execution.
+
+## Run a named text DAG from Python
+
+With `factory.enabled` set to `true`, `run` first checks the harness and then
+looks in the machine library. It does not edit either definition. This initial
+run path accepts one-shot DAGs with text ports and runs one child at a time per
+run. It checks `max_children` and `max_transitions` before starting.
+
+```python
+rlm.harness.save_factory("color-label", {"nodes": [
+    {"id": "pick", "subagent": {"prompt": "Reply with a single color word."},
+     "outputs": [{"name": "color", "type": "text"}]},
+    {"id": "label", "subagent": {"prompt": "Write a short label for {color}."},
+     "inputs": [{"name": "color", "type": "text", "from": "pick.color"}]},
+]})
+started = await rlm.factory.run("color-label")
+# In a later Python cell, inspect this run without waiting for it:
+snapshot = await rlm.factory.status(started["run_id"])
+print(snapshot["state"], snapshot["children"])
+```
+
+`run` returns before the children finish. Text ports bind the existing compact
+RLM answer preview, not a full transcript. Missing required output or child
+failure ends the run with an error. State machines, JSON ports, resident states,
+fan-out, retries, time budgets, and custom failure handling are not supported by
+this run path. Watch, stop, and resume are not yet available. Run records are
+kernel-local and do not survive a restart. Children are ordinary RLM children
+and remain visible through the existing child APIs.
