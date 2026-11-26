@@ -1,10 +1,10 @@
 ---
 id: PAPI-13
 title: Run and recover named machines from Python
-status: In Design
+status: In Planning
 assignee: []
 created_date: '2026-11-22T22:17:00Z'
-updated_date: '2026-11-26T20:36:00Z'
+updated_date: '2026-11-26T20:44:00Z'
 labels: []
 milestone: m-0
 dependencies:
@@ -32,3 +32,11 @@ Expose the upstream v0.10.0 baseline for opt-in named factory runs from Python, 
 - [ ] #1 Factory help is available while execution is off. Starting while disabled refuses without starting children. Once enabled, a named graph passes declared outputs between agent states within its run bounds.
 - [ ] #2 Two runs have distinct identities and children. Status and watch observe the selected run; stop and resume of a paused run affect only that run.
 <!-- AC:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+1. Add the local Python `rlm.factory` run surface against released upstream `v0.10.0` (`763094e1b6a7c17450ee8399b06cda1853847ca5`): help while off, and opt-in `run`, `status`, `watch`, `stop`, and paused-run `resume` by run ID (with the graph snapshot used by watch). Use the existing settings location (`factory.enabled`, default off). Resolve named definitions with PAPI-12's existing harness-first/library fallback, reusing its validator and DAG compiler. Disabled, unknown, or invalid starts must not start children or mutate definitions. Keep definition-only commands unchanged.
+2. Use a small Python run executor in the existing kernel lifecycle. Return a run ID without waiting for the graph to finish. Reuse ordinary scoped RLM child sessions and their completion/results. Bind each child by exact identity to its run; carry declared outputs to successors and apply the released graph's guard, join, fan-out, and run bounds. Keep run state local to its owning session/kernel. Observe only the selected run; stop affects only its active work; resume continues the selected paused run without replaying settled states. Use existing host lifecycle primitives where possible; add no second daemon, durable run store, or generic workflow engine. If a narrow host operation proves necessary, keep it scoped and follow Pi's compatibility rules. No later failed-entry/dead-worker recovery, loopback refinements, Python function states, or PAPI-14 terminal controls.
+3. Document opt-in, a short benign named-run example, the public run controls, and the kernel-lifetime limit. Exercise the public Python path offline with controlled child completions: disabled/no-spawn and unchanged definition use; output passage and graph bounds; concurrent run identity and child ownership; watch wakeup/timeout and isolated stop/resume. Use the project's test environment and completion signals, no live providers or fixed sleeps. Run changed tests directly, repeat ordering-sensitive cases with shuffle seeds where supported, and run the required code and test-policy checks. Add the user-visible changelog fragment; no version or release work.
+<!-- SECTION:PLAN:END -->
