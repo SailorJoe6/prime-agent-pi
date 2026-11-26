@@ -9,7 +9,7 @@ import asyncio
 import copy
 import json
 import re
-from collections import deque
+from collections import Counter, deque
 from dataclasses import dataclass, field
 from time import monotonic
 from typing import TYPE_CHECKING, Any, Protocol
@@ -40,6 +40,7 @@ class _DeleteChild(Protocol):
 
 
 WATCH_TIMEOUT_CAP_SECONDS = 60.0
+GRAPH_RUNS_WINDOW = 20
 
 FACTORY_DISABLED_MESSAGE = (
     'the factory is disabled; set factory.enabled to true in your agent settings.json'
@@ -55,7 +56,8 @@ child per item of a bounded JSON list.
 
 Opt in by adding {"factory": {"enabled": true}} to your agent settings.json.
 Use await rlm.factory.graph(name) to inspect a saved definition without
-starting children. Library files can be validated with rlm.machine_library.
+starting children. Call graph() without a reference to list live runs and
+recent terminal runs. Library files can be validated with rlm.machine_library.
 Run a machine or DAG with await rlm.factory.run(name) and inspect its
 returned run_id with await rlm.factory.status(run_id). Use
 await rlm.factory.watch(run_id, timeout=5) to wait for its graph to change,
@@ -181,6 +183,8 @@ class _Run:
     nodes: dict[str, str] = field(default_factory=dict)
     last_fired: deque[dict[str, Any]] = field(default_factory=lambda: deque(maxlen=10))
     active: dict[int, tuple[str, RLMSpawnHandle]] = field(default_factory=dict)
+    ready: deque[str] = field(default_factory=deque)
+    pending: deque[tuple[_Entry, int, int]] = field(default_factory=deque)
     worker: asyncio.Task[list[str]] | None = None
     changed: asyncio.Event = field(default_factory=asyncio.Event)
     error: str | None = None
@@ -387,6 +391,7 @@ class FactoryRuns:
     ) -> dict[str, Any]:
         states, machine = _prepare_machine(select_factory(spec_id, harness), harness)
         run = _Run(uuid4().hex, spec_id, name, machine, monotonic(), delete)
+        run.ready.extend(state["id"] for state in states if state.get("entry"))
         self._runs[run.run_id] = run
         run.worker = asyncio.create_task(self._execute(run, states, spawn, collect))
         return {"run_id": run.run_id, "spec_id": spec_id, "name": name,
@@ -403,9 +408,26 @@ class FactoryRuns:
 
     def status(self, run_id: str) -> dict[str, Any]:
         run = self._require_run(run_id)
+        active_children: dict[str, list[str]] = {}
+        for key, handle in run.active.values():
+            active_children.setdefault(key, []).append(handle.rlm_child_id)
+        queued: Counter[str] = Counter()
+        if run.state in ("running", "paused"):
+            queued.update(run.ready)
+            queued.update(entry.key for entry, _, _ in run.pending if not entry.failed)
         return {"run_id": run.run_id, "spec_id": run.spec_id, "name": run.name,
-                "state": run.state, "children": dict(run.children), "error": run.error,
+                "active_children": active_children, "queued": dict(queued), "state": run.state, "children": dict(run.children), "error": run.error,
                 "pause_reason": run.pause_reason}
+
+    def graphs(self) -> dict[str, Any]:
+        live_states = ("running", "paused", "stopping")
+        terminal = deque(maxlen=GRAPH_RUNS_WINDOW)
+        for run in self._runs.values():
+            if run.state not in live_states and not run.active:
+                terminal.append(run.run_id)
+        recent = set(terminal)
+        return {"runs": [self.graph(run.run_id) for run in self._runs.values()
+                         if run.state in live_states or run.active or run.run_id in recent]}
 
     def graph(self, run_id: str) -> dict[str, Any]:
         run = self._require_run(run_id)
@@ -526,7 +548,7 @@ class FactoryRuns:
         def tasks_in_flight() -> bool:
             return any(key not in residents for key, _ in run.active.values())
 
-        ready = deque(state["id"] for state in states if state.get("entry"))
+        ready, pending = run.ready, run.pending
         entries = dict.fromkeys(ready, 1)
         max_entries = {row["id"]: row["max_entries"] for row in run.machine["states"]}
         settled: dict[str, int] = {}
@@ -544,7 +566,6 @@ class FactoryRuns:
         current = ""
         index = 0
         sequence = 0
-        pending: deque[tuple[_Entry, int, int]] = deque()
         instances: dict[int, tuple[_Entry, int, int, float]] = {}
         latest: dict[str, int] = {}
         retire = False
@@ -644,8 +665,9 @@ class FactoryRuns:
                             await settle(entry)
                             continue
                         pending.extend((entry, item, 1) for item in range(len(entry.prompts)))
-                    entry, item, attempt = pending.popleft()
+                    entry, item, attempt = pending[0]
                     if entry.failed:
+                        pending.popleft()
                         continue
                     current = entry.key
                     subagent = by_id[current]["subagent"]
@@ -661,8 +683,10 @@ class FactoryRuns:
                         handle = await spawn(entry.prompts[item], name=_child_label(subagent.get("name"), run.run_id, index),
                                              model=subagent.get("model"), thinking=subagent.get("thinking"))
                     except Exception as exc:
+                        pending.popleft()
                         await fail(entry, str(exc))
                         continue
+                    pending.popleft()
                     run.active[index] = (current, handle)
                     instances[index] = (entry, item, attempt, monotonic())
                     run.children[current] = handle.rlm_child_id
@@ -733,6 +757,8 @@ class FactoryRuns:
                 run.error = f"{current}: {exc}"
                 retire = True
         finally:
+            ready.clear()
+            pending.clear()
             for admission, poll in polls.items():
                 if not poll.done():
                     poll.cancel()

@@ -7,10 +7,12 @@ from pathlib import Path
 from unittest.mock import patch
 
 from rlm import rlm
+from rlm.factory import FactoryRuns
 
 
 class FactoryTest(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
+        self.enterContext(patch.object(rlm.factory, "_runs", FactoryRuns()))
         self.directory = Path(self.enterContext(tempfile.TemporaryDirectory()))
         self.settings = self.directory / "settings.json"
         self.enterContext(patch.dict(os.environ, {
@@ -639,6 +641,11 @@ class FactoryTest(unittest.IsolatedAsyncioTestCase):
                     other_title, other_style = await collecting.get(), await collecting.get()
                     self.assertEqual([requests[k][1] for k in (other_title, other_style)], ["garden title", "garden style"])
                     self.assertNotEqual(a, b)
+                    runs = (await rlm.factory.graph())["runs"]
+                    self.assertEqual([row["run_id"] for row in runs], [a, b])
+                    for row, pair in zip(runs, ((title, style), (other_title, other_style)), strict=True):
+                        self.assertEqual(row["active_children"], {"title": [pair[0]], "style": [pair[1]]})
+                        self.assertEqual(row["queued"], {"summary": 1})
                     gates[style].set_result({"settled": False, "status": "done", "answer_text": '{"value":"early"}'})
                     self.assertEqual(await collecting.get(), style)
                     self.assertEqual(len(requests), 4)
@@ -662,6 +669,7 @@ class FactoryTest(unittest.IsolatedAsyncioTestCase):
                     paused = await until(a, "paused")
                     self.assertEqual(paused["pause_reason"], "max_children exceeded")
                     self.assertEqual(paused["active_nodes"], [])
+                    self.assertEqual(paused["queued"], {"format": 1})
                     self.assertEqual([edge["to"] for edge in paused["last_fired"]], ["format"])
                     self.assertEqual(len(requests), 5)
                     await rlm.factory.resume(a)
@@ -762,11 +770,22 @@ class FactoryTest(unittest.IsolatedAsyncioTestCase):
                     b1 = await next_child(b, "Index Garden")
                     b2 = await next_child(b, "Index Pond")
                     self.assertEqual(len(requests), 6)
+                    for run, children in ((a, [a1, a2]), (b, [b1, b2])):
+                        for view in (rlm.factory.status, rlm.factory.graph, rlm.factory.watch):
+                            snapshot = await view(run)
+                            self.assertEqual(snapshot["active_children"], {"index": children})
+                            self.assertEqual(snapshot["queued"], {"index": 1})
+                    # Editing a returned view cannot change the running machine.
+                    snapshot["active_children"]["index"].clear()
+                    snapshot["queued"].clear()
+                    self.assertEqual((await rlm.factory.status(b))["active_children"], {"index": [b1, b2]})
                     second = '```json\n{"tag": "section"}\n```'
                     settle(a2, second)
                     paused = await until(a, "paused")
                     self.assertEqual(paused["pause_reason"], "max_children exceeded")
                     self.assertEqual(paused["active_nodes"], ["index"])
+                    self.assertEqual(paused["active_children"], {"index": [a1]})
+                    self.assertEqual(paused["queued"], {"index": 1})
                     self.assertEqual([edge["to"] for edge in paused["last_fired"]], ["index"])
                     self.assertEqual(len(requests), 6)
                     stopping = asyncio.create_task(rlm.factory.stop(b))
@@ -778,6 +797,8 @@ class FactoryTest(unittest.IsolatedAsyncioTestCase):
                         stopping.cancel()
                         await asyncio.gather(stopping, return_exceptions=True)
                     self.assertCountEqual(deleted, [b1, b2])
+                    stopped = await rlm.factory.status(b)
+                    self.assertEqual((stopped["active_children"], stopped["queued"]), ({}, {}))
                     self.assertEqual((await rlm.factory.status(a))["state"], "paused")
                     await rlm.factory.resume(a)
                     a3 = await next_child(a, "Index Appendix")
@@ -786,6 +807,8 @@ class FactoryTest(unittest.IsolatedAsyncioTestCase):
                     partial = await rlm.factory.watch(a, timeout=30)
                     self.assertTrue(partial["changed"])
                     self.assertEqual(partial["active_nodes"], ["index"])
+                    self.assertEqual(partial["active_children"], {"index": [a1]})
+                    self.assertEqual(partial["queued"], {})
                     self.assertEqual([edge["to"] for edge in partial["last_fired"]], ["index"])
                     settle(a1, "Opening notes")
                     publish = await next_child(a, f'Publish Opening notes\n\n{second}\n\n{third}|"appendix"')
@@ -1322,6 +1345,43 @@ class FactoryTest(unittest.IsolatedAsyncioTestCase):
                     status = await rlm.factory.watch(run, timeout=1)
             self.assertEqual(status["state"], "done")
             self.assertEqual(prompts, ["Check copy", "Check sources"])
+
+    async def test_papi_13_graph_lists_live_residents_beyond_terminal_window(self):
+        self.settings.write_text('{"factory":{"enabled":true}}')
+        for name, lifecycle in (("watch-manuscript", "resident"), ("scan-page", "task")):
+            rlm.harness.save_factory(name, {"nodes": [
+                {"id": "page", "lifecycle": lifecycle, "subagent": {"prompt": name}},
+            ]})
+
+        async def host(kind, data):
+            if kind == "rlm.run":
+                name = data["kwargs"]["name"]
+                return {"rlm_child_id": f"id-{name}", "name": name,
+                        "session_dir": str(self.directory), "model": "fake"}
+            if kind == "rlm.collect":
+                child, = data["targets"]
+                return {"results": [{"rlm_child_id": child, "status": "done", "settled": True}]}
+            self.assertEqual(kind, "rlm.delete_subagent")
+            return {"subagent": {"rlm_child_id": data["target"], "session_name": "watch",
+                                 "session_dir": str(self.directory), "status": "running"}}
+
+        with patch("rlm.host_request", side_effect=host):
+            resident = (await rlm.factory.run("watch-manuscript"))["run_id"]
+            try:
+                watcher = await rlm.factory.watch(resident, timeout=1)
+                self.assertEqual(watcher["state"], "done")
+                scans = []
+                for _ in range(21):
+                    run = (await rlm.factory.run("scan-page"))["run_id"]
+                    scans.append(run)
+                    self.assertEqual((await rlm.factory.watch(run, timeout=1))["state"], "done")
+                listed = (await rlm.factory.graph())["runs"]
+                self.assertEqual([row["run_id"] for row in listed], [resident, *scans[1:]])
+                self.assertEqual(listed[0]["active_children"], {"page": [f"id-factory-{resident}-1"]})
+                self.assertEqual((await rlm.factory.graph(scans[0]))["state"], "done")
+            finally:
+                await rlm.factory.stop(resident)
+            self.assertEqual([row["run_id"] for row in (await rlm.factory.graph())["runs"]], scans[1:])
 
     async def test_papi_13_residents_survive_graph_completion_and_stop_by_run(self):
         self.settings.write_text('{"factory":{"enabled":true}}')

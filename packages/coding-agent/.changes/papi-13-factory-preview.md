@@ -11,3 +11,4 @@
 - Added default escalation, continue, and fail-fast policies for named Python factory runs.
 - Added per-state child retries and run and state time budgets for named Python factory runs.
 - Added resident states and selected-run retirement after named Python factory graphs finish.
+- Added Python factory run discovery and per-state queue counts and exact active child IDs.

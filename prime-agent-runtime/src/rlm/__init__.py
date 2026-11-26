@@ -585,7 +585,9 @@ class _RLMFactoryNamespace:
 
     async def graph(self, ref: str | None = None) -> dict[str, Any]:
         require_factory_enabled()
-        if ref is not None and self._runs.contains(ref):
+        if ref is None:
+            return self._runs.graphs()
+        if self._runs.contains(ref):
             return self._runs.graph(ref)
         return definition_graph(_harness_state._resolve(), ref)
 

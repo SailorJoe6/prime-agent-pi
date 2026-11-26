@@ -136,7 +136,9 @@ The preview includes the declared state order, transitions, and run limits.
 It does not start children or edit the definition. Like the released v0.10.0
 static graph, it looks up saved harness definitions; a library file must first
 be saved as a harness definition to preview it here. `await rlm.factory.graph()`
-returns an empty run list. Pass a run ID to `graph` to inspect that run instead.
+returns `{"runs": [...]}` in start order: all running, paused, or stopping runs,
+any run with attached active children, and up to 20 recent terminal runs.
+Pass a run ID to inspect that run, even if it has aged out of the list.
 
 ## Run a named machine from Python
 
@@ -256,6 +258,14 @@ print(update["changed"], update["state"], update["active_nodes"])
 result = await rlm.factory.stop(run_id)
 print(result["state"], result["cancelled"])
 ```
+
+`status(run_id)`, `graph(run_id)`, and `watch(run_id)` all include
+`active_children` (exact child IDs grouped by state) and `queued` (counts by
+state). A ready entry counts as one until expanded; after `foreach` expands,
+each waiting item counts separately. An admission in flight remains queued
+until its handle is known. Successors that have not been scheduled do not
+count. `children` still reports only the latest admitted ID per state and may
+include a settled child; use `active_children` for current ownership.
 
 `watch` returns the same live graph as `graph(run_id)`, plus `changed`. It wakes
 for a change to the selected run, not for another run's progress. `timeout`
