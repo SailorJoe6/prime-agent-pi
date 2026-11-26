@@ -1,10 +1,10 @@
 ---
 id: PAPI-13
 title: Run and recover named machines from Python
-status: Ready for Merge
+status: Done
 assignee: []
 created_date: '2026-11-22T22:17:00Z'
-updated_date: '2026-11-26T23:42:00Z'
+updated_date: '2026-11-26T23:46:00Z'
 labels: []
 milestone: m-0
 dependencies:
