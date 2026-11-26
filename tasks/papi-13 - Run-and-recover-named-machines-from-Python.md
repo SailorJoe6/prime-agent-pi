@@ -4,7 +4,7 @@ title: Run and recover named machines from Python
 status: In Progress
 assignee: []
 created_date: '2026-11-22T22:17:00Z'
-updated_date: '2026-11-26T21:51:00Z'
+updated_date: '2026-11-26T21:55:00Z'
 labels: []
 milestone: m-0
 dependencies:
@@ -95,4 +95,6 @@ Astra-reviewed bounded named-run revision against released v0.10.0 (763094e1): k
 Published the Astra-reviewed named-run revision at code 6b9f3d8c66aaf78afb9388e274fa5207bea86b1a. Compared released v0.10.0 (763094e1) latest-settled entry selection, per-settle guards, join signatures, spawn labels and total child admission. The newest settled entry replaces the full binding map, and a late older completion cannot regress it or refire an unchanged join; the older entry still evaluates its own guards. Pi uses authored inline child names as prefixes with full run/admission suffixes (including the host's UTF-16 name limit) so repeats and overlapping runs are distinct; collect and stop still address exact handles. DAGs now pause at the actual child-admission limit rather than refusing by upfront node count.
 
 Offline manuscript fixtures prove out-of-order settlement, stale-entry guard firing with newer downstream bindings, join deduplication, authored labels on repeated and overlapping children, and stop by exact opaque ID. An archive DAG proves first admission, selected pause, and continuation with settled output and no replay. Passed `uv run --locked python -m unittest discover -s test -p 'test_factory*.py' -v` (20 tests), FactoryTest shuffles 13/421/2026, `npm run check` including test-policy, and `git diff --check`. Five separate deliberate defects were detected: stale output replacement, duplicate join, missing per-settle guard, ignored authored label, and upfront DAG refusal. No live providers or new full-suite claim. Remaining released gaps include default escalation and failure policies, retries, time budgets, residents, selected/live diagnostics and preview vs exact-answer capture. No unnamed execution, terminal controls, later recovery or lifecycle changes. Acceptance checkboxes unchanged; not merge-ready.
+
+Next bounded slice: compare v0.10.0 (763094e1) named-run entry failure policies in the existing Python executor. Verify default escalation with selected resume, explicit continue and fail-fast, and state overrides. Use deterministic offline document fixtures for failed-settle downstream eligibility, sibling preservation or exact cancellation, and no replay or cross-run effects. Preserve Pi interfaces and leave retries, budgets, residents, diagnostics, preview behavior, later recovery and terminal controls open.
 <!-- SECTION:NOTES:END -->
