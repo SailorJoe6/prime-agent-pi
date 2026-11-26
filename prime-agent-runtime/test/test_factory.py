@@ -1051,7 +1051,7 @@ class FactoryTest(unittest.IsolatedAsyncioTestCase):
     async def test_papi_13_refused_spawns_do_not_consume_document_admission_budget(self):
         self.settings.write_text('{"factory":{"enabled":true}}')
         rlm.harness.save_factory("proofread", {
-            "nodes": [{"id": key, "subagent": {"prompt": key}} for key in ("appendix", "draft", "style")],
+            "nodes": [{"id": key, "subagent": {"prompt": key}} for key in ("appendix", "draft", "index", "style")],
             "run": {"max_parallel": 1, "max_children": 1, "failure_policy": "continue"},
         })
         attempts = []
@@ -1060,8 +1060,8 @@ class FactoryTest(unittest.IsolatedAsyncioTestCase):
             if kind == "rlm.run":
                 prompt, name = data["prompt"], data["kwargs"]["name"]
                 attempts.append((prompt, name))
-                if prompt == "appendix":
-                    raise RuntimeError("appendix admission refused")
+                if prompt in {"appendix", "index"}:
+                    raise RuntimeError(f"{prompt} admission refused")
                 return {"rlm_child_id": prompt, "name": name, "session_dir": str(self.directory), "model": "fake"}
             self.assertEqual(kind, "rlm.collect")
             child, = data["targets"]
@@ -1079,8 +1079,8 @@ class FactoryTest(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(finished["state"], "error")
                 self.assertIn("appendix admission refused", finished["error"])
                 self.assertEqual(finished["children"], {"draft": "draft", "style": "style"})
-                self.assertEqual([prompt for prompt, _ in attempts], ["appendix", "draft", "style"])
-                self.assertEqual(len({name for _, name in attempts}), 3)
+                self.assertEqual([prompt for prompt, _ in attempts], ["appendix", "draft", "index", "style"])
+                self.assertEqual(len({name for _, name in attempts}), 4)
             finally:
                 await rlm.factory.stop(run_id)
 

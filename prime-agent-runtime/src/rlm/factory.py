@@ -545,6 +545,7 @@ class FactoryRuns:
         transitions = 0
         transition_limit = run.machine["run"]["max_transitions"]
         child_limit = run.machine["run"]["max_children"]
+        child_limit_reported = False
         parallel_limit = run.machine["run"]["max_parallel"]
         run_budget_ms = run.machine["run"].get("budget_ms")
         budget_reported = False
@@ -682,7 +683,8 @@ class FactoryRuns:
                         continue
                     current = entry.key
                     subagent = by_id[current]["subagent"]
-                    if admitted == child_limit:
+                    if not child_limit_reported and admitted >= child_limit:
+                        child_limit_reported = True
                         await self._pause(run, "max_children exceeded")
                         if run.state != "running":
                             break

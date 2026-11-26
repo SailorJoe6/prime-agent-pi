@@ -292,7 +292,8 @@ limit. It keeps settled outputs and does not restart completed states. This
 transition limit pauses a run at most once. A run can also pause
 once before exceeding `run.max_children`, with `pause_reason: "max_children exceeded"`.
 This counts actual child admissions in both DAGs and explicit machines, not the
-number of states in a definition. `run.budget_ms` measures wall time from run
+number of states in a definition. After resume, a refused admission does not
+trigger another child-limit pause. `run.budget_ms` measures wall time from run
 start. If the executor observes that the budget has been exceeded while work
 remains, it pauses that run once with `pause_reason: "run budget exceeded"`.
 Budget checks happen before admissions and between collect waits; they do not
