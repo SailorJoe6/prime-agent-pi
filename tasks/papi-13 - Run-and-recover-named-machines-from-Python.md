@@ -4,7 +4,7 @@ title: Run and recover named machines from Python
 status: In Progress
 assignee: []
 created_date: '2026-11-22T22:17:00Z'
-updated_date: '2026-11-26T21:36:00Z'
+updated_date: '2026-11-26T21:39:00Z'
 labels: []
 milestone: m-0
 dependencies:
@@ -81,4 +81,6 @@ Bounded serial re-entry slice published at code 3e18f054d6845d41311cabdbcf9dcadc
 Next bounded slice: adapt v0.10.0 run.max_parallel for plain task entries in the same Python executor. Check independent admissions, settlement-driven output binding and joins, total-admission pause, and exact-child stop across overlapping offline document runs. Leave foreach item expansion and the exact-base Bash comparison open.
 
 Parallel plain-task slice published at code b740bc1e67c11c5644c0a5dcb29b3ddb41b7d6c3. Compared released v0.10.0 (763094e1) task admission, max_parallel, exact-child settlement, total child limits, and fail-fast/stop cleanup. The same Python executor now honors the per-run concurrency bound while successors consume exact settled text/JSON, not previews. Offline document fixtures cover independent slots refilling out of order, no early join, the total-admission pause and selected resume without replay, exact multi-child stop and fail-fast cleanup, and no cross-run effects. npm run check, git diff --check, 17 focused factory tests via uv run --locked python -m unittest discover -s test -p test_factory*.py, and three shuffled FactoryTest runs (13/421/2026) passed; five deliberate faults were caught. Foreach item expansion and the exact-base Bash comparison remain open. No live providers or acceptance closure.
+
+Next slice: adapt released foreach expansion and ordered answer aggregation in the existing runner, verifying bounded item and child admission, stop and run isolation with offline document fixtures. Compare the two Bash failures at the exact base and assess both acceptance criteria and remaining released gaps separately.
 <!-- SECTION:NOTES:END -->
