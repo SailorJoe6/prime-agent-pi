@@ -4,7 +4,7 @@ title: Run and recover named machines from Python
 status: In Progress
 assignee: []
 created_date: '2026-11-22T22:17:00Z'
-updated_date: '2026-11-26T22:24:00Z'
+updated_date: '2026-11-26T22:34:00Z'
 labels: []
 milestone: m-0
 dependencies:
@@ -121,4 +121,6 @@ Published Python factory diagnostics at code e7ea357c06d7109d1d75991fd24f77f8ff6
 Next bounded slice: replace private full-answer transport with exact-child released v0.10.0 output preview (whitespace-compacted leading 160 Unicode characters), used for bindings, guards, and ordered foreach joins. Expose latest settled preview on the selected graph and non-compact watch. Keep public collect unchanged; no unnamed execution, later recovery, TUI, live providers, or lifecycle change.
 
 Published released output preview at code 271ebd261154b9c6a67e3115c51e3c6531e8f13f. Traced exact v0.10.0 763094e1b6a7c17450ee8399b06cda1853847ca5: worker last assistant text -> daemon whitespace compaction and 160 Unicode character leading cap with ellipsis -> factory collect preview (Python defensive cap 200) -> ordered double-newline join for foreach -> declared text/JSON and guard evaluation. Pi captures only the bounded preview at successful child completion and uses exact-ID private collect projection; public Pi collect keeps its existing tail preview. Removed Episode-only full-answer retention/transport. Graph nodes expose the latest settled preview; compact watch omits it. Truncation can invalidate JSON; absent or invalid ports do not bind. Passed 30 focused Python factory tests, shuffles 13/421/2026, nine host collect tests, npm run check (including test-policy), and git diff --check. A deliberate substitution of the public roster preview failed the declared-port fixture. Offline fixtures cover Unicode cap, exact ID, no public collect change, text and named JSON (including null and truncation), guards, and ordered foreach. Full suite, packaged integration, and live providers were not exercised; unnamed runs, later recovery and TUI remain outside this slice. No lifecycle change or acceptance closure.
+
+Bounded owner-reviewed revision: preserve pending never-settled required dependencies and existing settled missing-output failures; count successful child admissions separately from attempt labels; preserve released text block boundaries in private answer previews; share in-flight fail-fast retirement with selected stop; expose basic per-state selected status from the existing in-memory snapshot. Offline document fixtures only. No merge, later recovery, TUI, unnamed runs or live providers.
 <!-- SECTION:NOTES:END -->
