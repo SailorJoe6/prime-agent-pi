@@ -96,7 +96,7 @@ export interface RlmCollectResultEntry {
 	/** True once the run reached a terminal state (settlement resolved or rejected). */
 	settled: boolean;
 	answer_preview: string | undefined;
-	answer_text?: string;
+	factory_answer_preview?: string;
 	error: string | undefined;
 	duration_ms: number | undefined;
 	tool_use_count: number | undefined;
@@ -110,7 +110,7 @@ export interface RlmCollectResult {
 export type RlmCollectHandler = (
 	targets: string[],
 	timeoutMs: number,
-	includeAnswer: boolean,
+	includeFactoryPreview: boolean,
 ) => Promise<RlmCollectResult>;
 
 export type RlmRunHandler = (request: RlmRunRequest) => Promise<Record<string, unknown>>;
@@ -417,9 +417,9 @@ export function createRlmCollectHostHandler(handler: RlmCollectHandler): HostReq
 			}
 			return target.trim();
 		});
-		const includeAnswer = payload.include_answer ?? false;
-		if (typeof includeAnswer !== "boolean" || (includeAnswer && targets.length !== 1)) {
-			throw new Error("rlm.collect include_answer requires a boolean and one exact child ID when true");
+		const includeFactoryPreview = payload.include_factory_preview ?? false;
+		if (typeof includeFactoryPreview !== "boolean" || (includeFactoryPreview && targets.length !== 1)) {
+			throw new Error("rlm.collect include_factory_preview requires a boolean and one exact child ID when true");
 		}
 		const rawTimeout = payload.timeout_ms ?? 0;
 		if (
@@ -430,7 +430,7 @@ export function createRlmCollectHostHandler(handler: RlmCollectHandler): HostReq
 		) {
 			throw new Error("rlm.collect timeout_ms must be a non-negative integer up to 2147483647");
 		}
-		const { results } = await handler(targets, rawTimeout, includeAnswer);
+		const { results } = await handler(targets, rawTimeout, includeFactoryPreview);
 		return { results };
 	};
 }

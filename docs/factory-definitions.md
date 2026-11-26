@@ -163,13 +163,16 @@ snapshot = await rlm.factory.status(started["run_id"])
 print(snapshot["state"], snapshot["children"])
 ```
 
-`run` returns before the children finish. Each text output receives the full
-text of the exact child's final assistant message, including line breaks.
-For JSON outputs, tell the child to return an object keyed by the declared port
-names. Each port uses the last fenced `json` object containing its key, or
-falls back to an object returned as the whole answer. A JSON `null` is a value.
-Answers
-larger than 256 KiB are unavailable for binding; they are never truncated.
+`run` returns before the children finish. Factory outputs bind from the exact
+child's settled answer preview, not its full reply or the public `rlm.collect`
+preview. The factory collapses whitespace to single spaces and limits each
+child's preview to 160 Unicode characters, including `...` when truncated.
+Keep structured replies short: truncation can remove a JSON port or make the
+preview invalid JSON. Each JSON port uses the last fenced `json` object with
+its key, or falls back to parsing the whole preview as an object. A JSON
+`null` is a value. Text ports receive the preview itself. Live graph nodes
+show their latest settled `answer_preview` when available; `watch(...,
+compact=True)` omits it.
 In an explicit machine, mark starting states with `entry: true`. A
 single-source transition can test settled output, for example:
 
@@ -194,7 +197,7 @@ output to an input named `chapter`. On the indexing state, set
 The runner starts one child per item, up to the first eight in this example.
 Each child counts toward `run.max_children` and shares the run's parallel
 limit. An empty array settles with no children or outputs. A non-array value
-fails the entry. When all items finish successfully, their available answers are joined with
+fails the entry. When all items finish successfully, their available previews are joined with
 blank lines in input order before declared text and JSON ports are captured.
 Use fenced JSON objects for named JSON outputs from multiple item answers.
 

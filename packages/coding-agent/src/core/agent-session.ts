@@ -1068,7 +1068,7 @@ interface RlmChildRun {
 	publication: AgentMessageDeferred;
 	/** Resolves after terminal result publication and detached-run cleanup finish. */
 	settlement: AgentMessageDeferred;
-	completedAnswer?: AssistantMessage;
+	factoryAnswerPreview?: string;
 	/** Child session, once its runtime exists. Used to cancel nested child runs. */
 	session?: AgentSession;
 	settled: boolean;
@@ -1434,6 +1434,31 @@ function rlmActivityStaleMs(
 	// are fractional, and the kernel parser rejects non-int activity_stale_ms.
 	const staleMs = Math.floor(Math.min(wallStaleMs, monotonicStaleMs));
 	return staleMs >= RLM_CHILD_STALE_ACTIVITY_THRESHOLD_MS ? staleMs : undefined;
+}
+
+// Match the released factory's leading, whitespace-compacted preview, not the Pi roster tail.
+function factoryAnswerPreview(message: AssistantMessage | undefined): string | undefined {
+	const cap = 160;
+	const prefix: string[] = [];
+	let space = false;
+	for (const block of message?.content ?? []) {
+		if (block.type !== "text") continue;
+		for (const char of block.text) {
+			if (/\p{White_Space}/u.test(char)) {
+				space = prefix.length > 0;
+				continue;
+			}
+			if (space) prefix.push(" ");
+			prefix.push(char);
+			space = false;
+			if (prefix.length > cap)
+				return `${prefix
+					.slice(0, cap - 3)
+					.join("")
+					.replace(/ +$/, "")}...`;
+		}
+	}
+	return prefix.join("") || undefined;
 }
 
 function readAssistantText(message: AssistantMessage): string {
@@ -11043,8 +11068,8 @@ export class AgentSession {
 				return { name };
 			},
 			"rlm.list_subagents": createRlmListSubagentsHostHandler(() => this.listRlmSubagents()),
-			"rlm.collect": createRlmCollectHostHandler((targets, timeoutMs, includeAnswer) =>
-				this.collectRlmChildren(targets, timeoutMs, includeAnswer),
+			"rlm.collect": createRlmCollectHostHandler((targets, timeoutMs, includeFactoryPreview) =>
+				this._collectRlmChildren(targets, timeoutMs, includeFactoryPreview),
 			),
 			"rlm.progress.note": createRlmProgressNoteHostHandler((message) => this.noteRlmProgress(message)),
 			"rlm.delete_subagent": createRlmDeleteSubagentHostHandler((target) => this.deleteRlmSubagent(target)),
@@ -11648,9 +11673,17 @@ export class AgentSession {
 	 * immediately to a settled cancelled envelope instead of an
 	 * unknown-selector error.
 	 */
-	async collectRlmChildren(targets: string[], timeoutMs: number, includeAnswer = false): Promise<RlmCollectResult> {
-		if (includeAnswer && targets.length !== 1) {
-			throw new Error("Collecting answer text requires one exact child ID");
+	async collectRlmChildren(targets: string[], timeoutMs: number): Promise<RlmCollectResult> {
+		return this._collectRlmChildren(targets, timeoutMs, false);
+	}
+
+	private async _collectRlmChildren(
+		targets: string[],
+		timeoutMs: number,
+		includeFactoryPreview: boolean,
+	): Promise<RlmCollectResult> {
+		if (includeFactoryPreview && targets.length !== 1) {
+			throw new Error("Collecting a factory preview requires one exact child ID");
 		}
 		const candidates = new Map<string, RlmChildRun>();
 		for (const run of this._activeRlmChildRuns.values()) {
@@ -11770,8 +11803,8 @@ export class AgentSession {
 				runs.set(matches[0].id, matches[0]);
 			}
 		}
-		if (includeAnswer && !runs.has(targets[0]) && !deletedRuns.has(targets[0])) {
-			throw new Error("Collecting answer text requires one exact child ID");
+		if (includeFactoryPreview && !runs.has(targets[0]) && !deletedRuns.has(targets[0])) {
+			throw new Error("Collecting a factory preview requires one exact child ID");
 		}
 		if (timeoutMs > 0) {
 			const deadline = Date.now() + timeoutMs;
@@ -11800,7 +11833,7 @@ export class AgentSession {
 		}
 		return {
 			results: [
-				...[...runs.values()].map((run) => this._rlmCollectEntryForRun(run, includeAnswer)),
+				...[...runs.values()].map((run) => this._rlmCollectEntryForRun(run, includeFactoryPreview)),
 				...[...deletedRuns.values()].map((run) => this._rlmDeletedCollectEntryForRun(run)),
 			],
 		};
@@ -11829,15 +11862,12 @@ export class AgentSession {
 		);
 	}
 
-	private _rlmCollectEntryForRun(run: RlmChildRun, includeAnswer = false): RlmCollectResultEntry {
+	private _rlmCollectEntryForRun(run: RlmChildRun, includeFactoryPreview = false): RlmCollectResultEntry {
 		const snapshot = this._rlmChildSnapshotForRun(run);
-		const answer =
-			includeAnswer && run.settled && run.status === "done" && run.completedAnswer
-				? readAssistantText(run.completedAnswer)
-				: undefined;
+		const preview =
+			includeFactoryPreview && run.settled && run.status === "done" ? run.factoryAnswerPreview : undefined;
 		return {
-			// Keep the kernel RPC bounded; never substitute a truncated answer.
-			...(answer !== undefined && Buffer.byteLength(answer, "utf8") <= 256 * 1024 ? { answer_text: answer } : {}),
+			...(preview !== undefined ? { factory_answer_preview: preview } : {}),
 			rlm_child_id: snapshot.id,
 			session_name: snapshot.sessionName,
 			session_dir: snapshot.sessionDir,
@@ -13105,7 +13135,7 @@ export class AgentSession {
 				});
 				await child.waitForRlmQuiescence();
 				if (run.error) throw new Error(run.error);
-				run.completedAnswer = child._findLastAssistantMessage();
+				run.factoryAnswerPreview = factoryAnswerPreview(child._findLastAssistantMessage());
 				run.status = "done";
 				// Only successful completions return; the edge lands on the parent's next commit.
 				const childLastCommitted = child.semanticEdges.lastCommittedRequestId;

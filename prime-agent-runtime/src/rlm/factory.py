@@ -31,7 +31,7 @@ class _Spawn(Protocol):
 
 class _Collect(Protocol):
     async def __call__(
-        self, target: RLMSpawnHandle, /, *, timeout_ms: int, include_answer: bool,
+        self, target: RLMSpawnHandle, /, *, timeout_ms: int, include_factory_preview: bool,
     ) -> list[RLMChildResult]: ...
 
 
@@ -181,6 +181,7 @@ class _Run:
     state: str = "running"
     children: dict[str, str] = field(default_factory=dict)
     nodes: dict[str, str] = field(default_factory=dict)
+    answer_previews: dict[str, str] = field(default_factory=dict)
     last_fired: deque[dict[str, Any]] = field(default_factory=lambda: deque(maxlen=10))
     active: dict[int, tuple[str, RLMSpawnHandle]] = field(default_factory=dict)
     ready: deque[str] = field(default_factory=deque)
@@ -429,9 +430,11 @@ class FactoryRuns:
         return {"runs": [self.graph(run.run_id) for run in self._runs.values()
                          if run.state in live_states or run.active or run.run_id in recent]}
 
-    def graph(self, run_id: str) -> dict[str, Any]:
+    def graph(self, run_id: str, *, compact: bool = False) -> dict[str, Any]:
         run = self._require_run(run_id)
-        nodes = [{"state_id": key, "status": status, "rlm_child_id": run.children.get(key)}
+        nodes = [{"state_id": key, "status": status, "rlm_child_id": run.children.get(key),
+                  **({"answer_preview": run.answer_previews[key]}
+                     if not compact and key in run.answer_previews else {})}
                  for key, status in run.nodes.items()]
         return {**self.status(run_id), "machine": copy.deepcopy(run.machine), "nodes": nodes,
                 "active_nodes": list(dict.fromkeys(key for key, _ in run.active.values())),
@@ -451,8 +454,7 @@ class FactoryRuns:
                 changed = True
             except TimeoutError:
                 pass
-        # The snapshot omits answers and retains only recent fired edges.
-        return {"changed": changed, **self.graph(run_id)}
+        return {"changed": changed, **self.graph(run_id, compact=compact)}
 
     def resume(self, run_id: str) -> dict[str, Any]:
         run = self._require_run(run_id)
@@ -516,9 +518,9 @@ class FactoryRuns:
 
     @staticmethod
     async def _poll_child(
-        collect: _Collect, handle: RLMSpawnHandle, include_answer: bool,
+        collect: _Collect, handle: RLMSpawnHandle, include_factory_preview: bool,
     ) -> tuple[RLMChildResult, float]:
-        results = await collect(handle, timeout_ms=1000, include_answer=include_answer)
+        results = await collect(handle, timeout_ms=1000, include_factory_preview=include_factory_preview)
         if len(results) != 1 or results[0].rlm_child_id != handle.rlm_child_id:
             raise RuntimeError("collect did not return the exact factory child")
         return results[0], monotonic()
@@ -588,6 +590,10 @@ class FactoryRuns:
             if entry.sequence > settled.get(key, 0):
                 outputs[key] = captured
                 settled[key] = entry.sequence
+                if answer and not entry.failed:
+                    run.answer_previews[key] = answer
+                else:
+                    run.answer_previews.pop(key, None)
             guard_values = {
                 name: json.loads(captured[name]) if port["type"] == "json" else captured[name]
                 for port in ports if (name := port["name"]) in captured
@@ -711,16 +717,16 @@ class FactoryRuns:
                 if run.state != "running":
                     break
 
-                # Answer capture only supports a single exact child per request.
+                # Factory previews are requested by exact child ID.
                 if len(run.active) == 1 and not polls:
                     admission, (current, handle) = next(iter(run.active.items()))
-                    result, observed_at = await self._poll_child(collect, handle, bool(by_id[current].get("outputs")))
+                    result, observed_at = await self._poll_child(collect, handle, current not in residents)
                 else:
                     if completed_poll is None:
                         for admission, (key, handle) in run.active.items():
                             if admission not in polls:
                                 polls[admission] = asyncio.create_task(
-                                    self._poll_child(collect, handle, bool(by_id[key].get("outputs")))
+                                    self._poll_child(collect, handle, key not in residents)
                                 )
                         await asyncio.wait(polls.values(), return_when=asyncio.FIRST_COMPLETED)
                         completed_poll = next(number for number, poll in polls.items() if poll.done())
@@ -747,7 +753,7 @@ class FactoryRuns:
                 if state_budget_ms is not None and elapsed_ms > state_budget_ms:
                     await fail(entry, f"state budget_ms {state_budget_ms} exceeded ({int(elapsed_ms)}ms)")
                     continue
-                entry.answers[item] = result.answer_text or ""
+                entry.answers[item] = result.answer_preview or ""
                 entry.remaining -= 1
                 if not entry.remaining:
                     await settle(entry)

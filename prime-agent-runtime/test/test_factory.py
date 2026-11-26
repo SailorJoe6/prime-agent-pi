@@ -125,7 +125,7 @@ class FactoryTest(unittest.IsolatedAsyncioTestCase):
             answer = await gates[child]
             settling.put_nowait(child)
             return {"results": [{"rlm_child_id": child, "status": "done", "settled": True,
-                                 "answer_text": answer}]}
+                                 "factory_answer_preview": answer}]}
 
         with patch("rlm.host_request", side_effect=host), self.assertRaisesRegex(ValueError, "unknown factory run"):
             await rlm.factory.status("from-harness")
@@ -211,7 +211,7 @@ class FactoryTest(unittest.IsolatedAsyncioTestCase):
             a_watch = asyncio.create_task(watch(a, reset))
             try:
                 await reset.wait()
-                results[other].set_result({"status": "done", "settled": True, "answer_text": "blue"})
+                results[other].set_result({"status": "done", "settled": True, "factory_answer_preview": "blue"})
                 successor = await collecting.get()
                 self.assertEqual(requested[-1], (successor, "color: use blue"))
                 self.assertFalse(a_watch.done(), "another run woke the selected run's watcher")
@@ -344,7 +344,7 @@ class FactoryTest(unittest.IsolatedAsyncioTestCase):
                     return {"results": [{"rlm_child_id": child, **await replies[child]}]}
 
                 def settle(child, answer=None):
-                    replies[child].set_result({"status": "done", "settled": True, "answer_text": answer})
+                    replies[child].set_result({"status": "done", "settled": True, "factory_answer_preview": answer})
 
                 with patch("rlm.host_request", side_effect=host):
                     try:
@@ -388,7 +388,7 @@ class FactoryTest(unittest.IsolatedAsyncioTestCase):
                             for run_id in run_ids:
                                 await rlm.factory.stop(run_id)
 
-    async def test_papi_13_declared_ports_bind_exact_final_text_and_named_json(self):
+    async def test_papi_13_declared_ports_bind_released_preview_and_named_json(self):
         self.settings.write_text('{"factory":{"enabled":true}}')
         spec = self.text_dag("fixture")
         spec["run"] = {"failure_policy": "fail_fast"}
@@ -398,11 +398,12 @@ class FactoryTest(unittest.IsolatedAsyncioTestCase):
             consumer["inputs"].append({"name": name, "type": "json", "from": f"produce.{name}"})
         consumer["subagent"]["prompt"] = "Text: {word}\nShape: {shape}"
         rlm.harness.save_factory("fixture", spec)
-        answer = ("Line one.\n  " + "notes " * 40 + '\n```json\n{"shape":"old"}\n```\n'
-                  '```json\n{"shape":{"color":"red","count":2}}\n```\n'
-                  '```json\n{"shade":null}\n```\n')
+        answer = ('Line one. ```json {"shape":"old"} ``` '
+                  '```json {"shape":{"color":"red","count":2}} ``` ```json {"shade":null} ```')
+        cut = '{"shape":[1,2],"shade":"' + 'x' * 130 + '...'
         for full, expected in (
             (answer, f'Text: {answer}\nShape: {{"color": "red", "count": 2}}\n\n## Inputs\n- shade: null\n'),
+            (cut, None),
             ('{"shape":[1,2],"shade":false}', 'Text: {"shape":[1,2],"shade":false}\nShape: [1, 2]\n\n## Inputs\n- shade: false\n'),
             ('```json\n{"shape":[]}\n```', None),
             (None, None),
@@ -418,19 +419,23 @@ class FactoryTest(unittest.IsolatedAsyncioTestCase):
                     self.assertEqual(kind, "rlm.collect")
                     child = f"child-{len(prompts)}"
                     self.assertEqual(data["targets"], [child])
-                    self.assertEqual(data.get("include_answer", False), len(prompts) == 1)
+                    self.assertEqual(data.get("include_factory_preview", False), True)
                     return {"results": [{"rlm_child_id": child, "status": "done", "settled": True,
                                          "answer_preview": '{"shape":99,"shade":99}',
-                                         "answer_text": full if len(prompts) == 1 else None}]}
+                                         "factory_answer_preview": full if len(prompts) == 1 else None}]}
 
                 with patch("rlm.host_request", side_effect=host):
                     run_id = (await rlm.factory.run("fixture"))["run_id"]
                     async with asyncio.timeout(3):
                         snapshot = await rlm.factory.watch(run_id, timeout=2)
+                producer_node = next(row for row in snapshot["nodes"] if row["state_id"] == "produce")
+                self.assertEqual(producer_node.get("answer_preview"), full)
+                compact = await rlm.factory.watch(run_id, compact=True)
+                self.assertTrue(all("answer_preview" not in row for row in compact["nodes"]))
                 if expected is None:
                     self.assertEqual(len(prompts), 1)
                     self.assertEqual(snapshot["state"], "error")
-                    self.assertIn("produce.shade" if full else "produce.word", snapshot["error"])
+                    self.assertIn(("produce.shape" if full == cut else "produce.shade") if full else "produce.word", snapshot["error"])
                 else:
                     self.assertEqual(snapshot["state"], "done")
                     self.assertEqual(prompts[1:], [expected])
@@ -475,7 +480,7 @@ class FactoryTest(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(data["targets"], [child])
             return {"results": [{"rlm_child_id": child, "status": "done", "settled": True,
                                  "answer_preview": '{"report":{"review":{"accept":1}}}',
-                                 "answer_text": answers[len(prompts) - 1]}]}
+                                 "factory_answer_preview": answers[len(prompts) - 1]}]}
 
         with patch("rlm.host_request", side_effect=host), self.subTest("pause before join"):
             run_id = (await rlm.factory.run("format"))["run_id"]
@@ -546,7 +551,7 @@ class FactoryTest(unittest.IsolatedAsyncioTestCase):
             child, = data["targets"]
             self.assertIn(child, answers)
             return {"results": [{"rlm_child_id": child, "status": "done", "settled": True,
-                                 "answer_preview": "not the settled output", "answer_text": answers.pop(child)}]}
+                                 "answer_preview": "not the settled output", "factory_answer_preview": answers.pop(child)}]}
 
         with patch("rlm.host_request", side_effect=host):
             atlas = (await rlm.factory.run("atlas"))["run_id"]
@@ -602,7 +607,7 @@ class FactoryTest(unittest.IsolatedAsyncioTestCase):
             if kind == "rlm.collect":
                 child, = data["targets"]
                 name, prompt = requests[child]
-                self.assertEqual(data.get("include_answer", False), "|" not in prompt)
+                self.assertEqual(data.get("include_factory_preview", False), True)
                 gates[child] = asyncio.get_running_loop().create_future()
                 collecting.put_nowait(child)
                 return {"results": [{"rlm_child_id": child, "answer_preview": "preview", **await gates[child]}]}
@@ -613,7 +618,7 @@ class FactoryTest(unittest.IsolatedAsyncioTestCase):
                                  "session_dir": str(self.directory), "status": "running"}}
 
         def settle(child, answer=None):
-            gates[child].set_result({"settled": True, "status": "done", "answer_text": answer})
+            gates[child].set_result({"settled": True, "status": "done", "factory_answer_preview": answer})
 
         async def until(run_id, state, *, drained=False):
             snapshot = await rlm.factory.graph(run_id)
@@ -646,7 +651,7 @@ class FactoryTest(unittest.IsolatedAsyncioTestCase):
                     for row, pair in zip(runs, ((title, style), (other_title, other_style)), strict=True):
                         self.assertEqual(row["active_children"], {"title": [pair[0]], "style": [pair[1]]})
                         self.assertEqual(row["queued"], {"summary": 1})
-                    gates[style].set_result({"settled": False, "status": "done", "answer_text": '{"value":"early"}'})
+                    gates[style].set_result({"settled": False, "status": "done", "factory_answer_preview": '{"value":"early"}'})
                     self.assertEqual(await collecting.get(), style)
                     self.assertEqual(len(requests), 4)
                     settle(style, '{"value":{"font":"plain"}}')
@@ -665,7 +670,7 @@ class FactoryTest(unittest.IsolatedAsyncioTestCase):
                     self.assertCountEqual(deleted, [other_title, other_style])
                     self.assertEqual((await rlm.factory.graph(a))["active_nodes"], ["title", "summary"])
                     settle(summary, "Two paragraphs")
-                    settle(title, "Atlas\nTitle")
+                    settle(title, "Atlas Title")
                     paused = await until(a, "paused")
                     self.assertEqual(paused["pause_reason"], "max_children exceeded")
                     self.assertEqual(paused["active_nodes"], [])
@@ -674,7 +679,7 @@ class FactoryTest(unittest.IsolatedAsyncioTestCase):
                     self.assertEqual(len(requests), 5)
                     await rlm.factory.resume(a)
                     formatted = await collecting.get()
-                    self.assertEqual(requests[formatted][1], 'Atlas\nTitle|{"font": "plain"}|Two paragraphs')
+                    self.assertEqual(requests[formatted][1], 'Atlas Title|{"font": "plain"}|Two paragraphs')
                     settle(formatted)
                     self.assertIsNone((await until(a, "done"))["error"])
                     self.assertEqual(len(requests), 6)
@@ -739,7 +744,7 @@ class FactoryTest(unittest.IsolatedAsyncioTestCase):
                                  "session_dir": str(self.directory), "status": "running"}}
 
         def settle(child, answer=""):
-            gates[child].set_result({"settled": True, "status": "done", "answer_text": answer})
+            gates[child].set_result({"settled": True, "status": "done", "factory_answer_preview": answer})
 
         async def next_child(run, prompt):
             child = await waiting.get()
@@ -871,7 +876,7 @@ class FactoryTest(unittest.IsolatedAsyncioTestCase):
                 child, = data["targets"]
                 answer = await children[child][1]
                 return {"results": [{"rlm_child_id": child, "settled": answer is not None,
-                                     "status": "running" if answer is None else "done", "answer_text": answer}]}
+                                     "status": "running" if answer is None else "done", "factory_answer_preview": answer}]}
             self.assertEqual(kind, "rlm.delete_subagent")
             child = data["target"]
             deleted.append(child)
@@ -957,7 +962,7 @@ class FactoryTest(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(kind, "rlm.collect")
             child, = data["targets"]
             return {"results": [{"rlm_child_id": child, "status": "done", "settled": True,
-                                 "answer_text": await answers[child]}]}
+                                 "factory_answer_preview": await answers[child]}]}
 
         with patch("rlm.host_request", side_effect=host):
             a = (await rlm.factory.run("archive-draft"))["run_id"]
@@ -1053,7 +1058,7 @@ class FactoryTest(unittest.IsolatedAsyncioTestCase):
                         async with asyncio.timeout(3):
                             a, draft, style = await start()
                             b, other_draft, other_style = await start()
-                            release(draft, status="error", error="draft unavailable", answer_text="not a valid title")
+                            release(draft, status="error", error="draft unavailable", factory_answer_preview="not a valid title")
                             initial = await rlm.factory.watch(a, timeout=2)
                             self.assertIn("draft unavailable", initial["error"])
                             if mode == "fail_fast":
@@ -1146,7 +1151,7 @@ class FactoryTest(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(kind, "rlm.collect")
             child, = data["targets"]
             return {"results": [{"rlm_child_id": child, "status": "done", "settled": True,
-                                 "answer_text": answers[child]}]}
+                                 "factory_answer_preview": answers[child]}]}
 
         with patch("rlm.host_request", side_effect=host):
             run = (await rlm.factory.run("chapter-index"))["run_id"]
@@ -1186,7 +1191,7 @@ class FactoryTest(unittest.IsolatedAsyncioTestCase):
                     failed = attempt == 3 or (attempt == 4 and exhausted)
                     return {"results": [{"rlm_child_id": child, "status": "error" if failed else "done",
                                          "settled": True, "error": "index failed" if failed else None,
-                                         "answer_text": {1: '{"chapters":["intro","appendix"]}',
+                                         "factory_answer_preview": {1: '{"chapters":["intro","appendix"]}',
                                                          2: "intro index", 4: "appendix index"}.get(attempt)}]}
 
                 with patch("rlm.host_request", side_effect=host):
@@ -1237,7 +1242,7 @@ class FactoryTest(unittest.IsolatedAsyncioTestCase):
                     if child == "review-1":
                         clock += elapsed
                     return {"results": [{"rlm_child_id": child, "status": "done", "settled": True,
-                                         "answer_text": "review text"}]}
+                                         "factory_answer_preview": "review text"}]}
 
                 with patch("rlm.factory.monotonic", side_effect=lambda: clock), patch("rlm.host_request", side_effect=host):
                     run = (await rlm.factory.run("timed-review"))["run_id"]
@@ -1272,7 +1277,7 @@ class FactoryTest(unittest.IsolatedAsyncioTestCase):
                     await release[child].wait()
                     return {"results": [{"rlm_child_id": child, "status": "running", "settled": False}]}
                 return {"results": [{"rlm_child_id": child, "status": "done", "settled": True,
-                                     "answer_text": "settled chapter"}]}
+                                     "factory_answer_preview": "settled chapter"}]}
             self.assertEqual(kind, "rlm.delete_subagent")
             child = data["target"]
             deleted.append(child)

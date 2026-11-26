@@ -86,7 +86,6 @@ class RLMChildResult:
     duration_ms: int | None
     tool_use_count: int | None
     replied_since_task: bool | None
-    answer_text: str | None = None
 
 
 def _spawn_handle_from_payload(payload: Any) -> RLMSpawnHandle:
@@ -400,7 +399,6 @@ def _child_result_from_payload(payload: Any) -> RLMChildResult:
         status=status,
         settled=settled,
         answer_preview=_optional_str("answer_preview"),
-        answer_text=_optional_str("answer_text"),
         error=_optional_str("error"),
         duration_ms=_optional_int("duration_ms"),
         tool_use_count=_optional_int("tool_use_count"),
@@ -429,7 +427,7 @@ async def collect(
     return await _collect(targets, timeout_ms=timeout_ms)
 
 
-async def _collect(targets: Any, *, timeout_ms: int, include_answer: bool = False) -> list[RLMChildResult]:
+async def _collect(targets: Any, *, timeout_ms: int, include_factory_preview: bool = False) -> list[RLMChildResult]:
     if not isinstance(timeout_ms, int) or isinstance(timeout_ms, bool) or timeout_ms < 0:
         raise TypeError("timeout_ms must be a non-negative int")
     if targets is None:
@@ -443,12 +441,16 @@ async def _collect(targets: Any, *, timeout_ms: int, include_answer: bool = Fals
             f"targets must be None, a target, or a list of targets, got {type(targets).__name__}"
         )
     request: dict[str, Any] = {"targets": selectors, "timeout_ms": timeout_ms}
-    if include_answer:
-        request["include_answer"] = True
+    if include_factory_preview:
+        request["include_factory_preview"] = True
     payload = await host_request("rlm.collect", request)
     results = payload.get("results")
     if not isinstance(results, list):
         raise RuntimeError("rlm.collect returned an invalid results list")
+    # The factory's internal view uses the released leading preview, not the public roster tail.
+    if include_factory_preview:
+        results = [{**entry, "answer_preview": entry.get("factory_answer_preview")}
+                   if isinstance(entry, dict) else entry for entry in results]
     return [_child_result_from_payload(entry) for entry in results]
 
 
