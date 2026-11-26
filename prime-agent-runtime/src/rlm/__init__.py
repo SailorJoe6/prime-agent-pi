@@ -86,6 +86,7 @@ class RLMChildResult:
     duration_ms: int | None
     tool_use_count: int | None
     replied_since_task: bool | None
+    answer_text: str | None = None
 
 
 def _spawn_handle_from_payload(payload: Any) -> RLMSpawnHandle:
@@ -399,6 +400,7 @@ def _child_result_from_payload(payload: Any) -> RLMChildResult:
         status=status,
         settled=settled,
         answer_preview=_optional_str("answer_preview"),
+        answer_text=_optional_str("answer_text"),
         error=_optional_str("error"),
         duration_ms=_optional_int("duration_ms"),
         tool_use_count=_optional_int("tool_use_count"),
@@ -424,6 +426,10 @@ async def collect(
     session is never steered. Completed children keep their result until
     deleted, so a later ``collect`` re-reads them without waiting.
     """
+    return await _collect(targets, timeout_ms=timeout_ms)
+
+
+async def _collect(targets: Any, *, timeout_ms: int, include_answer: bool = False) -> list[RLMChildResult]:
     if not isinstance(timeout_ms, int) or isinstance(timeout_ms, bool) or timeout_ms < 0:
         raise TypeError("timeout_ms must be a non-negative int")
     if targets is None:
@@ -436,7 +442,10 @@ async def collect(
         raise TypeError(
             f"targets must be None, a target, or a list of targets, got {type(targets).__name__}"
         )
-    payload = await host_request("rlm.collect", {"targets": selectors, "timeout_ms": timeout_ms})
+    request: dict[str, Any] = {"targets": selectors, "timeout_ms": timeout_ms}
+    if include_answer:
+        request["include_answer"] = True
+    payload = await host_request("rlm.collect", request)
     results = payload.get("results")
     if not isinstance(results, list):
         raise RuntimeError("rlm.collect returned an invalid results list")
@@ -552,7 +561,7 @@ class _RLMFactoryNamespace:
     async def run(self, spec_id: str, *, name: str | None = None) -> dict[str, Any]:
         require_factory_enabled()
         return self._runs.start(
-            _harness_state._resolve(), spec_id, name, spawn=spawn, collect=collect, delete=delete_subagent,
+            _harness_state._resolve(), spec_id, name, spawn=spawn, collect=_collect, delete=delete_subagent,
         )
 
     async def status(self, run_id: str) -> dict[str, Any]:

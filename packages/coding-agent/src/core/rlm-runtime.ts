@@ -96,6 +96,7 @@ export interface RlmCollectResultEntry {
 	/** True once the run reached a terminal state (settlement resolved or rejected). */
 	settled: boolean;
 	answer_preview: string | undefined;
+	answer_text?: string;
 	error: string | undefined;
 	duration_ms: number | undefined;
 	tool_use_count: number | undefined;
@@ -106,7 +107,11 @@ export interface RlmCollectResult {
 	results: RlmCollectResultEntry[];
 }
 
-export type RlmCollectHandler = (targets: string[], timeoutMs: number) => Promise<RlmCollectResult>;
+export type RlmCollectHandler = (
+	targets: string[],
+	timeoutMs: number,
+	includeAnswer: boolean,
+) => Promise<RlmCollectResult>;
 
 export type RlmRunHandler = (request: RlmRunRequest) => Promise<Record<string, unknown>>;
 type RlmCreateSessionHandler = (request: RlmCreateSessionRequest) => Promise<RlmCreateSessionResult>;
@@ -412,11 +417,11 @@ export function createRlmCollectHostHandler(handler: RlmCollectHandler): HostReq
 			}
 			return target.trim();
 		});
-		const rawTimeout = payload.timeout_ms;
-		if (rawTimeout === undefined || rawTimeout === null) {
-			const { results } = await handler(targets, 0);
-			return { results };
+		const includeAnswer = payload.include_answer ?? false;
+		if (typeof includeAnswer !== "boolean" || (includeAnswer && targets.length !== 1)) {
+			throw new Error("rlm.collect include_answer requires a boolean and one exact child ID when true");
 		}
+		const rawTimeout = payload.timeout_ms ?? 0;
 		if (
 			typeof rawTimeout !== "number" ||
 			!Number.isSafeInteger(rawTimeout) ||
@@ -425,7 +430,7 @@ export function createRlmCollectHostHandler(handler: RlmCollectHandler): HostReq
 		) {
 			throw new Error("rlm.collect timeout_ms must be a non-negative integer up to 2147483647");
 		}
-		const { results } = await handler(targets, rawTimeout);
+		const { results } = await handler(targets, rawTimeout, includeAnswer);
 		return { results };
 	};
 }

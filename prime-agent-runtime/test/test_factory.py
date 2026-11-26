@@ -128,7 +128,7 @@ class FactoryTest(unittest.IsolatedAsyncioTestCase):
             answer = await gates[child]
             settling.put_nowait(child)
             return {"results": [{"rlm_child_id": child, "status": "done", "settled": True,
-                                 "answer_preview": answer}]}
+                                 "answer_text": answer}]}
 
         with patch("rlm.host_request", side_effect=host), self.assertRaisesRegex(ValueError, "unknown factory run"):
             await rlm.factory.status("from-harness")
@@ -214,7 +214,7 @@ class FactoryTest(unittest.IsolatedAsyncioTestCase):
             a_watch = asyncio.create_task(watch(a, reset))
             try:
                 await reset.wait()
-                results[other].set_result({"status": "done", "settled": True, "answer_preview": "blue"})
+                results[other].set_result({"status": "done", "settled": True, "answer_text": "blue"})
                 successor = await collecting.get()
                 self.assertEqual(requested[-1], (successor, "color: use blue"))
                 self.assertFalse(a_watch.done(), "another run woke the selected run's watcher")
@@ -347,7 +347,7 @@ class FactoryTest(unittest.IsolatedAsyncioTestCase):
                     return {"results": [{"rlm_child_id": child, **await replies[child]}]}
 
                 def settle(child, answer=None):
-                    replies[child].set_result({"status": "done", "settled": True, "answer_preview": answer})
+                    replies[child].set_result({"status": "done", "settled": True, "answer_text": answer})
 
                 with patch("rlm.host_request", side_effect=host):
                     try:
@@ -390,3 +390,49 @@ class FactoryTest(unittest.IsolatedAsyncioTestCase):
                         async with asyncio.timeout(3):
                             for run_id in run_ids:
                                 await rlm.factory.stop(run_id)
+
+    async def test_papi_13_declared_ports_bind_exact_final_text_and_named_json(self):
+        self.settings.write_text('{"factory":{"enabled":true}}')
+        spec = self.text_dag("fixture")
+        producer, consumer = spec["nodes"][1], spec["nodes"][0]
+        for name in ("shape", "shade"):
+            producer["outputs"].append({"name": name, "type": "json"})
+            consumer["inputs"].append({"name": name, "type": "json", "from": f"produce.{name}"})
+        consumer["subagent"]["prompt"] = "Text: {word}\nShape: {shape}"
+        rlm.harness.save_factory("fixture", spec)
+        answer = ("Line one.\n  " + "notes " * 40 + '\n```json\n{"shape":"old"}\n```\n'
+                  '```json\n{"shape":{"color":"red","count":2}}\n```\n'
+                  '```json\n{"shade":null}\n```\n')
+        for full, expected in (
+            (answer, f'Text: {answer}\nShape: {{"color": "red", "count": 2}}\n\n## Inputs\n- shade: null\n'),
+            ('{"shape":[1,2],"shade":false}', 'Text: {"shape":[1,2],"shade":false}\nShape: [1, 2]\n\n## Inputs\n- shade: false\n'),
+            ('```json\n{"shape":[]}\n```', None),
+            (None, None),
+        ):
+            with self.subTest(full=full):
+                prompts = []
+
+                async def host(kind, data):
+                    if kind == "rlm.run":
+                        prompts.append(data["prompt"])
+                        return {"rlm_child_id": f"child-{len(prompts)}", "name": data["kwargs"]["name"],
+                                "session_dir": str(self.directory), "model": "fake"}
+                    self.assertEqual(kind, "rlm.collect")
+                    child = f"child-{len(prompts)}"
+                    self.assertEqual(data["targets"], [child])
+                    self.assertEqual(data.get("include_answer", False), len(prompts) == 1)
+                    return {"results": [{"rlm_child_id": child, "status": "done", "settled": True,
+                                         "answer_preview": '{"shape":99,"shade":99}',
+                                         "answer_text": full if len(prompts) == 1 else None}]}
+
+                with patch("rlm.host_request", side_effect=host):
+                    run_id = (await rlm.factory.run("fixture"))["run_id"]
+                    async with asyncio.timeout(3):
+                        snapshot = await rlm.factory.watch(run_id, timeout=2)
+                if expected is None:
+                    self.assertEqual(len(prompts), 1)
+                    self.assertEqual(snapshot["state"], "error")
+                    self.assertIn("produce.shade" if full else "produce.word", snapshot["error"])
+                else:
+                    self.assertEqual(snapshot["state"], "done")
+                    self.assertEqual(prompts[1:], [expected])

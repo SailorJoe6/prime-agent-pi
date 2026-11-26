@@ -138,11 +138,11 @@ static graph, it looks up saved harness definitions; a library file must first
 be saved as a harness definition to preview it here. `await rlm.factory.graph()`
 returns an empty run list. Pass a run ID to `graph` to inspect that run instead.
 
-## Run a named text DAG from Python
+## Run a named DAG from Python
 
 With `factory.enabled` set to `true`, `run` first checks the harness and then
 looks in the machine library. It does not edit either definition. This initial
-run path accepts one-shot DAGs with text ports and runs one child at a time per
+run path accepts one-shot DAGs with text and JSON ports and runs one child at a time per
 run. It checks `max_children` before starting and applies `max_transitions`
 as the run proceeds.
 
@@ -159,9 +159,14 @@ snapshot = await rlm.factory.status(started["run_id"])
 print(snapshot["state"], snapshot["children"])
 ```
 
-`run` returns before the children finish. Text ports bind the existing compact
-RLM answer preview, not a full transcript. Missing required output or child
-failure ends the run with an error. State machines, JSON ports, resident states,
+`run` returns before the children finish. Each text output receives the full
+text of the exact child's final assistant message, including line breaks.
+For JSON outputs, tell the child to return an object keyed by the declared port
+names. Each port uses the last fenced `json` object containing its key, or
+falls back to an object returned as the whole answer. A JSON `null` is a value.
+A missing required output or child failure ends the run with an error. Answers
+larger than 256 KiB are unavailable for binding; they are never truncated.
+State machines, resident states,
 fan-out, retries, time budgets, and custom failure handling are not supported by
 this run path. Run records are kernel-local and do not survive a restart.
 Children are ordinary RLM children and remain visible through the existing

@@ -1068,6 +1068,7 @@ interface RlmChildRun {
 	publication: AgentMessageDeferred;
 	/** Resolves after terminal result publication and detached-run cleanup finish. */
 	settlement: AgentMessageDeferred;
+	completedAnswer?: AssistantMessage;
 	/** Child session, once its runtime exists. Used to cancel nested child runs. */
 	session?: AgentSession;
 	settled: boolean;
@@ -11042,8 +11043,8 @@ export class AgentSession {
 				return { name };
 			},
 			"rlm.list_subagents": createRlmListSubagentsHostHandler(() => this.listRlmSubagents()),
-			"rlm.collect": createRlmCollectHostHandler((targets, timeoutMs) =>
-				this.collectRlmChildren(targets, timeoutMs),
+			"rlm.collect": createRlmCollectHostHandler((targets, timeoutMs, includeAnswer) =>
+				this.collectRlmChildren(targets, timeoutMs, includeAnswer),
 			),
 			"rlm.progress.note": createRlmProgressNoteHostHandler((message) => this.noteRlmProgress(message)),
 			"rlm.delete_subagent": createRlmDeleteSubagentHostHandler((target) => this.deleteRlmSubagent(target)),
@@ -11647,7 +11648,10 @@ export class AgentSession {
 	 * immediately to a settled cancelled envelope instead of an
 	 * unknown-selector error.
 	 */
-	async collectRlmChildren(targets: string[], timeoutMs: number): Promise<RlmCollectResult> {
+	async collectRlmChildren(targets: string[], timeoutMs: number, includeAnswer = false): Promise<RlmCollectResult> {
+		if (includeAnswer && targets.length !== 1) {
+			throw new Error("Collecting answer text requires one exact child ID");
+		}
 		const candidates = new Map<string, RlmChildRun>();
 		for (const run of this._activeRlmChildRuns.values()) {
 			candidates.set(run.id, run);
@@ -11766,6 +11770,9 @@ export class AgentSession {
 				runs.set(matches[0].id, matches[0]);
 			}
 		}
+		if (includeAnswer && !runs.has(targets[0]) && !deletedRuns.has(targets[0])) {
+			throw new Error("Collecting answer text requires one exact child ID");
+		}
 		if (timeoutMs > 0) {
 			const deadline = Date.now() + timeoutMs;
 			await Promise.all(
@@ -11793,7 +11800,7 @@ export class AgentSession {
 		}
 		return {
 			results: [
-				...[...runs.values()].map((run) => this._rlmCollectEntryForRun(run)),
+				...[...runs.values()].map((run) => this._rlmCollectEntryForRun(run, includeAnswer)),
 				...[...deletedRuns.values()].map((run) => this._rlmDeletedCollectEntryForRun(run)),
 			],
 		};
@@ -11822,9 +11829,15 @@ export class AgentSession {
 		);
 	}
 
-	private _rlmCollectEntryForRun(run: RlmChildRun): RlmCollectResultEntry {
+	private _rlmCollectEntryForRun(run: RlmChildRun, includeAnswer = false): RlmCollectResultEntry {
 		const snapshot = this._rlmChildSnapshotForRun(run);
+		const answer =
+			includeAnswer && run.settled && run.status === "done" && run.completedAnswer
+				? readAssistantText(run.completedAnswer)
+				: undefined;
 		return {
+			// Keep the kernel RPC bounded; never substitute a truncated answer.
+			...(answer !== undefined && Buffer.byteLength(answer, "utf8") <= 256 * 1024 ? { answer_text: answer } : {}),
 			rlm_child_id: snapshot.id,
 			session_name: snapshot.sessionName,
 			session_dir: snapshot.sessionDir,
@@ -13092,6 +13105,7 @@ export class AgentSession {
 				});
 				await child.waitForRlmQuiescence();
 				if (run.error) throw new Error(run.error);
+				run.completedAnswer = child._findLastAssistantMessage();
 				run.status = "done";
 				// Only successful completions return; the edge lands on the parent's next commit.
 				const childLastCommitted = child.semanticEdges.lastCommittedRequestId;

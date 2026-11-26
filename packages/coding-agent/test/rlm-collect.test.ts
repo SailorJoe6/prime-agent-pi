@@ -123,6 +123,32 @@ describe("rlm.collect typed fan-in", () => {
 		expect(entry.error).toBeUndefined();
 	});
 
+	it("PAPI-13 returns the unabridged settled answer only for an opted-in exact child ID", async () => {
+		session = makeSession();
+		const prompt = `First line.\n  ${"example ".repeat(70)}\nLast line.`;
+		const first = await session.runRlmChild(prompt, { name: "worker-a" });
+		const other = await session.runRlmChild("different answer", { name: "worker-b" });
+		const rootSession = session;
+		const handler = createRlmCollectHostHandler((targets, timeout, includeAnswer) =>
+			rootSession.collectRlmChildren(targets, timeout, includeAnswer),
+		);
+		const result = await handler({ targets: [first.rlm_child_id], timeout_ms: 10_000, include_answer: true });
+		expect(result).toMatchObject({
+			results: [
+				{
+					rlm_child_id: first.rlm_child_id,
+					settled: true,
+					answer_text: `child answer: [task from parent]\n\n${prompt}`,
+				},
+			],
+		});
+		const regular = await session.collectRlmChildren([first.rlm_child_id, other.rlm_child_id], 10_000);
+		expect(regular.results.map((entry) => entry.answer_text)).toEqual([undefined, undefined]);
+		expect(regular.results[0].answer_preview).not.toContain("First line");
+		await expect(handler({ targets: ["worker-a"], include_answer: true })).rejects.toThrow("exact child ID");
+		await expect(handler({ include_answer: true })).rejects.toThrow("exact child ID");
+	});
+
 	it("collects every direct child when no targets are given and only the selected child when targeted", async () => {
 		session = makeSession();
 		const first = await session.runRlmChild("first task", { name: "worker-a" });

@@ -28,7 +28,9 @@ class _Spawn(Protocol):
 
 
 class _Collect(Protocol):
-    async def __call__(self, target: RLMSpawnHandle, /, *, timeout_ms: int) -> list[RLMChildResult]: ...
+    async def __call__(
+        self, target: RLMSpawnHandle, /, *, timeout_ms: int, include_answer: bool,
+    ) -> list[RLMChildResult]: ...
 
 
 class _DeleteChild(Protocol):
@@ -51,7 +53,7 @@ max_entries and set run limits in the run block.
 Opt in by adding {"factory": {"enabled": true}} to your agent settings.json.
 Use await rlm.factory.graph(name) to inspect a saved definition without
 starting children. Library files can be validated with rlm.machine_library.
-Run a one-shot text DAG with await rlm.factory.run(name) and inspect its
+Run a one-shot DAG with await rlm.factory.run(name) and inspect its
 returned run_id with await rlm.factory.status(run_id). Use
 await rlm.factory.watch(run_id, timeout=5) to wait for its graph to change,
 await rlm.factory.resume(run_id) to continue a paused run, and
@@ -167,6 +169,32 @@ class _Run:
         event.set()
 
 
+_FENCED_JSON_RE = re.compile(r"```json\s*(.*?)\s*```", re.DOTALL)
+
+
+def _capture_outputs(answer: str, ports: list[dict[str, Any]]) -> dict[str, str]:
+    outputs = {port["name"]: answer for port in ports if port["type"] == "text" and answer}
+    remaining = {port["name"] for port in ports if port["type"] == "json"}
+    if not remaining:
+        return outputs
+    candidates = [*reversed(_FENCED_JSON_RE.findall(answer)), answer.strip()]
+    for candidate in candidates:
+        try:
+            parsed = json.loads(candidate)
+        except (ValueError, RecursionError):
+            continue
+        if isinstance(parsed, dict):
+            for name in remaining.intersection(parsed):
+                try:
+                    outputs[name] = json.dumps(parsed[name], allow_nan=False)
+                except (ValueError, RecursionError):
+                    continue
+                remaining.remove(name)
+        if not remaining:
+            break
+    return outputs
+
+
 def _render_prompt(template: str, values: dict[str, str]) -> str:
     if not values:
         return template
@@ -212,10 +240,8 @@ def _prepare_dag(spec: dict[str, Any], harness: HarnessState) -> tuple[list[dict
             state = pending.pop(key)
             if (state.get("lifecycle", "task") != "task" or state.get("foreach") is not None
                     or state.get("retries", 0) or "budget_ms" in state
-                    or state.get("failure_policy", "fail_fast") != "fail_fast"
-                    or any(port["type"] != "text" for field_name in ("inputs", "outputs")
-                           for port in state.get(field_name) or [])):
-                raise ValueError(f"state {key!r}: this run path only supports one-shot task states with text ports")
+                    or state.get("failure_policy", "fail_fast") != "fail_fast"):
+                raise ValueError(f"state {key!r}: this run path only supports one-shot task states")
             subagent = state["subagent"]
             if isinstance(subagent, str):
                 entry = harness.get("subagent", subagent)
@@ -344,8 +370,10 @@ class FactoryRuns:
                     value = outputs.get(port["from"])
                     if value is not None:
                         bindings[port["name"]] = value
-                    elif not port.get("optional"):
-                        raise ValueError(f"missing output {port['from']!r}")
+                    elif port.get("optional"):
+                        bindings[port["name"]] = "null" if port["type"] == "json" else "None"
+                    else:
+                        raise ValueError(f"missing {port['type']} output {port['from']!r}")
                 subagent = state["subagent"]
                 prompt = _render_prompt(subagent["prompt"], bindings)
                 handle = await spawn(prompt, name=f"factory-{run.run_id}-{index}",
@@ -354,8 +382,9 @@ class FactoryRuns:
                 run.children[current] = handle.rlm_child_id
                 run.nodes[current] = "running"
                 run.notify()
+                ports = state.get("outputs") or []
                 while run.state == "running":
-                    results = await collect(handle, timeout_ms=1000)
+                    results = await collect(handle, timeout_ms=1000, include_answer=bool(ports))
                     if len(results) != 1 or results[0].rlm_child_id != handle.rlm_child_id:
                         raise RuntimeError("collect did not return the exact factory child")
                     result = results[0]
@@ -366,9 +395,9 @@ class FactoryRuns:
                     run.notify()
                     if result.status != "done" and run.state == "running":
                         raise RuntimeError(result.error or f"child settled with status {result.status!r}")
-                    if result.answer_preview:
-                        for port in state.get("outputs") or []:
-                            outputs[f"{current}.{port['name']}"] = result.answer_preview
+                    if run.state == "running" and result.answer_text is not None:
+                        for name, value in _capture_outputs(result.answer_text, ports).items():
+                            outputs[f"{current}.{name}"] = value
                     break
         except Exception as exc:
             if run.state != "stopping" or run.active is None:
