@@ -7,6 +7,7 @@ import {
 	HEARTBEAT_PROMPT_CUSTOM_TYPE,
 	sanitizeMessageHeaderValue,
 } from "./messages.js";
+import type { RlmSubagentRegistryEntry } from "./rlm-runtime.js";
 import { canonicalSessionPath } from "./session-lease.js";
 
 export const AGENT_MESSAGE_CUSTOM_TYPE = "agent_message";
@@ -171,6 +172,8 @@ export interface AgentSessionMessageController {
 	awaitPendingChildPublication?(selector: string): Promise<string | undefined>;
 	assertSessionNameAvailable?(input: AgentSessionNameAvailabilityInput): void | Promise<void>;
 	setSessionName?(name: string): void | Promise<void>;
+	renameSessionFromPython?(name: string): Promise<void>;
+	renameDirectRlmChild?(child: RlmSubagentRegistryEntry, name: string): Promise<void>;
 	sendAgentMessage(input: AgentSessionMessageSendInput): Promise<AgentSessionMessageReceipt>;
 }
 

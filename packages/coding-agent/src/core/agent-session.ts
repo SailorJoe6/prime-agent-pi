@@ -199,6 +199,7 @@ import {
 	createCompactionOutcomeMessage,
 	createHarnessDigestMessage,
 	createHeartbeatPromptMessage,
+	createPythonRenameNotice,
 	createRefinementNoticeMessage,
 	createRefinementOutcomeMessage,
 	createRlmChildFailureMessage,
@@ -1708,6 +1709,7 @@ export class AgentSession {
 	private readonly _semanticEdges: SemanticEdgeRecorder;
 	private _rlmParentNodeId?: string;
 	private _rlmParentAgent?: string;
+	private _renameInlineRlmSelf?: (name: string) => Promise<void>;
 	private _repliedToParentSinceTask: boolean | undefined;
 	private _parentReplyCount = 0;
 	private _subagentRuntimeHost?: SubagentRuntimeHost;
@@ -11011,6 +11013,32 @@ export class AgentSession {
 				this._withdrawAsyncBashCompletionNotice(details);
 			}),
 			"rlm.find_models": createRlmFindModelsHostHandler((query, limit) => this.findRlmModels(query, limit)),
+			"rlm.rename": async (payload) => {
+				if ("target" in payload) throw new Error("rlm.rename uses session_id, not target");
+				const name = normalizeRequestedRlmSubagentSessionName(payload.name, "rlm.rename");
+				if (name === undefined) throw new Error("rlm.rename requires a name");
+				assertDirectAgentMessageTarget(name);
+				const controller = this._agentMessageController;
+				if ("session_id" in payload) {
+					if (typeof payload.session_id !== "string" || !payload.session_id) {
+						throw new Error("rlm.rename requires an exact direct child ID");
+					}
+					await this._renameDirectRlmChild(payload.session_id, name);
+				} else if (controller?.renameSessionFromPython) {
+					await controller.renameSessionFromPython(name);
+				} else if (this.sessionName === name) {
+					return { name };
+				} else if (controller?.setSessionName) {
+					await controller.setSessionName(name);
+				} else if (this._renameInlineRlmSelf) {
+					await this._renameInlineRlmSelf(name);
+				} else if (this._rlmDepth > 0) {
+					throw new Error("rlm.rename requires the current child's naming authority");
+				} else {
+					this.setSessionName(name);
+				}
+				return { name };
+			},
 			"rlm.list_subagents": createRlmListSubagentsHostHandler(() => this.listRlmSubagents()),
 			"rlm.collect": createRlmCollectHostHandler((targets, timeoutMs) =>
 				this.collectRlmChildren(targets, timeoutMs),
@@ -11372,6 +11400,18 @@ export class AgentSession {
 				throw error;
 			}
 		}
+		child._renameInlineRlmSelf = async (name) => {
+			if (child.sessionName === name) return;
+			const pending = this._pendingRlmSubagentSessionNames;
+			if (pending.has(name)) throw new Error(formatAgentSessionNameUnavailable(name, options.rlmDepth));
+			pending.add(name);
+			try {
+				await this._assertRlmSubagentSessionNameAvailable(name, true);
+				child.setSessionName(name);
+			} finally {
+				pending.delete(name);
+			}
+		};
 		options.onSessionPublished?.(child);
 
 		return { session: child };
@@ -11448,6 +11488,25 @@ export class AgentSession {
 		this._lastRlmProgressNoteAt = now;
 		this._emit({ type: "rlm_progress_note", message, timestamp: now });
 		return { accepted: true, retry_after_ms: undefined };
+	}
+
+	private async _renameDirectRlmChild(id: string, name: string): Promise<void> {
+		const matches = (await this.listRlmSubagents()).subagents.filter(
+			(child) => child.rlm_child_id === id || child.session_id === id || child.active_session_id === id,
+		);
+		if (matches.length !== 1) throw new Error("rlm.rename requires an unambiguous exact direct child ID");
+		const child = matches[0]!;
+		if (this._agentMessageController?.renameDirectRlmChild) {
+			await this._agentMessageController.renameDirectRlmChild(child, name);
+			return;
+		}
+		const local =
+			this._activeRlmChildRuns.get(child.rlm_child_id)?.session ??
+			this._rlmChildSessions.get(child.rlm_child_id)?.session;
+		if (!local?._renameInlineRlmSelf || local.sessionId !== child.session_id) {
+			throw new Error("rlm.rename cannot rename this direct child in the current runtime");
+		}
+		await local._renameInlineRlmSelf(name);
 	}
 
 	async listRlmSubagents(): Promise<RlmListSubagentsResult> {
@@ -11740,11 +11799,13 @@ export class AgentSession {
 
 	private _rlmChildRunMatchesTarget(run: RlmChildRun, target: string): boolean {
 		const session = run.session ?? this._rlmChildSessions.get(run.id)?.session;
+		// A resident child's current name supersedes its spawn name unless a delete
+		// receipt already made that run collectable under the old selectors.
 		return (
 			run.id === target ||
-			run.sessionName === target ||
 			session?.sessionId === target ||
-			session?.sessionName === target
+			session?.sessionName === target ||
+			((!session || run.detachedDeletion !== undefined) && run.sessionName === target)
 		);
 	}
 
@@ -14607,6 +14668,15 @@ export class AgentSession {
 			globalSaved: options.global === true && globalError === undefined,
 			...(globalError ? { globalError } : {}),
 		};
+	}
+
+	appendPythonRenameNotice(previousName: string | undefined, name: string): void {
+		const message = createPythonRenameNotice(previousName, name);
+		if (!message) return;
+		this.sessionManager.appendCustomMessageEntryWithRollback(message.customType, message.content, message.display);
+		this.agent.state.messages.push(message);
+		this._emit({ type: "message_start", message });
+		this._emit({ type: "message_end", message });
 	}
 
 	setSessionName(name: string): void {

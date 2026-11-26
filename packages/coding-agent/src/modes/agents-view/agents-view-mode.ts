@@ -1867,8 +1867,7 @@ export class AgentsViewMode implements Component, Focusable {
 
 	private enterRenameMode(): void {
 		const row = this.rows[this.selectedIndex];
-		// Only top-level agents carry a renameable session; subagents do not.
-		if (row?.kind !== "agent" || !row.selectable) {
+		if ((row?.kind !== "agent" && row?.kind !== "subagent") || !row.selectable) {
 			return;
 		}
 		const activeSessionId = row.summary.activeSessionId;
