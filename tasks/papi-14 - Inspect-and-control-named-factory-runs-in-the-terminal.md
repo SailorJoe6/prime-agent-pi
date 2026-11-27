@@ -4,7 +4,7 @@ title: Inspect and control named factory runs in the terminal
 status: In Progress
 assignee: []
 created_date: '2026-11-22T22:17:00Z'
-updated_date: '2026-11-26T23:58:00Z'
+updated_date: '2026-11-27T00:02:00Z'
 labels: []
 milestone: m-0
 dependencies:
@@ -17,6 +17,14 @@ references:
 documentation:
   - >-
     https://github.com/SailorJoe6/prime-agent-pi/blob/dfba53a40c277c8341930024b014ffbdaf7e1e68/docs/upstream-feature-inventory.md#factory-workflows-sessions-and-terminal-controls
+  - docs/factory-definitions.md
+modified_files:
+  - docs/factory-definitions.md
+  - docs/upstream-feature-inventory.md
+  - prime-agent-runtime/src/rlm/factory.py
+  - prime-agent-runtime/src/rlm/repl.md
+  - prime-agent-runtime/src/rlm/repl.py
+  - prime-agent-runtime/test/test_repl.py
 type: feature
 ordinal: 14000
 ---
@@ -41,3 +49,9 @@ Expose the original v0.10.0 terminal page and selected-run actions, building on 
 3. Use the existing default-off factory.enabled setting for /factory on, off, and status. Keep page visibility and Python opt-in aligned with the effective setting and explain any client restart needed. Refuse to persist off while a live run would lose its controls or when its owning runtime cannot determine liveness; a known absent kernel is not a running one. Keep PAPI-12's definition CLI and PAPI-13's Python API unchanged. No state-session drill-in, grouped costs, or spec/run counts.
 4. Validate offline with targeted terminal interaction tests and a supported-path real Pi kernel/host test with benign faux-provider runs. Exercise selected state and diagram, remapped keys, paused resume, exact stop with a second run unaffected, disable refusal then success once idle, and normal navigation after leaving the page. Run modified tests, relevant shuffle checks, npm run check and npm run check:test-policy per project rules; show a targeted regression fails when its behavior is broken. Document entry, controls, and settings behavior in factory-definitions.md; add the required changelog fragment and reflect verified scope in the parity inventory.
 <!-- SECTION:PLAN:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Slice 1: added the owning Python kernel’s capability-advertised, read-only factory_runs request. It reads compact diagrams from the existing in-memory runs on the event loop, including while a cell awaits; idle returns an empty array. Matched released v0.10.0 factory_view.rs liveness (running, paused, stopping or children still in flight). Real REPL subprocess regression verified an idle read and a named live run with its transition while a cell awaited a faux host response. Forcing the read to omit live runs made the regression fail; restored behavior passed shuffle seeds 14, 310 and 763. npm run check and npm run check:test-policy passed. No terminal wiring, controls, settings writes, acceptance checks or daemon wire changes in this slice.
+<!-- SECTION:NOTES:END -->
