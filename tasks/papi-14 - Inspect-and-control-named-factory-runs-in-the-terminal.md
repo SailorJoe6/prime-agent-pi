@@ -4,7 +4,7 @@ title: Inspect and control named factory runs in the terminal
 status: In Progress
 assignee: []
 created_date: '2026-11-22T22:17:00Z'
-updated_date: '2026-11-27T00:04:00Z'
+updated_date: '2026-11-27T17:56:00Z'
 labels: []
 milestone: m-0
 dependencies:
@@ -56,4 +56,6 @@ Expose the original v0.10.0 terminal page and selected-run actions, building on 
 Slice 1: added the owning Python kernel’s capability-advertised, read-only factory_runs request. It reads compact diagrams from the existing in-memory runs on the event loop, including while a cell awaits; idle returns an empty array. Matched released v0.10.0 factory_view.rs liveness (running, paused, stopping or children still in flight). Real REPL subprocess regression verified an idle read and a named live run with its transition while a cell awaited a faux host response. Forcing the read to omit live runs made the regression fail; restored behavior passed shuffle seeds 14, 310 and 763. npm run check and npm run check:test-policy passed. No terminal wiring, controls, settings writes, acceptance checks or daemon wire changes in this slice.
 
 Validation follow-up: test_factory.py passed 27 tests. test_repl.py ran 118 tests with two errors: test_import_rlm_defers_the_event_loop_stack and test_sigint_during_the_deferred_boot_stays_fatal. Both errors reproduced using git archive of the unchanged base ca4ae04af192571dcfd10a90b8c4e08b476b96d0 and the same interpreter (unittest discover -s test -p test_repl.py -k defer -v). The new regression passes; a green full REPL run requires the baseline deferred-import/startup failures to be fixed. This is a review checkpoint, not a merge-ready candidate.
+
+Slice 2 validation checkpoint (code still local): added a capability-aware AgentSession → IpythonKernelProvisioner → ReplKernelManager read, without starting Python. Distinct outcomes: successful graphs (including empty), absent, unsupported, and unavailable. No UI, actions, settings, daemon changes, or startup repair. npm run check (including test policy) and the targeted real-runtime host test passed using Vitest threads with --tagsFilter kernel-heavy and -t PAPI-14. Deliberately misrouting the reply ID made the targeted test fail; production routing was restored. Two fork runs reported worker exit before tests; full-file and shuffled threads runs exited 143 without a final report. Cause unconfirmed. Before publishing code, obtain complete test-file and shuffled focused results in a stable runner and fix any attributable failure. Existing baseline REPL failures remain separate. Episode code branch stays at 4bedfc91cdfc807207ecdbd9aed770e1ce15f098; the slice is uncommitted in its worktree.
 <!-- SECTION:NOTES:END -->
