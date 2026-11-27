@@ -32,6 +32,8 @@ import {
 	type ExecuteOptions,
 	type ExecuteResult,
 	errorMessage,
+	type FactoryRunGraph,
+	type FactoryRunsRead,
 	HOST_REQUEST_SHUTDOWN_TIMEOUT_MS,
 	installSignalHandlersOnce,
 	isRecord,
@@ -66,6 +68,7 @@ import {
 const REPL_PROTOCOL_VERSION = 3;
 const READY_TIMEOUT_MS = 30_000;
 const REPAIR_STEP_TIMEOUT_MS = 30_000;
+const FACTORY_READ_TIMEOUT_MS = 2_000;
 // Runtime-minted host-request ids never repeat; the bound only guards a
 // misbehaving runtime from growing the dedup set forever.
 const MAX_HANDLED_HOST_REQUEST_IDS = 1024;
@@ -215,6 +218,28 @@ function asStringArray(value: unknown): string[] {
 	return Array.isArray(value) ? value.filter((v): v is string => typeof v === "string") : [];
 }
 
+function isFactoryRunGraph(value: unknown): value is FactoryRunGraph {
+	return (
+		isRecord(value) &&
+		typeof value.run_id === "string" &&
+		typeof value.name === "string" &&
+		typeof value.state === "string" &&
+		Array.isArray(value.active_nodes) &&
+		value.active_nodes.every((node) => typeof node === "string") &&
+		isRecord(value.machine) &&
+		Array.isArray(value.machine.order) &&
+		value.machine.order.every((node) => typeof node === "string") &&
+		Array.isArray(value.machine.transitions) &&
+		value.machine.transitions.every(
+			(edge) =>
+				isRecord(edge) &&
+				typeof edge.to === "string" &&
+				(typeof edge.from === "string" ||
+					(Array.isArray(edge.from) && edge.from.every((node) => typeof node === "string"))),
+		)
+	);
+}
+
 function asReasonArray(value: unknown): { name: string; reason: string }[] {
 	if (!Array.isArray(value)) return [];
 	return value.flatMap((entry) => {
@@ -241,6 +266,8 @@ export class ReplKernelManager {
 	>;
 	private readonly handledHostRequestIds = new Set<string>();
 	private child?: ChildProcess;
+	private supportsFactoryRuns = false;
+	private readonly pendingFactoryReads = new Map<string, (event?: Record<string, unknown>) => void>();
 	private readyDeferred?: ReturnType<typeof createDeferred<number>>;
 	private kernelStderr = "";
 	/** Serializes execute() calls — the runtime runs one request at a time. */
@@ -886,6 +913,26 @@ export class ReplKernelManager {
 		});
 	}
 
+	/** Read the current child out of band: never enter the execute queue or start/repair a kernel. */
+	async readFactoryRuns(): Promise<FactoryRunsRead> {
+		if (!this.isRunning || this.teardownInFlight || this.protocolRepairPromise) return { status: "unavailable" };
+		if (!this.supportsFactoryRuns) return { status: "unsupported" };
+		const id = uuid();
+		const reply = createDeferred<Record<string, unknown> | undefined>();
+		this.pendingFactoryReads.set(id, reply.resolve);
+		const timer = setTimeout(() => reply.resolve(undefined), FACTORY_READ_TIMEOUT_MS);
+		try {
+			void this.writeLine({ type: "factory_runs", id }).catch(() => reply.resolve(undefined));
+			const event = await reply.promise;
+			return event?.status === "ok" && Array.isArray(event.runs) && event.runs.every(isFactoryRunGraph)
+				? { status: "ok", runs: event.runs }
+				: { status: "unavailable" };
+		} finally {
+			clearTimeout(timer);
+			this.pendingFactoryReads.delete(id);
+		}
+	}
+
 	private handleEvent(event: Record<string, unknown>): void {
 		const type = event.event;
 		if (type === "display" && isRecord(event.data) && BASH_ACTIVITY_DISPLAY_MIME in event.data) {
@@ -921,6 +968,7 @@ export class ReplKernelManager {
 			return;
 		}
 		if (type === "ready") {
+			this.supportsFactoryRuns = asStringArray(event.capabilities).includes("factory_runs");
 			this.readyDeferred?.resolve(typeof event.protocol === "number" ? event.protocol : -1);
 			return;
 		}
@@ -930,6 +978,13 @@ export class ReplKernelManager {
 		}
 
 		const id = typeof event.id === "string" ? event.id : undefined;
+		if (id && type === "done") {
+			const read = this.pendingFactoryReads.get(id);
+			if (read) {
+				read(event);
+				return;
+			}
+		}
 		const execution = this.activeExecution;
 		if (!execution || id !== execution.requestId) {
 			if (type === "display" && isRecord(event.data)) {
@@ -1427,6 +1482,9 @@ export class ReplKernelManager {
 		this.clearSnapshotTimer();
 		this.lateSentAgentMessageHandlers.clear();
 		this.pendingDoneWaiters.clear();
+		this.supportsFactoryRuns = false;
+		for (const read of this.pendingFactoryReads.values()) read();
+		this.pendingFactoryReads.clear();
 		// Teardown kills the handles with the kernel, so owed continuations
 		// waiting on them must hear the settlement once before it is lost. A
 		// host callback failure must not abort the kernel teardown.

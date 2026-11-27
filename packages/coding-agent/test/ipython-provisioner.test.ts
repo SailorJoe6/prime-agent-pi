@@ -1,6 +1,6 @@
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { cleanupSessionResources } from "@earendil-works/pi-ai";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ExtensionContext } from "../src/core/extensions/types.js";
@@ -11,6 +11,7 @@ import {
 	type KernelClient,
 	ReplKernelManager,
 } from "../src/core/kernel/index.js";
+import { createDeferred } from "../src/core/kernel/shared.js";
 import { createIpythonToolDefinition, IpythonKernelProvisioner } from "../src/core/tools/ipython.js";
 
 let tempDir = "";
@@ -67,7 +68,10 @@ function createBusyKernelContext(
 
 function writeFakeReplRuntime(
 	markerPath: string,
-	options: { gatedExecute?: { startedPath: string; gatePath: string } } = {},
+	options: {
+		gatedExecute?: { startedPath: string; gatePath: string };
+		factoryReply?: "legacy" | "failed" | "malformed";
+	} = {},
 ): string {
 	const python = join(tempDir, "python-repl");
 	const refuse = `emit({ event: "error", id: request.id, ename: "RuntimeError", evalue: "bootstrap refused", traceback: [] });
@@ -79,14 +83,16 @@ function writeFakeReplRuntime(
 			clearInterval(gate);
 			${refuse}
 		}, 10);`
-		: refuse;
+		: options.factoryReply
+			? `emit({ event: "done", id: request.id, status: "ok" });`
+			: refuse;
 	writeFileSync(
 		python,
 		`#!/usr/bin/env node
 const fs = require("node:fs");
 const readline = require("node:readline");
 const emit = (event) => process.stdout.write(JSON.stringify(event) + "\\n");
-emit({ event: "ready", protocol: 3, python: process.version });
+emit({ event: "ready", protocol: 3, python: process.version, capabilities: ${JSON.stringify(options.factoryReply && options.factoryReply !== "legacy" ? ["factory_runs"] : [])} });
 const input = readline.createInterface({ input: process.stdin });
 input.on("line", (line) => {
 	const request = JSON.parse(line);
@@ -103,6 +109,11 @@ input.on("line", (line) => {
 	}
 	if (request.type === "execute") {
 		${executeBranch}
+		return;
+	}
+	if (request.type === "factory_runs") {
+		if (${JSON.stringify(options.factoryReply ?? "")} === "legacy") process.exit(43);
+		emit({ event: "done", id: request.id, status: ${JSON.stringify(options.factoryReply === "failed" ? "error" : "ok")}, runs: ${JSON.stringify(options.factoryReply === "malformed" ? [{}] : [])} });
 		return;
 	}
 	if (request.type === "shutdown") {
@@ -126,6 +137,98 @@ describe("IpythonKernelProvisioner", () => {
 			rmSync(tempDir, { recursive: true, force: true });
 			tempDir = "";
 		}
+	});
+
+	it("PAPI-14 reads live runs from the owning REPL during a waiting cell", { tags: ["kernel-heavy"] }, async () => {
+		const runtime = resolve(import.meta.dirname, "../../../prime-agent-runtime");
+		const python = process.env.PRIME_AGENT_KERNEL_PYTHON ?? join(runtime, ".venv", "bin", "python");
+		const barrier = createDeferred<void>();
+		const release = createDeferred<void>();
+		writeFileSync(join(tempDir, "settings.json"), '{"factory":{"enabled":true}}');
+		const provisioner = new IpythonKernelProvisioner(tempDir, {
+			python,
+			env: {
+				PYTHONPATH: join(runtime, "src"),
+				PRIME_AGENT_CODING_AGENT_DIR: tempDir,
+				RLM_HARNESS_STATE_DIR: join(tempDir, "harness"),
+			},
+			hostHandlers: {
+				test_barrier: async () => {
+					barrier.resolve();
+					await release.promise;
+					return {};
+				},
+			},
+		});
+		try {
+			const manager = await provisioner.ensure();
+			await expect(provisioner.readFactoryRuns()).resolves.toEqual({ status: "ok", runs: [] });
+			const cell = manager.execute(`
+from rlm import rlm, host_request
+rlm.harness.save_factory("colors", {"nodes": [
+    {"id": "first", "subagent": {"prompt": "Name a color."}},
+    {"id": "second", "depends_on": ["first"], "subagent": {"prompt": "Name another color."}},
+]})
+started = await rlm.factory.run("colors", name="palette")
+await host_request("test_barrier")
+`);
+			try {
+				await Promise.race([
+					barrier.promise,
+					cell.then((result) => {
+						throw new Error(`Cell finished before barrier: ${result.error?.evalue ?? result.status}`);
+					}),
+				]);
+				await expect(provisioner.readFactoryRuns()).resolves.toMatchObject({
+					status: "ok",
+					runs: [
+						{
+							name: "palette",
+							state: "running",
+							machine: { order: ["first", "second"], transitions: [{ to: "second" }] },
+						},
+					],
+				});
+			} finally {
+				release.resolve();
+				await expect(cell).resolves.toMatchObject({ status: "ok" });
+			}
+		} finally {
+			await provisioner.dispose({ snapshot: false });
+		}
+	});
+
+	it.each([
+		{ factoryReply: "legacy", status: "unsupported" },
+		{ factoryReply: "failed", status: "unavailable" },
+		{ factoryReply: "malformed", status: "unavailable" },
+	] as const)("PAPI-14 reports a $factoryReply factory read as $status", async ({ factoryReply, status }) => {
+		const python = writeFakeReplRuntime(join(tempDir, "unused"), { factoryReply });
+		const provisioner = new IpythonKernelProvisioner(tempDir, { python });
+		try {
+			const manager = await provisioner.ensure();
+			await expect(provisioner.readFactoryRuns()).resolves.toEqual({ status });
+			await expect(manager.execute("1 + 1")).resolves.toMatchObject({ status: "ok" });
+		} finally {
+			await provisioner.dispose({ snapshot: false });
+		}
+	});
+
+	it("PAPI-14 distinguishes an untouched kernel from startup in flight without spawning Python", async () => {
+		const { python, countRuns } = writeFakePython();
+		const gate = createDeferred<void>();
+		const provisioner = new IpythonKernelProvisioner(tempDir, { python, readyGate: gate.promise });
+		let starting: Promise<unknown> | undefined;
+		try {
+			await expect(provisioner.readFactoryRuns()).resolves.toEqual({ status: "absent" });
+			starting = provisioner.ensure().catch(() => undefined);
+			await expect(provisioner.readFactoryRuns()).resolves.toEqual({ status: "unavailable" });
+		} finally {
+			const disposed = provisioner.dispose();
+			gate.resolve();
+			await Promise.all([disposed, starting]);
+		}
+		expect(countRuns()).toBe(0);
 	});
 
 	it("does not surface a failed startup before the kernel's final snapshot flush finished", async () => {

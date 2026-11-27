@@ -284,6 +284,18 @@ export interface KernelShutdownOptions {
 }
 
 /** Public surface every kernel client exposes to the provisioner and session layer. */
+export interface FactoryRunGraph {
+	run_id: string;
+	name: string;
+	state: string;
+	machine: { order: string[]; transitions: { from: string | string[]; to: string }[] };
+	active_nodes: string[];
+}
+
+export type FactoryRunsRead =
+	| { status: "ok"; runs: FactoryRunGraph[] }
+	| { status: "absent" | "unsupported" | "unavailable" };
+
 export interface KernelClient {
 	readonly ownerSessionId: string | undefined;
 	readonly isRunning: boolean;
@@ -300,6 +312,7 @@ export interface KernelClient {
 	pruneOversizedVariables(): Promise<SnapshotResult | null>;
 	restoreState(): Promise<RestoreResult | null>;
 	listNamespaceNames(signal?: AbortSignal): Promise<string[] | null>;
+	readFactoryRuns?(): Promise<FactoryRunsRead>;
 }
 
 // One registry serves every client kind; two parallel registries would

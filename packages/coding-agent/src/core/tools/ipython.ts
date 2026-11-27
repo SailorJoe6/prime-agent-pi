@@ -10,6 +10,7 @@ import { withKernelBootPermit } from "../kernel/boot-gate.js";
 import type { KernelBootstrapProgressHandler } from "../kernel/bootstrap.js";
 import {
 	type ExecuteResult,
+	type FactoryRunsRead,
 	type HostRequestHandlers,
 	type KernelAttachment,
 	KernelBusyAfterInterruptError,
@@ -390,6 +391,16 @@ export class IpythonKernelProvisioner {
 	/** Whether a kernel has finished starting and is currently running. */
 	get hasRunningKernel(): boolean {
 		return this.startedManager?.isRunning ?? false;
+	}
+
+	/** Inspect the existing kernel only; in-flight startup is not known absence. */
+	async readFactoryRuns(): Promise<FactoryRunsRead> {
+		const manager = this.startedManager;
+		if (!manager) return { status: this.managerPromise ? "unavailable" : "absent" };
+		if (manager.isDefunct) return { status: "unavailable" };
+		if (!manager.readFactoryRuns) return { status: "unsupported" };
+		const result = await manager.readFactoryRuns();
+		return manager === this.startedManager ? result : { status: "unavailable" };
 	}
 
 	/** Remove live variables above the snapshot's per-variable size limit. */

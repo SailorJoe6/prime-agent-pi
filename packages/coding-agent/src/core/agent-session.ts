@@ -182,7 +182,7 @@ import {
 	validateGoalObjective,
 } from "./goals.js";
 import { resolveImageModelOverride } from "./image-model-routing.js";
-import type { HostRequestHandlers, KernelSentAgentMessage } from "./kernel/index.js";
+import type { FactoryRunsRead, HostRequestHandlers, KernelSentAgentMessage } from "./kernel/index.js";
 import { type RestoreResult, snapshotPathIn } from "./kernel/state-snapshot.js";
 import type { AcpMcpServerConfig } from "./mcp/acp-mcp-types.js";
 import type { McpManager } from "./mcp/mcp-manager.js";
@@ -2937,6 +2937,12 @@ export class AgentSession {
 	 */
 	private _hasLiveBackgroundBashHandles(): boolean {
 		return this._ipythonKernelProvisioner?.manager?.hasBackgroundWork === true;
+	}
+
+	/** Local host-side read; no kernel provisioning or daemon command. */
+	async readFactoryRuns(): Promise<FactoryRunsRead> {
+		if (this._disposed || this._disposing) return { status: "unavailable" };
+		return this._ipythonKernelProvisioner?.readFactoryRuns() ?? { status: "absent" };
 	}
 
 	/** Deliver the owed continuation once descendant work settles. */

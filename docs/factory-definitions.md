@@ -254,9 +254,11 @@ run controls still target exact child IDs.
 
 ### Terminal integration status
 
-The Python kernel can report live run diagrams to its host, including paused
-runs and runs with children still in flight. The terminal page and `/factory`
-controls are not wired to that read path yet. Use the Python commands below to
+Pi can read live diagrams, including paused runs and runs with children still
+in flight, from the session’s already-running Python kernel. The read does not
+start Python. A successful empty read is distinct from no kernel, an older
+runtime that does not support the read, or a failed read. The terminal page
+and `/factory` controls are not wired to that read path yet. Use the Python commands below to
 inspect or control runs in the meantime.
 
 ### Watch, resume, or stop one run
