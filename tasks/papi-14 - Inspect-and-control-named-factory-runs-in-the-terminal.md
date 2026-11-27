@@ -4,7 +4,7 @@ title: Inspect and control named factory runs in the terminal
 status: In Progress
 assignee: []
 created_date: '2026-11-22T22:17:00Z'
-updated_date: '2026-11-27T00:02:00Z'
+updated_date: '2026-11-27T00:04:00Z'
 labels: []
 milestone: m-0
 dependencies:
@@ -54,4 +54,6 @@ Expose the original v0.10.0 terminal page and selected-run actions, building on 
 
 <!-- SECTION:NOTES:BEGIN -->
 Slice 1: added the owning Python kernel’s capability-advertised, read-only factory_runs request. It reads compact diagrams from the existing in-memory runs on the event loop, including while a cell awaits; idle returns an empty array. Matched released v0.10.0 factory_view.rs liveness (running, paused, stopping or children still in flight). Real REPL subprocess regression verified an idle read and a named live run with its transition while a cell awaited a faux host response. Forcing the read to omit live runs made the regression fail; restored behavior passed shuffle seeds 14, 310 and 763. npm run check and npm run check:test-policy passed. No terminal wiring, controls, settings writes, acceptance checks or daemon wire changes in this slice.
+
+Validation follow-up: test_factory.py passed 27 tests. test_repl.py ran 118 tests with two errors: test_import_rlm_defers_the_event_loop_stack and test_sigint_during_the_deferred_boot_stays_fatal. Both errors reproduced using git archive of the unchanged base ca4ae04af192571dcfd10a90b8c4e08b476b96d0 and the same interpreter (unittest discover -s test -p test_repl.py -k defer -v). The new regression passes; a green full REPL run requires the baseline deferred-import/startup failures to be fixed. This is a review checkpoint, not a merge-ready candidate.
 <!-- SECTION:NOTES:END -->
