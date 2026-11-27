@@ -4,7 +4,7 @@ title: Inspect and control named factory runs in the terminal
 status: In Progress
 assignee: []
 created_date: '2026-11-22T22:17:00Z'
-updated_date: '2026-11-27T17:56:00Z'
+updated_date: '2026-11-27T17:59:00Z'
 labels: []
 milestone: m-0
 dependencies:
@@ -21,6 +21,12 @@ documentation:
 modified_files:
   - docs/factory-definitions.md
   - docs/upstream-feature-inventory.md
+  - packages/coding-agent/package.json
+  - packages/coding-agent/src/core/agent-session.ts
+  - packages/coding-agent/src/core/kernel/repl-manager.ts
+  - packages/coding-agent/src/core/kernel/shared.ts
+  - packages/coding-agent/src/core/tools/ipython.ts
+  - packages/coding-agent/test/ipython-provisioner.test.ts
   - prime-agent-runtime/src/rlm/factory.py
   - prime-agent-runtime/src/rlm/repl.md
   - prime-agent-runtime/src/rlm/repl.py
@@ -57,5 +63,7 @@ Slice 1: added the owning Python kernel’s capability-advertised, read-only fac
 
 Validation follow-up: test_factory.py passed 27 tests. test_repl.py ran 118 tests with two errors: test_import_rlm_defers_the_event_loop_stack and test_sigint_during_the_deferred_boot_stays_fatal. Both errors reproduced using git archive of the unchanged base ca4ae04af192571dcfd10a90b8c4e08b476b96d0 and the same interpreter (unittest discover -s test -p test_repl.py -k defer -v). The new regression passes; a green full REPL run requires the baseline deferred-import/startup failures to be fixed. This is a review checkpoint, not a merge-ready candidate.
 
-Slice 2 validation checkpoint (code still local): added a capability-aware AgentSession → IpythonKernelProvisioner → ReplKernelManager read, without starting Python. Distinct outcomes: successful graphs (including empty), absent, unsupported, and unavailable. No UI, actions, settings, daemon changes, or startup repair. npm run check (including test policy) and the targeted real-runtime host test passed using Vitest threads with --tagsFilter kernel-heavy and -t PAPI-14. Deliberately misrouting the reply ID made the targeted test fail; production routing was restored. Two fork runs reported worker exit before tests; full-file and shuffled threads runs exited 143 without a final report. Cause unconfirmed. Before publishing code, obtain complete test-file and shuffled focused results in a stable runner and fix any attributable failure. Existing baseline REPL failures remain separate. Episode code branch stays at 4bedfc91cdfc807207ecdbd9aed770e1ce15f098; the slice is uncommitted in its worktree.
+Slice 2: added a capability-aware read through AgentSession, IpythonKernelProvisioner and ReplKernelManager. It uses the existing session kernel without starting Python or entering the cell queue. A successful empty read is distinct from an absent kernel, unsupported runtime, or unavailable read. No terminal UI, controls, settings or daemon changes.
+
+Host validation: npm run check (including test policy) passed. From packages/coding-agent, Vitest 4.1.10 via npx --no-install tsx ../../node_modules/vitest/dist/cli.js --run --no-file-parallelism test/ipython-provisioner.test.ts passed 25 default tests and 1 real-kernel test with a separate --tagsFilter kernel-heavy invocation. Adding -t PAPI-14 --sequence.shuffle --sequence.seed=<seed> gave 4 default + 1 kernel-heavy pass for each of 14, 310 and 763. Deliberately misrouting the reply ID made the real-kernel regression fail; production routing was restored. The owner confirmed the combined filter hung in the tokenizer on a lone | and sent SIGTERM (exit 143, no test result). Earlier fork-worker exits remain unexplained and separate. The two unchanged-base REPL startup failures noted above were not addressed. This is a host-read review checkpoint; terminal display, selected-run controls and settings still remain.
 <!-- SECTION:NOTES:END -->
