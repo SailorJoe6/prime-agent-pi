@@ -150,6 +150,69 @@ describe("SettingsManager", () => {
 		});
 	});
 
+	describe("PAPI-14 global factory opt-in", () => {
+		it.each([undefined, {}, { enabled: "true" }, { enabled: 1 }, true, null, []].map((factory) => ({ factory })))(
+			"ignores project and runtime opt-ins for missing or malformed global factory (%j)",
+			({ factory }) => {
+				if (factory !== undefined) writeSettings(globalPath, { factory });
+				writeSettings(projectPath, { factory: { enabled: true } });
+				const manager = SettingsManager.create(projectDir, agentDir);
+				manager.applyOverrides({ factory: { enabled: true } });
+				expect(manager.getFactoryEnabled()).toBe(false);
+			},
+		);
+
+		it("tracks live global edits without a session reload", () => {
+			const manager = SettingsManager.create(projectDir, agentDir);
+			writeSettings(globalPath, { factory: { enabled: true } });
+			writeSettings(projectPath, { factory: { enabled: false } });
+			manager.applyOverrides({ factory: { enabled: false } });
+			expect(manager.getFactoryEnabled()).toBe(true);
+
+			writeFileSync(globalPath, "{ broken settings");
+			expect(manager.getFactoryEnabled()).toBe(false);
+		});
+
+		it("persists ordered changes before resolving and preserves other global and project settings", async () => {
+			writeSettings(globalPath, { factory: { preserved: "old" }, theme: "dark" });
+			writeSettings(projectPath, { factory: { enabled: true } });
+			const manager = SettingsManager.create(projectDir, agentDir);
+			writeSettings(globalPath, { factory: { preserved: "new" }, theme: "dark", queueMode: "all" });
+
+			await manager.setFactoryEnabled(true);
+			expect(SettingsManager.create(projectDir, agentDir).getFactoryEnabled()).toBe(true);
+			expect(readSettings(globalPath)).toEqual({
+				factory: { enabled: true, preserved: "new" },
+				theme: "dark",
+				queueMode: "all",
+			});
+
+			const disable = manager.setFactoryEnabled(false);
+			const enable = manager.setFactoryEnabled(true);
+			const disableAgain = manager.setFactoryEnabled(false);
+			await Promise.all([disable, enable, disableAgain]);
+			expect(SettingsManager.create(projectDir, agentDir).getFactoryEnabled()).toBe(false);
+			expect(readSettings(globalPath).factory).toEqual({ enabled: false, preserved: "new" });
+			expect(readSettings(projectPath)).toEqual({ factory: { enabled: true } });
+		});
+
+		it.each(["", "{ broken settings", "[]", "null"])(
+			"rejects without overwriting invalid settings (%j)",
+			async (text) => {
+				const manager = SettingsManager.create(projectDir, agentDir);
+				writeFileSync(globalPath, text);
+				await expect(manager.setFactoryEnabled(true)).rejects.toThrow();
+				expect(readFileSync(globalPath, "utf-8")).toBe(text);
+				expect(manager.getFactoryEnabled()).toBe(false);
+
+				// A failed write must not poison the queue for later changes.
+				rmSync(globalPath);
+				await manager.setFactoryEnabled(true);
+				expect(readSettings(globalPath)).toEqual({ factory: { enabled: true } });
+			},
+		);
+	});
+
 	describe("PAPI-7 global model admission policy", () => {
 		it.each([
 			["missing file", undefined],

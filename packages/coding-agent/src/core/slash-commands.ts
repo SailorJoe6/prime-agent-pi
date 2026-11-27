@@ -212,7 +212,7 @@ const CANONICAL_BUILTIN_SLASH_COMMANDS: ReadonlyArray<BuiltinSlashCommand> = [
 		argumentHint: "[id|path]",
 		takesArgument: true,
 	},
-	{ name: "factory", description: "Inspect and control this session’s factory runs" },
+	{ name: "factory", description: "Inspect factory runs or change the factory setting (on/off/status)" },
 	{ name: "reload", description: "Reload keybindings, extensions, skills, prompts, and themes" },
 	{
 		name: "fullscreen",

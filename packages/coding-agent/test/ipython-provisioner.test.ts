@@ -12,6 +12,7 @@ import {
 	ReplKernelManager,
 } from "../src/core/kernel/index.js";
 import { createDeferred } from "../src/core/kernel/shared.js";
+import { SettingsManager } from "../src/core/settings-manager.js";
 import { createIpythonToolDefinition, IpythonKernelProvisioner } from "../src/core/tools/ipython.js";
 
 let tempDir = "";
@@ -171,60 +172,123 @@ describe("IpythonKernelProvisioner", () => {
 		}
 	});
 
-	it("PAPI-14 reads live runs from the owning REPL during a waiting cell", { tags: ["kernel-heavy"] }, async () => {
+	it("PAPI-14 re-reads global factory settings and controls paused and live runs in one REPL", {
+		tags: ["kernel-heavy"],
+	}, async () => {
 		const runtime = resolve(import.meta.dirname, "../../../prime-agent-runtime");
 		const python = process.env.PRIME_AGENT_KERNEL_PYTHON ?? join(runtime, ".venv", "bin", "python");
-		const barrier = createDeferred<void>();
-		const release = createDeferred<void>();
-		writeFileSync(join(tempDir, "settings.json"), '{"factory":{"enabled":true}}');
+		const settings = SettingsManager.create(tempDir, tempDir);
+		const paused = createDeferred<void>();
+		const releaseCell = createDeferred<void>();
+		const live = createDeferred<void>();
+		const settle = createDeferred<void>();
+		let childCount = 0;
 		const provisioner = new IpythonKernelProvisioner(tempDir, {
 			python,
 			env: {
 				PYTHONPATH: join(runtime, "src"),
 				PRIME_AGENT_CODING_AGENT_DIR: tempDir,
+				PRIME_AGENT_MACHINES_DIR: join(tempDir, "machines"),
 				RLM_HARNESS_STATE_DIR: join(tempDir, "harness"),
 			},
 			hostHandlers: {
+				"rlm.run": async ({ kwargs }) => ({
+					rlm_child_id: `color-${++childCount}`,
+					name: (kwargs as { name: string }).name,
+					session_dir: tempDir,
+					model: "fixture",
+				}),
+				"rlm.collect": async ({ targets }) => {
+					const [id] = targets as string[];
+					if (id === "color-3") {
+						live.resolve();
+						await settle.promise;
+					}
+					return { results: [{ rlm_child_id: id, status: "done", settled: true }] };
+				},
 				test_barrier: async () => {
-					barrier.resolve();
-					await release.promise;
+					paused.resolve();
+					await releaseCell.promise;
 					return {};
 				},
 			},
 		});
 		try {
 			const manager = await provisioner.ensure();
+			expect(settings.getFactoryEnabled()).toBe(false);
+			const checkGate = "await rlm.factory.graph()";
+			const disabled = { status: "error", error: { evalue: expect.stringContaining("factory is disabled") } };
+			await expect(manager.execute(`from rlm import rlm, host_request\n${checkGate}`)).resolves.toMatchObject(
+				disabled,
+			);
 			await expect(provisioner.readFactoryRuns()).resolves.toEqual({ status: "ok", runs: [] });
+			await settings.setFactoryEnabled(true);
 			const cell = manager.execute(`
-from rlm import rlm, host_request
-rlm.harness.save_factory("colors", {"nodes": [
+import asyncio
+rlm.harness.save_factory("colors", {"run": {"max_children": 1}, "nodes": [
     {"id": "first", "subagent": {"prompt": "Name a color."}},
     {"id": "second", "depends_on": ["first"], "subagent": {"prompt": "Name another color."}},
 ]})
-started = await rlm.factory.run("colors", name="palette")
+async def wait_for_state(run_id, state):
+    async with asyncio.timeout(10):
+        while (await rlm.factory.status(run_id))["state"] != state:
+            await rlm.factory.watch(run_id, timeout=10)
+a = (await rlm.factory.run("colors", name="palette"))["run_id"]
+await wait_for_state(a, "paused")
+b = (await rlm.factory.run("colors", name="contrast"))["run_id"]
+await wait_for_state(b, "paused")
 await host_request("test_barrier")
 `);
+			const endedBeforeSignal = cell.then((result) => {
+				throw new Error(`Cell finished before control signal: ${result.error?.evalue ?? result.status}`);
+			});
 			try {
-				await Promise.race([
-					barrier.promise,
-					cell.then((result) => {
-						throw new Error(`Cell finished before barrier: ${result.error?.evalue ?? result.status}`);
-					}),
-				]);
-				await expect(provisioner.readFactoryRuns()).resolves.toMatchObject({
+				await Promise.race([paused.promise, endedBeforeSignal]);
+				const pair = await provisioner.readFactoryRuns();
+				expect(pair).toMatchObject({
 					status: "ok",
 					runs: [
 						{
 							name: "palette",
-							state: "running",
+							state: "paused",
 							machine: { order: ["first", "second"], transitions: [{ to: "second" }] },
 						},
+						{ name: "contrast", state: "paused" },
 					],
 				});
+				if (pair.status !== "ok" || !pair.runs[0] || !pair.runs[1]) throw new Error("Expected two paused runs");
+				const [a, b] = pair.runs;
+
+				// A direct global settings change bypasses the terminal's live-run disable guard.
+				await settings.setFactoryEnabled(false);
+				await expect(provisioner.actOnFactoryRun(a.run_id, "resume")).resolves.toMatchObject({
+					status: "error",
+					error: expect.stringContaining("factory is disabled"),
+				});
+				await expect(provisioner.readFactoryRuns()).resolves.toMatchObject({
+					status: "ok",
+					runs: [
+						{ run_id: a.run_id, state: "paused" },
+						{ run_id: b.run_id, state: "paused" },
+					],
+				});
+				await settings.setFactoryEnabled(true);
+				await expect(provisioner.actOnFactoryRun(a.run_id, "resume")).resolves.toEqual({ status: "ok" });
+				await Promise.race([live.promise, endedBeforeSignal]);
+				await expect(provisioner.actOnFactoryRun(b.run_id, "stop")).resolves.toEqual({ status: "ok" });
+				await expect(provisioner.readFactoryRuns()).resolves.toMatchObject({
+					status: "ok",
+					runs: [{ run_id: a.run_id, state: "running", active_nodes: ["second"] }],
+				});
 			} finally {
-				release.resolve();
-				await expect(cell).resolves.toMatchObject({ status: "ok" });
+				settle.resolve();
+				releaseCell.resolve();
+				await cell;
 			}
+			await expect(manager.execute('await wait_for_state(a, "done")')).resolves.toMatchObject({ status: "ok" });
+			await expect(provisioner.readFactoryRuns()).resolves.toEqual({ status: "ok", runs: [] });
+			await settings.setFactoryEnabled(false);
+			await expect(manager.execute(checkGate)).resolves.toMatchObject(disabled);
 		} finally {
 			await provisioner.dispose({ snapshot: false });
 		}

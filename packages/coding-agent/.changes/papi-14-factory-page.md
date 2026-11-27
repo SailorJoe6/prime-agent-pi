@@ -1,1 +1,2 @@
 - Added a `/factory` terminal page to inspect the current session’s live run diagrams and stop or resume the selected run.
+- Added `/factory on`, `/factory off`, and `/factory status`, with a guard against disabling while the current session has live runs.

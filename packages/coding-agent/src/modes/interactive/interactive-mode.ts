@@ -5221,13 +5221,13 @@ export class InteractiveMode {
 					return;
 				}
 				if (commandName === "factory") {
-					if (commandArgs) {
+					if (commandArgs && commandArgs !== "on" && commandArgs !== "off" && commandArgs !== "status") {
 						this.editor.setText(text);
-						this.showError("Usage: /factory");
+						this.showError("Usage: /factory [on|off|status]");
 						return;
 					}
-					this.showFactoryPage();
 					this.editor.setText("");
+					await this.handleFactoryCommand(commandArgs);
 					return;
 				}
 				if (commandName === "settings") {
@@ -12095,6 +12095,41 @@ export class InteractiveMode {
 			}
 		} catch (error) {
 			this.showError(error instanceof Error ? error.message : String(error));
+		}
+	}
+
+	private async handleFactoryCommand(args: string): Promise<void> {
+		try {
+			if (args === "on") {
+				await this.settingsManager.setFactoryEnabled(true);
+			} else if (args === "off" && this.settingsManager.getFactoryEnabled()) {
+				const connection = this.agentConnection;
+				const sessionId = this.connectionState?.sessionId;
+				const result = sessionId ? await connection.readFactoryRuns?.() : undefined;
+				if (
+					this.agentConnection !== connection ||
+					this.connectionState?.sessionId !== sessionId ||
+					(result?.status !== "ok" && result?.status !== "absent")
+				) {
+					this.showError("Cannot disable the factory: live runs could not be checked in this session.");
+					return;
+				}
+				if (result.status === "ok" && result.runs.length > 0) {
+					this.showError("Cannot disable the factory while runs are live. Stop them from /factory first.");
+					return;
+				}
+				await this.settingsManager.setFactoryEnabled(false);
+				this.closeFactoryPage();
+			}
+			if (!this.settingsManager.getFactoryEnabled()) {
+				this.showStatus("The factory is disabled (off by default). Run /factory on to enable it.");
+			} else if (args === "") {
+				this.showFactoryPage();
+			} else {
+				this.showStatus("The factory is enabled. Run /factory to inspect runs or /factory off to disable it.");
+			}
+		} catch (error) {
+			this.showError(`Could not run /factory ${args}: ${error instanceof Error ? error.message : String(error)}`);
 		}
 	}
 

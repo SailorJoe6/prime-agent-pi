@@ -117,6 +117,66 @@ describe("InteractiveMode factory page", () => {
 		};
 	}
 
+	function settingsContext(initial: boolean, initialRead: FactoryRunsRead) {
+		const context = makeSubmitContext();
+		Object.setPrototypeOf(context, InteractiveMode.prototype);
+		let enabled = initial;
+		const setFactoryEnabled = vi.fn(async (value: boolean) => {
+			enabled = value;
+		});
+		const read = vi.fn(async () => initialRead);
+		const open = vi.fn();
+		Object.assign(context, {
+			uiServices: { settingsManager: { getFactoryEnabled: () => enabled, setFactoryEnabled } },
+			connectionState: { sessionId: "session-1" },
+			agentConnection: { ...(context.agentConnection as object), readFactoryRuns: read },
+			showFactoryPage: open,
+		});
+		prototype.setupEditorSubmitHandler.call(context);
+		return { context, submit: context.defaultEditor.onSubmit!, read, open, setFactoryEnabled };
+	}
+
+	it("PAPI-14 shares the factory setting across status, on, bare factory, and off", async () => {
+		const { context, submit, read, open, setFactoryEnabled } = settingsContext(false, { status: "absent" });
+		await submit("/factory status");
+		expect(context.showStatus).toHaveBeenLastCalledWith(expect.stringMatching(/disabled/i));
+		await submit("/factory");
+		expect(open).not.toHaveBeenCalled();
+		await submit("/factory on");
+		await submit("/factory status");
+		expect(context.showStatus).toHaveBeenLastCalledWith(expect.stringMatching(/enabled/i));
+		await submit("/factory");
+		expect(open).toHaveBeenCalledOnce();
+		expect(read).not.toHaveBeenCalled();
+		await submit("/factory off");
+		expect(read).toHaveBeenCalledOnce();
+		expect(setFactoryEnabled.mock.calls).toEqual([[true], [false]]);
+		await submit("/factory nonsense");
+		expect(context.editor.getText()).toBe("/factory nonsense");
+		expect(context.showError).toHaveBeenCalledWith("Usage: /factory [on|off|status]");
+		expect((context.agentConnection as { prompt: ReturnType<typeof vi.fn> }).prompt).not.toHaveBeenCalled();
+	});
+
+	it.each<FactoryRunsRead>([
+		{ status: "ok", runs: [fixture("running")] },
+		{ status: "ok", runs: [fixture("paused")] },
+		{ status: "ok", runs: [fixture("stopping")] },
+		{ status: "unsupported" },
+		{ status: "unavailable" },
+	])("PAPI-14 refuses off for a live or unreadable snapshot (%j), then allows it once settled", async (snapshot) => {
+		const { context, submit, read, setFactoryEnabled } = settingsContext(true, snapshot);
+		await submit("/factory off");
+		expect(context.showError).toHaveBeenCalledWith(expect.stringMatching(/cannot disable/i));
+		expect(setFactoryEnabled).not.toHaveBeenCalled();
+		await submit("/factory status");
+		expect(context.showStatus).toHaveBeenLastCalledWith(expect.stringMatching(/enabled/i));
+		read.mockResolvedValue({ status: "ok", runs: [] });
+		await submit("/factory off");
+		expect(setFactoryEnabled.mock.calls).toEqual([[false]]);
+		await submit("/factory status");
+		expect(context.showStatus).toHaveBeenLastCalledWith(expect.stringMatching(/disabled/i));
+	});
+
 	async function withPage(
 		run: (
 			page: Component,
@@ -140,7 +200,7 @@ describe("InteractiveMode factory page", () => {
 			page = undefined;
 		});
 		Object.assign(context, {
-			uiServices: { settingsManager: {} },
+			uiServices: { settingsManager: { getFactoryEnabled: () => true } },
 			ui: {
 				requestRender: vi.fn(),
 				terminal: { rows: 24 },

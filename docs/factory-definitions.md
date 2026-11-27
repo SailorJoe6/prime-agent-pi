@@ -254,7 +254,12 @@ run controls still target exact child IDs.
 
 ### Inspect and control the current session in Pi
 
-Enter `/factory` in the terminal chat. The page shows the selected live run,
+The factory is off by default. Enter `/factory on` in terminal chat to enable
+it, and `/factory status` to check. Pi and Python use the same `factory.enabled`
+flag in the agent's `settings.json`. On a supported client and runtime, the
+setting takes effect without a restart.
+
+When enabled, enter `/factory` to open the page. It shows the selected live run,
 its state, and its diagram, with active states marked `*`. The selection follows
 the run ID as runs update. With the default picker bindings, Up/Down changes the
 selection, Page Up/Page Down scrolls the diagram, Enter opens the run actions
@@ -268,8 +273,11 @@ session’s already-running Python kernel and does not start a kernel just to
 inspect it. It distinguishes no live runs from no kernel, an older runtime,
 and an unavailable read. Ordinary session navigation is unchanged.
 
-The terminal does not change `factory.enabled` yet. `/factory on`, `off`, and
-`status`, including the guard against disabling with live runs, remain pending.
+Enter `/factory off` to disable it. Pi leaves the setting unchanged if the
+current session reports any live run (including a paused run or one with active
+children), or if its liveness cannot be verified. Stop live runs first and
+wait for them to settle. A session known to have no kernel can disable the
+factory without starting one.
 
 ### Watch, resume, or stop one run
 

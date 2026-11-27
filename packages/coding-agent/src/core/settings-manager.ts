@@ -239,6 +239,7 @@ export interface Settings {
 	 */
 	imageModel?: string;
 	autonomous?: AutonomousSettings;
+	factory?: { enabled?: boolean }; // Global opt-in, default: false
 	shellPath?: string; // Custom shell path (e.g., for Cygwin users on Windows)
 	quietStartup?: boolean;
 	shellCommandPrefix?: string; // Prefix prepended to every bash command (e.g., "shopt -s expand_aliases" for alias support)
@@ -324,10 +325,14 @@ function parseModelAdmissionPolicy(settings: unknown): ModelAdmissionPolicy {
 	return { patterns: allowedModels.map((pattern) => pattern.trim()).filter(Boolean) };
 }
 
+function isSettingsObject(value: unknown): value is Record<string, unknown> {
+	return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
 export type SettingsScope = "global" | "project";
 
 export interface SettingsStorage {
-	withLock(scope: SettingsScope, fn: (current: string | undefined) => string | undefined): void;
+	withLock(scope: SettingsScope, fn: (current: string | undefined) => string | undefined, durable?: boolean): void;
 }
 
 export interface SettingsError {
@@ -383,7 +388,7 @@ export class FileSettingsStorage implements SettingsStorage {
 		throw (lastError as Error) ?? new Error("Failed to acquire settings lock");
 	}
 
-	withLock(scope: SettingsScope, fn: (current: string | undefined) => string | undefined): void {
+	withLock(scope: SettingsScope, fn: (current: string | undefined) => string | undefined, durable = false): void {
 		const path = scope === "global" ? this.globalSettingsPath : this.projectSettingsPath;
 		const dir = dirname(path);
 
@@ -409,7 +414,7 @@ export class FileSettingsStorage implements SettingsStorage {
 					}
 				}
 				if (next !== undefined) {
-					writeFileAtomicSync(path, next, { mode: 0o600 });
+					writeFileAtomicSync(path, next, { mode: 0o600, fsync: durable, fsyncDir: durable });
 				}
 			}
 		} finally {
@@ -927,6 +932,43 @@ export class SettingsManager {
 		this.globalSettings.defaultServiceTier = serviceTier;
 		this.markModified("defaultServiceTier");
 		this.save();
+	}
+
+	/** Match the Python runtime's live, global-only opt-in. */
+	getFactoryEnabled(): boolean {
+		try {
+			let enabled = false;
+			this.storage.withLock("global", (current) => {
+				const settings: unknown = current === undefined ? {} : JSON.parse(current);
+				enabled =
+					isSettingsObject(settings) && isSettingsObject(settings.factory) && settings.factory.enabled === true;
+				return undefined;
+			});
+			return enabled;
+		} catch {
+			return false;
+		}
+	}
+
+	/** Resolve only after the setting is saved; reject instead of reporting an unsaved change. */
+	async setFactoryEnabled(enabled: boolean): Promise<void> {
+		const write = this.writeQueue.then(() => {
+			let factory: Settings["factory"];
+			this.storage.withLock(
+				"global",
+				(current) => {
+					const settings: unknown = current === undefined ? {} : JSON.parse(current);
+					if (!isSettingsObject(settings)) throw new Error("Global settings.json must contain a JSON object.");
+					factory = { ...(isSettingsObject(settings.factory) ? settings.factory : {}), enabled };
+					return JSON.stringify({ ...settings, factory }, null, 2);
+				},
+				true,
+			);
+			this.globalSettings.factory = factory;
+		});
+		// Keep later queued writes usable after a failure; this caller still sees the rejection.
+		this.writeQueue = write.catch((error) => this.recordError("global", error));
+		await write;
 	}
 
 	getRlmMaxDepth(): number | undefined {
