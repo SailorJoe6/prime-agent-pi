@@ -1,10 +1,10 @@
 ---
 id: PAPI-14
 title: Inspect and control named factory runs in the terminal
-status: In Progress
+status: Ready for Merge
 assignee: []
 created_date: '2026-11-22T22:17:00Z'
-updated_date: '2026-11-27T18:36:00Z'
+updated_date: '2026-11-27T18:38:00Z'
 labels: []
 milestone: m-0
 dependencies:
