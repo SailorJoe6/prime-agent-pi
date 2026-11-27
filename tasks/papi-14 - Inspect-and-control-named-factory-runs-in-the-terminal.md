@@ -4,7 +4,7 @@ title: Inspect and control named factory runs in the terminal
 status: In Progress
 assignee: []
 created_date: '2026-11-22T22:17:00Z'
-updated_date: '2026-11-27T18:29:00Z'
+updated_date: '2026-11-27T18:36:00Z'
 labels: []
 milestone: m-0
 dependencies:
@@ -101,10 +101,14 @@ Targeted Astra revision: run(spec_id) emits native name:null. The host now accep
 Regression evidence: the mixed real-kernel snapshot was unavailable before the fix; now it shows both paused runs and independently resumes the named run and stops the unnamed one. Terminal red cases failed for null and blank labels; green tests verify shared visible labels cannot retarget a confirmation after reordering. The relative SDK agentDir test asserts distinct host/session path resolution and uses normal AgentSession provisioning (only interpreter selection is stubbed). Python stayed disabled after the host write on the old code and now observes off/on/off without restart.
 
 Validation: 140 targeted default Vitest tests passed across ipython-provisioner, interactive-mode-command-usage, slash-commands and settings-manager; separate --tagsFilter kernel-heavy passed both offline real-kernel tests. Terminal and kernel shuffle seeds 14, 310 and 763 passed. npm run check (including test policy) and git diff --check passed. Previously documented broad baseline failures were not rerun or repaired. Published for targeted review, not merged or activated.
+
+Split-root SDK compatibility: a relative agentDir A is resolved on the host and remains the Python resource root. An injected file-backed SettingsManager at B passes the effective absolute settings file only to the Python factory gate; without a backing file that reader still uses the Python agent directory settings.json. No machine library, daemon, or run routing change.
+
+Offline SDK regression: normal createAgentSession provisions a real kernel in a distinct cwd (only interpreter selection is stubbed); it observes factory off/on/off from B without restart and selects a benign personal definition found only under A/machines. On f72c1c2a8 the split fixture failed with MachineResolutionError (shared layout passed); both passed after the fix. From packages/coding-agent, bounded Vitest via npx --no-install tsx ../../node_modules/vitest/dist/cli.js --run --no-file-parallelism passed 140 default tests across ipython-provisioner, interactive-mode-command-usage, slash-commands and settings-manager. Separately, --tagsFilter kernel-heavy test/ipython-provisioner.test.ts passed all 3 offline kernel cases normally and with --sequence.shuffle --sequence.seed=14, 310, and 763 (one run per seed). All 27 Python factory tests, npm run check, and git diff --check passed. Known broad baseline failures were not rerun. Published for targeted follow-up, not merged or activated.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
 
 <!-- SECTION:FINAL_SUMMARY:BEGIN -->
-Pi supports the v0.10.0 session-local factory page, exact selected-run Stop and Resume, and /factory on/off/status. The terminal and Python use factory.enabled in existing global settings (off by default). Off does not write while a live run exists or its liveness cannot be confirmed; a settled or definitively absent kernel permits disabling. Later factory navigation and aggregation are outside this candidate. Unnamed runs use the spec ID as a label without changing action routing. Pi and Python share the same global settings file even when the SDK agentDir is relative.
+Pi supports the v0.10.0 session-local factory page, exact selected-run Stop and Resume, and /factory on/off/status. The terminal and Python use factory.enabled in existing global settings (off by default). Off does not write while a live run exists or its liveness cannot be confirmed; a settled or definitively absent kernel permits disabling. Later factory navigation and aggregation are outside this candidate. Unnamed runs use the spec ID as a label without changing action routing. Pi and Python share the same global settings file even when the SDK agentDir is relative. When the SDK uses separate directories, the factory gate follows the file-backed settings manager while personal machines remain under agentDir.
 <!-- SECTION:FINAL_SUMMARY:END -->
