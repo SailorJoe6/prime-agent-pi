@@ -4,7 +4,7 @@ title: Inspect and control named factory runs in the terminal
 status: In Progress
 assignee: []
 created_date: '2026-11-22T22:17:00Z'
-updated_date: '2026-11-27T17:59:00Z'
+updated_date: '2026-11-27T18:11:00Z'
 labels: []
 milestone: m-0
 dependencies:
@@ -21,11 +21,28 @@ documentation:
 modified_files:
   - docs/factory-definitions.md
   - docs/upstream-feature-inventory.md
+  - packages/coding-agent/.changes/papi-14-factory-page.md
   - packages/coding-agent/package.json
   - packages/coding-agent/src/core/agent-session.ts
   - packages/coding-agent/src/core/kernel/repl-manager.ts
   - packages/coding-agent/src/core/kernel/shared.ts
+  - packages/coding-agent/src/core/slash-commands.ts
   - packages/coding-agent/src/core/tools/ipython.ts
+  - packages/coding-agent/src/modes/agent-connection/daemon-agent-connection.ts
+  - >-
+    packages/coding-agent/src/modes/agent-connection/in-process-agent-connection.ts
+  - packages/coding-agent/src/modes/agent-connection/types.ts
+  - packages/coding-agent/src/modes/daemon/daemon-mode.ts
+  - packages/coding-agent/src/modes/daemon/daemon-protocol.ts
+  - packages/coding-agent/src/modes/daemon/daemon-routed-client.ts
+  - packages/coding-agent/src/modes/daemon/daemon-supervisor.ts
+  - packages/coding-agent/src/modes/interactive/components/factory-page.ts
+  - packages/coding-agent/src/modes/interactive/interactive-mode.ts
+  - packages/coding-agent/test/agent-connection-daemon.test.ts
+  - packages/coding-agent/test/daemon-client.test.ts
+  - packages/coding-agent/test/daemon-mode.test.ts
+  - packages/coding-agent/test/daemon-protocol.test.ts
+  - packages/coding-agent/test/interactive-mode-command-usage.test.ts
   - packages/coding-agent/test/ipython-provisioner.test.ts
   - prime-agent-runtime/src/rlm/factory.py
   - prime-agent-runtime/src/rlm/repl.md
@@ -66,4 +83,8 @@ Validation follow-up: test_factory.py passed 27 tests. test_repl.py ran 118 test
 Slice 2: added a capability-aware read through AgentSession, IpythonKernelProvisioner and ReplKernelManager. It uses the existing session kernel without starting Python or entering the cell queue. A successful empty read is distinct from an absent kernel, unsupported runtime, or unavailable read. No terminal UI, controls, settings or daemon changes.
 
 Host validation: npm run check (including test policy) passed. From packages/coding-agent, Vitest 4.1.10 via npx --no-install tsx ../../node_modules/vitest/dist/cli.js --run --no-file-parallelism test/ipython-provisioner.test.ts passed 25 default tests and 1 real-kernel test with a separate --tagsFilter kernel-heavy invocation. Adding -t PAPI-14 --sequence.shuffle --sequence.seed=<seed> gave 4 default + 1 kernel-heavy pass for each of 14, 310 and 763. Deliberately misrouting the reply ID made the real-kernel regression fail; production routing was restored. The owner confirmed the combined filter hung in the tokenizer on a lone | and sent SIGTERM (exit 143, no test result). Earlier fork-worker exits remain unexplained and separate. The two unchanged-base REPL startup failures noted above were not addressed. This is a host-read review checkpoint; terminal display, selected-run controls and settings still remain.
+
+Slice 3 terminal review checkpoint: /factory renders the current session’s selected live/paused run, state, active nodes and transitions. Configurable picker keys control selection, diagram scrolling, action confirmation and dismissal. Refresh and dispatch check the captured run, and the owning Python loop revalidates exact stop/resume eligibility. No inspection provisions Python. The optional daemon transport uses schema 31 and capability negotiation with protocol 7 unchanged; it uses the attached session without worker startup or action replay. Ordinary session navigation is unchanged. /factory on/off/status, settings alignment and live-run disable refusal are explicitly remaining; no acceptance checks changed.
+
+Validation: npm run check (including check:test-policy) and git diff --check passed. From packages/coding-agent, bounded Vitest runs via npx --no-install tsx ../../node_modules/vitest/dist/cli.js --run --no-file-parallelism: interactive-mode-command-usage, slash-commands and ipython-provisioner gave 67 default passes and, separately using --tagsFilter kernel-heavy, 1 real kernel pass. The six focused terminal cases passed shuffle seeds 14 and 310; deliberately sending the wrong run ID failed the exact-action test, and production was restored. Retained package-level uv sync: the isolated kernel CI job installs uv but does not otherwise create the runtime .venv used by the unconditional provisioner case. Daemon-protocol/client/routed-client and AgentConnection passed 186 tests; 8 focused transport cases passed, including older endpoints and attached session controls. The broader daemon-mode test for passive child completion failed with undefined on both candidate and clean host-read HEAD using the same dependencies. Python factory: 27 pass; focused REPL: 2 pass at seeds 14/310/763; full REPL: 117/119, with the two previously documented unchanged-base startup errors. No live model provider used for validation. This is a review checkpoint, not a merge candidate.
 <!-- SECTION:NOTES:END -->
