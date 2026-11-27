@@ -8,9 +8,11 @@ from __future__ import annotations
 import asyncio
 import copy
 import json
+import os
 import re
 from collections import Counter, deque
 from dataclasses import dataclass, field
+from pathlib import Path
 from time import monotonic
 from typing import TYPE_CHECKING, Any, Protocol
 from uuid import uuid4
@@ -68,8 +70,10 @@ outlive graph completion; stop the run to retire them.
 
 
 def require_factory_enabled() -> None:
+    settings_path = os.environ.get("PRIME_AGENT_FACTORY_SETTINGS_PATH")
+    path = Path(settings_path) if settings_path else _agent_dir() / "settings.json"
     try:
-        document = json.loads((_agent_dir() / "settings.json").read_text(encoding="utf-8"))
+        document = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, ValueError):
         document = None
     factory = document.get("factory") if isinstance(document, dict) else None

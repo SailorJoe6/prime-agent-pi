@@ -349,8 +349,8 @@ export class FileSettingsStorage implements SettingsStorage {
 		this.projectSettingsPath = join(cwd, CONFIG_DIR_NAME, "settings.json");
 	}
 
-	getGlobalSettingsDir(): string {
-		return dirname(this.globalSettingsPath);
+	getGlobalSettingsPath(): string {
+		return this.globalSettingsPath;
 	}
 
 	private acquireLockSyncWithRetry(path: string): () => void {
@@ -478,9 +478,9 @@ export class SettingsManager {
 		this.settings = deepMergeSettings(this.globalSettings, this.projectSettings);
 	}
 
-	/** Directory shared with the Python kernel when global settings are file-backed. */
-	getGlobalSettingsDir(): string | undefined {
-		return this.storage instanceof FileSettingsStorage ? this.storage.getGlobalSettingsDir() : undefined;
+	/** Global settings file, when backed by the filesystem. */
+	getGlobalSettingsPath(): string | undefined {
+		return this.storage instanceof FileSettingsStorage ? this.storage.getGlobalSettingsPath() : undefined;
 	}
 
 	/** Create a SettingsManager that loads from files */

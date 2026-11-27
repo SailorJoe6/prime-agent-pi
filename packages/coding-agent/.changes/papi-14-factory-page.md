@@ -1,3 +1,3 @@
 - Added a `/factory` terminal page to inspect the current session’s live run diagrams and stop or resume the selected run.
 - Added `/factory on`, `/factory off`, and `/factory status`, with a guard against disabling while the current session has live runs.
-- Fixed factory inspection for unnamed runs and kept Pi and Python settings aligned for relative agent directories.
+- Fixed factory inspection for unnamed runs and kept Pi and Python settings aligned for relative agent directories and separate SDK settings and resource directories.

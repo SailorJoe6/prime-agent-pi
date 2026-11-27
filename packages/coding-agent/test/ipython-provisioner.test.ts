@@ -299,55 +299,90 @@ await host_request("test_barrier")
 		}
 	});
 
-	it("PAPI-14 shares the host-relative factory settings with a kernel in a different cwd", {
-		tags: ["kernel-heavy"],
-	}, async () => {
-		const runtime = resolve(import.meta.dirname, "../../../prime-agent-runtime");
-		const settingsDir = join(tempDir, "agent");
-		const agentDir = relative(process.cwd(), settingsDir);
-		// Do not let excess ".." segments collapse at the root in both processes.
-		const parentSteps = agentDir.split(sep).filter((part) => part === "..").length;
-		const cwd = join(tempDir, ...Array<string>(parentSteps).fill("nested"), "project");
-		mkdirSync(cwd, { recursive: true });
-		mkdirSync(settingsDir);
-		expect(resolve(cwd, agentDir)).not.toBe(settingsDir);
-		const python = process.env.PRIME_AGENT_KERNEL_PYTHON ?? join(runtime, ".venv", "bin", "python");
-		// Select the offline fixture interpreter without installing optional bootstrap packages.
-		const selectPython = vi.spyOn(kernelBootstrap, "ensureKernelPython").mockResolvedValue(python);
-		vi.stubEnv("PYTHONPATH", join(runtime, "src"));
-		try {
-			const { session } = await createAgentSession({
-				cwd,
-				agentDir,
-				model: getCodingAgentFixtureModel("anthropic", "claude-sonnet-4-5")!,
-				sessionManager: SessionManager.inMemory(cwd),
-				tools: ["ipython"],
-			});
+	it.each(["shared", "split"] as const)(
+		"PAPI-14 reads %s SDK settings without redirecting kernel resources",
+		{
+			tags: ["kernel-heavy"],
+		},
+		async (layout) => {
+			const runtime = resolve(import.meta.dirname, "../../../prime-agent-runtime");
+			const resourceDir = join(tempDir, "agent");
+			const settingsDir = layout === "split" ? join(tempDir, "settings") : resourceDir;
+			const agentDir = relative(process.cwd(), resourceDir);
+			// Do not let excess ".." segments collapse at the root in both processes.
+			const parentSteps = agentDir.split(sep).filter((part) => part === "..").length;
+			const cwd = join(tempDir, ...Array<string>(parentSteps).fill("nested"), "project");
+			mkdirSync(cwd, { recursive: true });
+			const machineDir = join(resourceDir, "machines", "papi-14-personal-fixture");
+			mkdirSync(machineDir, { recursive: true });
+			writeFileSync(
+				join(machineDir, "MACHINE.md"),
+				[
+					"---",
+					"name: papi-14-personal-fixture",
+					"description: Offline test machine",
+					"version: 1",
+					"---",
+					"```machine-spec",
+					JSON.stringify({
+						states: [{ id: "fixture", entry: true, subagent: { prompt: "Format text." } }],
+						transitions: [],
+					}),
+					"```",
+					"",
+				].join("\n"),
+			);
+			expect(resolve(cwd, agentDir)).not.toBe(resourceDir);
+			const python = process.env.PRIME_AGENT_KERNEL_PYTHON ?? join(runtime, ".venv", "bin", "python");
+			// Select the offline fixture interpreter without installing optional bootstrap packages.
+			const selectPython = vi.spyOn(kernelBootstrap, "ensureKernelPython").mockResolvedValue(python);
+			vi.stubEnv("PYTHONPATH", join(runtime, "src"));
 			try {
-				const tool = session.agent.state.tools.find((candidate) => candidate.name === "ipython")!;
-				const execute = async (code: string) => (await tool.execute("factory-settings", { code })).content;
-				await expect(
-					execute(`import os\nfrom rlm import rlm\nprint(os.path.samefile(os.getcwd(), ${JSON.stringify(cwd)}))`),
-				).resolves.toEqual([{ type: "text", text: "True\n" }]);
-				const checkGate = "await rlm.factory.graph()\nprint('factory enabled')";
-				const disabled = [{ type: "text", text: expect.stringContaining("factory is disabled") }];
-				expect(session.settingsManager.getFactoryEnabled()).toBe(false);
-				await expect(execute(checkGate)).resolves.toEqual(disabled);
-				await session.settingsManager.setFactoryEnabled(true);
-				expect(JSON.parse(readFileSync(join(settingsDir, "settings.json"), "utf8"))).toMatchObject({
-					factory: { enabled: true },
+				const { session } = await createAgentSession({
+					cwd,
+					agentDir,
+					settingsManager: layout === "split" ? SettingsManager.create(cwd, settingsDir) : undefined,
+					model: getCodingAgentFixtureModel("anthropic", "claude-sonnet-4-5")!,
+					sessionManager: SessionManager.inMemory(cwd),
+					tools: ["ipython"],
 				});
-				await expect(execute(checkGate)).resolves.toEqual([{ type: "text", text: "factory enabled\n" }]);
-				await session.settingsManager.setFactoryEnabled(false);
-				await expect(execute(checkGate)).resolves.toEqual(disabled);
+				try {
+					const tool = session.agent.state.tools.find((candidate) => candidate.name === "ipython")!;
+					const execute = async (code: string) => (await tool.execute("factory-settings", { code })).content;
+					await expect(
+						execute(
+							`import os\nfrom rlm import rlm\nprint(os.path.samefile(os.getcwd(), ${JSON.stringify(cwd)}))`,
+						),
+					).resolves.toEqual([{ type: "text", text: "True\n" }]);
+					const checkGate = "await rlm.factory.graph()\nprint('factory enabled')";
+					const disabled = [{ type: "text", text: expect.stringContaining("factory is disabled") }];
+					expect(session.settingsManager.getFactoryEnabled()).toBe(false);
+					await expect(execute(checkGate)).resolves.toEqual(disabled);
+					await session.settingsManager.setFactoryEnabled(true);
+					expect(JSON.parse(readFileSync(join(settingsDir, "settings.json"), "utf8"))).toMatchObject({
+						factory: { enabled: true },
+					});
+					await expect(execute(checkGate)).resolves.toEqual([{ type: "text", text: "factory enabled\n" }]);
+					await expect(
+						execute(
+							[
+								"from rlm.machine_library import select_factory",
+								"from rlm.harness import HarnessState",
+								"print(select_factory('papi-14-personal-fixture', HarnessState())['states'][0]['id'])",
+							].join("\n"),
+						),
+					).resolves.toEqual([{ type: "text", text: "fixture\n" }]);
+					await session.settingsManager.setFactoryEnabled(false);
+					await expect(execute(checkGate)).resolves.toEqual(disabled);
+				} finally {
+					await session.disposeAsync({ kernelSnapshot: false });
+				}
 			} finally {
-				await session.disposeAsync({ kernelSnapshot: false });
+				selectPython.mockRestore();
+				vi.unstubAllEnvs();
 			}
-		} finally {
-			selectPython.mockRestore();
-			vi.unstubAllEnvs();
-		}
-	});
+		},
+	);
 
 	it.each([
 		{ factoryReply: "legacy", status: "unsupported" },

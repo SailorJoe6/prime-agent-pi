@@ -258,7 +258,9 @@ The factory is off by default. Enter `/factory on` in terminal chat to enable
 it, and `/factory status` to check. Pi and Python use the same `factory.enabled`
 flag in the agent's `settings.json`. On a supported client and runtime, the
 setting takes effect without a restart. A relative SDK `agentDir` resolves
-against the host working directory, not the kernel’s session directory.
+against the host working directory, not the kernel’s session directory. If the SDK
+supplies a file-backed `SettingsManager` in a different directory, the factory
+reads that settings file. Personal machines still come from `agentDir/machines`.
 
 When enabled, enter `/factory` to open the page. It shows the selected live run,
 its state, and its diagram, with active states marked `*`. An unnamed run
