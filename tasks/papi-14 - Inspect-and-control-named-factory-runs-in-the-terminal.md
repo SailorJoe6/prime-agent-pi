@@ -4,7 +4,7 @@ title: Inspect and control named factory runs in the terminal
 status: In Progress
 assignee: []
 created_date: '2026-11-22T22:17:00Z'
-updated_date: '2026-11-27T18:18:00Z'
+updated_date: '2026-11-27T18:29:00Z'
 labels: []
 milestone: m-0
 dependencies:
@@ -95,10 +95,16 @@ Settings slice: compared released v0.10.0 commands and factory lane at 763094e1b
 Acceptance evidence: interactive-mode-command-usage tests cover selected diagrams, remapped controls, stale actions, exact Stop/Resume, normal /tree navigation, and on/off/status including no write for running, paused, stopping or unreadable state, plus allowance after settlement and definite absence. Real-kernel ipython-provisioner regression uses two benign paused runs, verifies exact selected actions and that the other run remains active, confirms a truly empty read after settlement, and rechecks Python and host action gating without restart. Settings tests cover persistent existing-store behavior and unrelated setting retention.
 
 Validation: from packages/coding-agent, bounded Vitest via npx --no-install tsx ../../node_modules/vitest/dist/cli.js --run --no-file-parallelism passed 137 default tests across interactive-mode-command-usage, slash-commands, ipython-provisioner and settings-manager. Separately, --tagsFilter kernel-heavy passed the real-kernel provisioner regression. Focused terminal, kernel and settings runs passed shuffle seeds 14/310/763. The command tests failed on the previous implementation; isolated negative controls for Python action gating and preservation of nested settings also failed as intended. npm run check (including test policy) and git diff --check passed. No live provider was used. Earlier broader daemon and two REPL failures reproduced on baseline as noted above; those suites were not rerun in the settings slice. Published for independent review, not activated or merged.
+
+Targeted Astra revision: run(spec_id) emits native name:null. The host now accepts mixed named/unnamed snapshots; the terminal uses spec_id when the scrubbed name is absent or blank, as in released factory_view.rs. Display labels never route actions. The existing file-backed SettingsManager binds its global settings path against host cwd at creation and AgentSession passes that same directory to Python, not the session cwd. Default-off behavior, unknown-liveness refusal, action eligibility and navigation are unchanged.
+
+Regression evidence: the mixed real-kernel snapshot was unavailable before the fix; now it shows both paused runs and independently resumes the named run and stops the unnamed one. Terminal red cases failed for null and blank labels; green tests verify shared visible labels cannot retarget a confirmation after reordering. The relative SDK agentDir test asserts distinct host/session path resolution and uses normal AgentSession provisioning (only interpreter selection is stubbed). Python stayed disabled after the host write on the old code and now observes off/on/off without restart.
+
+Validation: 140 targeted default Vitest tests passed across ipython-provisioner, interactive-mode-command-usage, slash-commands and settings-manager; separate --tagsFilter kernel-heavy passed both offline real-kernel tests. Terminal and kernel shuffle seeds 14, 310 and 763 passed. npm run check (including test policy) and git diff --check passed. Previously documented broad baseline failures were not rerun or repaired. Published for targeted review, not merged or activated.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
 
 <!-- SECTION:FINAL_SUMMARY:BEGIN -->
-Pi supports the v0.10.0 session-local factory page, exact selected-run Stop and Resume, and /factory on/off/status. The terminal and Python use factory.enabled in existing global settings (off by default). Off does not write while a live run exists or its liveness cannot be confirmed; a settled or definitively absent kernel permits disabling. Later factory navigation and aggregation are outside this candidate.
+Pi supports the v0.10.0 session-local factory page, exact selected-run Stop and Resume, and /factory on/off/status. The terminal and Python use factory.enabled in existing global settings (off by default). Off does not write while a live run exists or its liveness cannot be confirmed; a settled or definitively absent kernel permits disabling. Later factory navigation and aggregation are outside this candidate. Unnamed runs use the spec ID as a label without changing action routing. Pi and Python share the same global settings file even when the SDK agentDir is relative.
 <!-- SECTION:FINAL_SUMMARY:END -->
