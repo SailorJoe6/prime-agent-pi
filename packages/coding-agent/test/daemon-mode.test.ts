@@ -47,7 +47,9 @@ import {
 	setDaemonClientSessionCapabilities,
 } from "../src/modes/daemon/daemon-mode.js";
 import {
+	DAEMON_DEFAULT_SERVER_CAPABILITIES,
 	DAEMON_PROTOCOL_INFO,
+	DAEMON_SCHEMA_REVISION,
 	type DaemonAttachResult,
 	type DaemonCommand,
 	type DaemonOutbound,
@@ -3891,6 +3893,111 @@ describe("daemon snapshot transfers", () => {
 			},
 		});
 	}
+
+	it("PAPI-14: gates older resident workers and forwards the exact attached run to supported workers", async () => {
+		const supervisor = makeSupervisor(snapshotRoot());
+		const fixture = snapshotWorker(snapshotResult("factory", 0, 0));
+		const request = vi.fn(
+			async (command: DaemonCommand) =>
+				({
+					type: "response",
+					command: command.type,
+					success: true,
+					data: { status: "ok" },
+				}) satisfies DaemonResponse,
+		);
+		const workerClient = {
+			...fixture.client,
+			request,
+			hello: {
+				protocol: DAEMON_PROTOCOL_INFO,
+				schemaRevision: 30,
+				serverCapabilities: DAEMON_DEFAULT_SERVER_CAPABILITIES,
+			},
+		};
+		const worker = { ...fixture, client: workerClient };
+		const internals = supervisor as unknown as {
+			workers: Map<string, typeof worker>;
+			handleCommand(client: DaemonSocketClient, command: DaemonCommand): Promise<DaemonResponse>;
+		};
+		internals.workers.set(worker.descriptor.workerId, worker);
+		seedSupervisorRoster(supervisor, worker);
+		const client = makeClient("factory", snapshotSessionId);
+		const command = {
+			type: "act_on_factory_run",
+			activeSessionId: snapshotSessionId,
+			runId: "selected-run",
+			action: "stop",
+		} as const;
+		await expect(internals.handleCommand(client, command)).resolves.toMatchObject({
+			data: { status: "unsupported" },
+		});
+		expect(request).not.toHaveBeenCalled();
+		workerClient.hello.schemaRevision = DAEMON_SCHEMA_REVISION;
+		await expect(internals.handleCommand(client, { ...command, activeSessionId: "other" })).rejects.toThrow(
+			"not attached",
+		);
+		expect(request).not.toHaveBeenCalled();
+		await expect(internals.handleCommand(client, command)).resolves.toMatchObject({ success: true });
+		expect(request).toHaveBeenCalledExactlyOnceWith(command, expect.any(Number));
+	});
+
+	it("PAPI-14: the daemon invokes only the attached session and passes the exact run ID and action", async () => {
+		const daemon = makeWorkerDaemon(snapshotRoot());
+		const client = makeClient("factory", snapshotSessionId);
+		const internals = daemon as unknown as {
+			sessions: Map<string, ActiveSessionState>;
+			handleCommand(client: DaemonSocketClient, command: DaemonCommand): Promise<DaemonResponse>;
+		};
+		const readFactoryRuns = vi.fn(async () => ({ status: "absent" }));
+		const actOnFactoryRun = vi.fn(async () => ({ status: "ok" }));
+		const state = {
+			activeSessionId: snapshotSessionId,
+			clients: new Set<DaemonSocketClient>(),
+			runtime: { session: { readFactoryRuns, actOnFactoryRun } },
+		} as unknown as ActiveSessionState;
+		internals.sessions.set(snapshotSessionId, state);
+		const read = { type: "read_factory_runs", activeSessionId: snapshotSessionId } as const;
+		await expect(internals.handleCommand(client, read)).rejects.toThrow("not attached");
+		expect(readFactoryRuns).not.toHaveBeenCalled();
+		state.clients.add(client);
+		await expect(internals.handleCommand(client, read)).resolves.toMatchObject({ data: { status: "absent" } });
+		await expect(
+			internals.handleCommand(client, {
+				type: "act_on_factory_run",
+				activeSessionId: snapshotSessionId,
+				runId: "selected-run",
+				action: "resume",
+			}),
+		).resolves.toMatchObject({ success: true });
+		expect(actOnFactoryRun).toHaveBeenCalledExactlyOnceWith("selected-run", "resume");
+	});
+
+	it("PAPI-14: new daemon still serves old JSONL clients without factory negotiation", async () => {
+		const daemon = makeWorkerDaemon(snapshotRoot());
+		const client = makeClient("old-client", snapshotSessionId);
+		const internals = daemon as unknown as {
+			sessions: Map<string, ActiveSessionState>;
+			handleLine(client: DaemonSocketClient, line: string): Promise<void>;
+			write(client: DaemonSocketClient, response: DaemonResponse): boolean;
+		};
+		const write = vi.spyOn(internals, "write").mockReturnValue(true);
+		internals.sessions.set(snapshotSessionId, {
+			activeSessionId: snapshotSessionId,
+			runtime: { session: { getSteeringMessagePreviews: () => ["legacy"], getFollowUpMessagePreviews: () => [] } },
+		} as unknown as ActiveSessionState);
+		await internals.handleLine(
+			client,
+			JSON.stringify({ id: "legacy-request", type: "get_queue", activeSessionId: snapshotSessionId }),
+		);
+		expect(write).toHaveBeenCalledExactlyOnceWith(client, {
+			id: "legacy-request",
+			type: "response",
+			command: "get_queue",
+			success: true,
+			data: { steering: ["legacy"], followUp: [] },
+		});
+	});
 
 	/** Both catch-up channels (supervisor -> public client, worker -> supervisor link) share one contract. */
 	function catchupChannel(channel: "supervisor" | "worker", root: string, drain: CatchupDrain) {

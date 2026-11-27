@@ -90,6 +90,16 @@ export class DaemonRoutedClient implements DaemonTransportClient {
 		);
 	}
 
+	/** Negotiate against the attached endpoint, without falling back to a different socket. */
+	supportsAttachedSessionCommand(command: DaemonCommandBody): boolean {
+		if (this.direct?.isConnected) return this.servesDirect(this.direct, command);
+		const hello = this.supervisor.hello;
+		return (
+			hello !== undefined &&
+			getDaemonCommandCompatibilities(command).every((req) => meetsDaemonCommandCompatibility(hello, req))
+		);
+	}
+
 	waitForHello(timeoutMs = 3000): Promise<DaemonHello> {
 		return this.supervisor.waitForHello(timeoutMs);
 	}

@@ -59,6 +59,7 @@ _protocol_fd: int = -1
 _write_lock = threading.Lock()
 _loop: asyncio.AbstractEventLoop | None = None
 _serve_task: asyncio.Task[Any] | None = None
+_factory_action_tasks: set[asyncio.Task[None]] = set()
 
 
 class _CellExecution:
@@ -1126,6 +1127,26 @@ def _inspect_factory_runs(rid: str) -> None:
         _send(reply)
 
 
+async def _handle_factory_action(req: dict[str, Any]) -> None:
+    rid = req["id"]
+    try:
+        if _host_closed:
+            raise RuntimeError("host connection closed; factory action unavailable")
+        await rlm.factory._runs.control(req["run_id"], req["action"])
+    except Exception as exc:
+        _send(_error_event(rid, exc))
+        _send({"event": "done", "id": rid, "status": "error"})
+    else:
+        _send({"event": "done", "id": rid, "status": "ok"})
+
+
+def _start_factory_action(req: dict[str, Any]) -> None:
+    assert _loop is not None
+    task = _loop.create_task(_handle_factory_action(req))
+    _factory_action_tasks.add(task)
+    task.add_done_callback(_factory_action_tasks.discard)
+
+
 async def _handle_request(
     handler: Callable[[dict[str, Any], dict[str, Any]], Awaitable[None]],
     req: dict[str, Any],
@@ -1157,6 +1178,13 @@ async def _serve(queue: asyncio.Queue[dict[str, Any]], ns: dict[str, Any]) -> No
         rtype = req.get("type")
         if rtype == "shutdown":
             rid = req.get("id")
+            # Do not wait on factory retirement during shutdown. The worker,
+            # not the request, owns the shielded retirement task.
+            actions = tuple(_factory_action_tasks)
+            for action in actions:
+                action.cancel()
+            if actions:
+                await asyncio.gather(*actions, return_exceptions=True)
             # MCP children must close before the loop dies; close() is internally bounded under the host's 5s deadline.
             mcp_mod = sys.modules.get("rlm.mcp")
             if mcp_mod is not None:
@@ -1183,6 +1211,7 @@ _REQUIRED_FIELDS = {
     "restore": ("id", "path"),
     "list_names": ("id",),
     "factory_runs": ("id",),
+    "factory_action": ("id", "run_id", "action"),
     "shutdown": (),
 }
 
@@ -1223,6 +1252,10 @@ def _handle_request_line(raw: bytes, queue: asyncio.Queue[dict[str, Any]]) -> No
     if rtype == "factory_runs":
         # Inspect on the owning loop, without waiting behind a cell watching a run.
         _loop.call_soon_threadsafe(_inspect_factory_runs, req["id"])
+        return
+    if rtype == "factory_action":
+        # A cell may be watching this run; an action must not queue behind it.
+        _loop.call_soon_threadsafe(_start_factory_action, req)
         return
     if rtype in ("execute", "snapshot", "restore"):
         with _interrupt_lock:
@@ -1368,7 +1401,7 @@ def main() -> None:
     sys.modules["__main__"] = user_module
 
     _send({"event": "ready", "protocol": PROTOCOL_VERSION, "python": platform.python_version(),
-           "capabilities": ["factory_runs"]})
+           "capabilities": ["factory_runs", "factory_action"]})
 
     # The event-loop stack (asyncio plus its ssl, concurrent.futures, and
     # logging imports) is the heaviest part of this module's boot chain; load

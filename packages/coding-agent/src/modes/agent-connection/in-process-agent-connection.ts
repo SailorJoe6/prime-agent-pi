@@ -14,6 +14,7 @@ import type {
 	AgentHeartbeatUpdateAction,
 } from "../../core/cron-jobs.js";
 import type { ExtensionUIContext } from "../../core/extensions/types.js";
+import type { FactoryRunAction, FactoryRunActionResult, FactoryRunsRead } from "../../core/kernel/shared.js";
 import type { AcpMcpServerConfig } from "../../core/mcp/acp-mcp-types.js";
 import type { CustomMessage } from "../../core/messages.js";
 import { providerRetryPolicy } from "../../core/provider-retry.js";
@@ -218,6 +219,14 @@ export class InProcessAgentConnection implements AgentConnection {
 			steering: [...this.session.getSteeringMessagePreviews()],
 			followUp: [...this.session.getFollowUpMessagePreviews()],
 		};
+	}
+
+	async readFactoryRuns(): Promise<FactoryRunsRead> {
+		return this.session.readFactoryRuns();
+	}
+
+	async actOnFactoryRun(runId: string, action: FactoryRunAction): Promise<FactoryRunActionResult> {
+		return this.session.actOnFactoryRun(runId, action);
 	}
 
 	async mutateQueuedMessage(

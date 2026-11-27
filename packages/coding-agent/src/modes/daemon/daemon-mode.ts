@@ -4986,6 +4986,30 @@ export class AgentDaemon {
 				return success(command.id, "get_model_catalog", catalog);
 			}
 
+			case "read_factory_runs":
+			case "act_on_factory_run": {
+				if (!this.sessions.has(command.activeSessionId)) {
+					return success(command.id, command.type, { status: "unavailable" });
+				}
+				const state = this.getBoundSessionState(command.activeSessionId);
+				// The authenticated supervisor already checked its public client's attachment.
+				if (!this.supervisorClaims.has(client) && !state.clients.has(client)) {
+					throw new Error("Daemon client is not attached to this session");
+				}
+				const { session } = state.runtime;
+				if (command.type === "read_factory_runs") {
+					return success(command.id, command.type, await session.readFactoryRuns());
+				}
+				if (
+					typeof command.runId !== "string" ||
+					!command.runId ||
+					(command.action !== "stop" && command.action !== "resume")
+				) {
+					throw new Error("Factory run action requires a run ID and a stop or resume action");
+				}
+				return success(command.id, command.type, await session.actOnFactoryRun(command.runId, command.action));
+			}
+
 			case "get_queue": {
 				const state = this.getSessionState(command.activeSessionId);
 				return success(command.id, "get_queue", {

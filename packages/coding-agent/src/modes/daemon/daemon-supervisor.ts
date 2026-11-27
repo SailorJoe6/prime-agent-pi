@@ -105,9 +105,11 @@ import {
 	type DaemonServerCapability,
 	type DaemonUpdateRestartManifest,
 	failure,
+	getDaemonCommandCompatibilities,
 	isDaemonCommandEnvelope,
 	isDaemonMutatingCommand,
 	isSessionSummary,
+	meetsDaemonCommandCompatibility,
 	salvageDaemonCommandId,
 	success,
 	UPDATE_RESTART_DRAIN_COMMANDS,
@@ -2222,6 +2224,28 @@ export class DaemonSupervisor {
 				}
 				const ticket = await this.issuePeerTransport(match.worker, match.summary);
 				return success(command.id, command.type, ticket);
+			}
+			case "read_factory_runs":
+			case "act_on_factory_run": {
+				if (!client.attachedActiveSessionIds.has(command.activeSessionId)) {
+					throw new Error("Daemon client is not attached to this session");
+				}
+				const entry = this.roster().byActiveSessionId(command.activeSessionId);
+				const worker = entry?.workerId === undefined ? undefined : this.workers.get(entry.workerId);
+				if (!worker || !this.isWorkerAccessibleToClient(client, worker)) {
+					return success(command.id, command.type, { status: "unavailable" });
+				}
+				// Use the resident worker only. The general forwarding path may recover or start a worker.
+				const workerClient = this.requireAvailableWorkerClient(worker);
+				const hello = workerClient.hello;
+				if (
+					!hello ||
+					!getDaemonCommandCompatibilities(command).every((req) => meetsDaemonCommandCompatibility(hello, req))
+				) {
+					return success(command.id, command.type, { status: "unsupported" });
+				}
+				const response = await workerClient.request(withoutCommandId(command), WORKER_REQUEST_TIMEOUT_MS);
+				return responseWithId(response, command.id);
 			}
 			case "list_saved_sessions":
 				return this.handleSavedSessionList(client, command);

@@ -873,6 +873,58 @@ function emitSequencedQueueUpdate(client: FakeDaemonClient, activeSessionId: str
 }
 
 describe("DaemonAgentConnection", () => {
+	it("PAPI-14: negotiates factory commands with the attached direct worker, not the supervisor", async () => {
+		const supervisor = new FakeDaemonClient();
+		supervisor.serverCapabilities.add("factory_runs");
+		const worker = new FakeDaemonClient();
+		Object.defineProperty(worker, "isConnected", { get: () => worker.connected });
+		const routed = new DaemonRoutedClient(asDaemonClient(supervisor), worker as unknown as DaemonWorkerClient);
+		const connection = await DaemonAgentConnection.attach(routed, "active-1");
+		try {
+			const request = vi.spyOn(worker, "request");
+			const fallback = vi.spyOn(supervisor, "request");
+			worker.hello = { ...worker.hello!, schemaRevision: 30, serverCapabilities: ["factory_runs"] };
+			await expect(connection.readFactoryRuns()).resolves.toEqual({ status: "unsupported" });
+			expect(request).not.toHaveBeenCalled();
+			expect(fallback).not.toHaveBeenCalled();
+			worker.hello.schemaRevision = DAEMON_SCHEMA_REVISION;
+			request.mockResolvedValueOnce(success(undefined, "read_factory_runs", { status: "absent" }));
+			await expect(connection.readFactoryRuns()).resolves.toEqual({ status: "absent" });
+			expect(request).toHaveBeenCalledOnce();
+			expect(fallback).not.toHaveBeenCalled();
+		} finally {
+			await connection.dispose();
+		}
+	});
+
+	it("PAPI-14: skips factory traffic until supported, then forwards the selected run unchanged", async () => {
+		const client = new FakeDaemonClient();
+		const connection = await DaemonAgentConnection.attach(asDaemonClient(client), "active-1");
+		try {
+			const request = vi.spyOn(client, "request");
+			await expect(connection.readFactoryRuns()).resolves.toEqual({ status: "unsupported" });
+			await expect(connection.actOnFactoryRun("selected", "stop")).resolves.toEqual({ status: "unsupported" });
+			expect(request).not.toHaveBeenCalled();
+			client.serverCapabilities.add("factory_runs");
+			request.mockResolvedValueOnce(success(undefined, "read_factory_runs", { status: "absent" }));
+			await expect(connection.readFactoryRuns()).resolves.toEqual({ status: "absent" });
+			expect(request).toHaveBeenLastCalledWith(
+				{ type: "read_factory_runs", activeSessionId: "active-1" },
+				undefined,
+				{ recoverable: false },
+			);
+			request.mockResolvedValueOnce(success(undefined, "act_on_factory_run", { status: "ok" }));
+			await expect(connection.actOnFactoryRun("selected", "resume")).resolves.toEqual({ status: "ok" });
+			expect(request).toHaveBeenLastCalledWith(
+				{ type: "act_on_factory_run", activeSessionId: "active-1", runId: "selected", action: "resume" },
+				undefined,
+				{ recoverable: false },
+			);
+		} finally {
+			await connection.dispose();
+		}
+	});
+
 	it("falls back to the supervisor when the direct socket closes during initial attach", async () => {
 		const supervisor = new FakeDaemonClient();
 		const closeListeners = new Set<(error: Error) => void>();

@@ -1361,6 +1361,106 @@ await host_request({"type": "test_barrier", "run_id": started["run_id"]})
             finally:
                 repl.close()
 
+    def test_papi_14_factory_actions_revalidate_exact_run_while_cell_waits(self):
+        with tempfile.TemporaryDirectory() as directory:
+            with open(os.path.join(directory, "settings.json"), "w", encoding="utf-8") as settings:
+                settings.write('{"factory":{"enabled":true}}')
+            repl = ReplProcess({
+                "PRIME_AGENT_CODING_AGENT_DIR": directory,
+                "RLM_HARNESS_STATE_DIR": os.path.join(directory, "harness"),
+                "PRIME_AGENT_MACHINES_DIR": os.path.join(directory, "machines"),
+            })
+            self.addCleanup(repl.close)
+            ready, _ = repl.ready()
+            self.assertIn("factory_action", ready["capabilities"])
+
+            def send_action(rid, run_id, action):
+                repl.send({"type": "factory_action", "id": rid, "run_id": run_id, "action": action})
+
+            def rejected(rid, run_id, action, message):
+                send_action(rid, run_id, action)
+                error, done = repl.until_done(rid)
+                self.assertEqual((error["event"], error["id"]), ("error", rid))
+                self.assertIn(message, error["evalue"])
+                self.assertEqual(done["status"], "error")
+
+            def reply(request, result):
+                repl.send({"type": "host_reply", "id": request["id"],
+                           "data": {"status": "ok", "result": result}})
+
+            def host_event(kind):
+                event = repl.read_event(timeout=5)
+                self.assertEqual(event.get("event"), "host_request", event)
+                self.assertEqual(event["data"]["type"], kind)
+                return event
+
+            def spawn_child(request, child):
+                args = request["data"]
+                name = args["kwargs"]["name"]
+                reply(request, {"rlm_child_id": child, "name": name, "session_dir": directory, "model": "fake"})
+                return name
+
+            rejected("idle", "missing-run", "stop", "unknown factory run")
+            repl.send({"type": "execute", "id": "run", "code": """
+from rlm import rlm
+from rlm.repl import host_request
+rlm.harness.save_factory("colors", {"run": {"max_children": 1}, "nodes": [
+    {"id": "first", "subagent": {"prompt": "Name a color."}},
+    {"id": "second", "depends_on": ["first"], "subagent": {"prompt": "Name another color."}},
+]})
+async def start_and_pause():
+    run_id = (await rlm.factory.run("colors", name="same name"))["run_id"]
+    while (await rlm.factory.status(run_id))["state"] != "paused":
+        await rlm.factory.watch(run_id, timeout=30)
+    return run_id
+a = await start_and_pause()
+b = await start_and_pause()
+await host_request({"type": "test_barrier", "ids": [a, b]})
+"""})
+            for child in ("a1", "b1"):
+                spawn_child(host_event("rlm.run"), child)
+                collect = host_event("rlm.collect")
+                self.assertEqual(collect["data"]["targets"], [child])
+                reply(collect, {"results": [{"rlm_child_id": child, "status": "done", "settled": True}]})
+            barrier = host_event("test_barrier")
+            a, b = barrier["data"]["ids"]
+
+            rejected("bad-action", a, "start", "unknown factory action")
+            rejected("not-an-id", "same name", "resume", "unknown factory run")
+            rejected("almost-id", f" {a}", "resume", "unknown factory run")
+            send_action("resume-a", a, "resume")
+            self.assertEqual(repl.read_event(timeout=5), {"event": "done", "id": "resume-a", "status": "ok"})
+            child_name = spawn_child(host_event("rlm.run"), "a2")
+            self.assertIn(a, child_name)
+            collect = host_event("rlm.collect")
+            self.assertEqual(collect["data"]["targets"], ["a2"])
+            rejected("already-running", a, "resume", "not paused")
+
+            send_action("stop-a", a, "stop")
+            rejected("resume-stopping", a, "resume", "is 'stopping', not paused")
+            repl.send({"type": "factory_runs", "id": "inspect-stopping"})
+            live = repl.until_done("inspect-stopping")[-1]["runs"]
+            self.assertEqual({run["run_id"]: run["state"] for run in live}, {a: "stopping", b: "paused"})
+            send_action("join-a", a, "stop")
+            reply(collect, {"results": [{"rlm_child_id": "a2", "status": "running", "settled": False}]})
+            delete = host_event("rlm.delete_subagent")
+            self.assertEqual(delete["data"]["target"], "a2")
+            reply(delete, {"subagent": {"rlm_child_id": "a2", "session_name": child_name,
+                                         "session_dir": directory, "status": "running"}})
+            self.assertCountEqual([repl.read_event(timeout=5), repl.read_event(timeout=5)], [
+                {"event": "done", "id": "stop-a", "status": "ok"},
+                {"event": "done", "id": "join-a", "status": "ok"},
+            ])
+            rejected("stale-stop", a, "stop", "not live")
+            repl.send({"type": "factory_runs", "id": "remaining"})
+            remaining, = repl.until_done("remaining")[-1]["runs"]
+            self.assertEqual((remaining["run_id"], remaining["state"]), (b, "paused"))
+            send_action("stop-b", b, "stop")
+            self.assertEqual(repl.until_done("stop-b")[-1]["status"], "ok")
+            reply_ok(repl, barrier)
+            self.assertEqual(repl.until_done("run")[-1]["status"], "ok")
+            self.assertEqual(repl.shutdown(), 0)
+
     def test_typed_host_request_unwraps_exact_handler_result(self):
         code = "\n".join(
             [

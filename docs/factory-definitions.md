@@ -252,14 +252,24 @@ child label prefix, shortened if needed to fit the host limit. The runner adds
 run and admission suffixes so repeated or overlapping runs have distinct names;
 run controls still target exact child IDs.
 
-### Terminal integration status
+### Inspect and control the current session in Pi
 
-Pi can read live diagrams, including paused runs and runs with children still
-in flight, from the session’s already-running Python kernel. The read does not
-start Python. A successful empty read is distinct from no kernel, an older
-runtime that does not support the read, or a failed read. The terminal page
-and `/factory` controls are not wired to that read path yet. Use the Python commands below to
-inspect or control runs in the meantime.
+Enter `/factory` in the terminal chat. The page shows the selected live run,
+its state, and its diagram, with active states marked `*`. The selection follows
+the run ID as runs update. With the default picker bindings, Up/Down changes the
+selection, Page Up/Page Down scrolls the diagram, Enter opens the run actions
+or confirms one, and Esc backs out of actions or returns to chat. The page
+shows the configured keys if you remapped them.
+
+Choose Stop to stop the selected live run, or Resume to continue the selected
+paused run. If the run changes before confirmation, Pi rechecks the selected
+action instead of applying it to another run. The page uses the current
+session’s already-running Python kernel and does not start a kernel just to
+inspect it. It distinguishes no live runs from no kernel, an older runtime,
+and an unavailable read. Ordinary session navigation is unchanged.
+
+The terminal does not change `factory.enabled` yet. `/factory on`, `off`, and
+`status`, including the guard against disabling with live runs, remain pending.
 
 ### Watch, resume, or stop one run
 

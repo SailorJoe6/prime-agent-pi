@@ -1,0 +1,1 @@
+- Added a `/factory` terminal page to inspect the current session’s live run diagrams and stop or resume the selected run.

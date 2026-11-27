@@ -34,16 +34,25 @@ event.
 | `restore` | `{"type":"restore","id":str,"path":str}` |
 | `list_names` | `{"type":"list_names","id":str}` |
 | `factory_runs` | `{"type":"factory_runs","id":str}` — when advertised in `ready.capabilities` |
+| `factory_action` | `{"type":"factory_action","id":str,"run_id":str,"action":"stop" or "resume"}` — when advertised in `ready.capabilities` |
 | `shutdown` | `{"type":"shutdown","id"?:str}` |
 
-Requests other than `interrupt`, `host_reply`, and `factory_runs` run strictly
-in order, one at a time. `factory_runs` reads on the owning event loop without
+Requests other than `interrupt`, `host_reply`, `factory_runs`, and
+`factory_action` run strictly in order, one at a time. `factory_runs` reads on the owning event loop without
 waiting for an awaiting cell to finish. It returns a `done` event with a `runs`
 array of compact run graphs: running, paused, stopping, or still holding active
 children. An idle kernel returns an empty array. This read does not execute a
 cell or change factory settings. A host must not send the request to a runtime
-that does not advertise it. A malformed line
-produces `{"event":"error","id":null,"ename":"ProtocolError",...}` and the
+that does not advertise it.
+
+`factory_action` also runs on the owning loop without waiting for an awaiting
+cell. It revalidates the exact `run_id` against the existing runs: `resume`
+requires a paused run, and `stop` requires a live run and waits for it to stop.
+A successful action returns `{"event":"done","id":str,"status":"ok"}`;
+a rejected action sends the usual correlated `error` and `done` events with
+`status:"error"` on `done`. A host must not send it without the capability.
+
+A malformed line produces `{"event":"error","id":null,"ename":"ProtocolError",...}` and the
 runtime keeps serving. Closing stdin is equivalent to `shutdown`.
 
 ## Events

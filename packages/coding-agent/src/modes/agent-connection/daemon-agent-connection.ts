@@ -17,6 +17,7 @@ import type {
 	AgentHeartbeatManagementAction,
 	AgentHeartbeatUpdateAction,
 } from "../../core/cron-jobs.js";
+import type { FactoryRunAction, FactoryRunActionResult, FactoryRunsRead } from "../../core/kernel/shared.js";
 import type { AcpMcpServerConfig } from "../../core/mcp/acp-mcp-types.js";
 import type { CustomMessage } from "../../core/messages.js";
 import type { RefinementResult } from "../../core/refinement/index.js";
@@ -937,6 +938,38 @@ export class DaemonAgentConnection implements AgentConnection {
 			type: "get_queue",
 			activeSessionId: this.activeSessionId,
 		});
+	}
+
+	async readFactoryRuns(): Promise<FactoryRunsRead> {
+		return this.requestFactoryRuns({ type: "read_factory_runs", activeSessionId: this.activeSessionId });
+	}
+
+	async actOnFactoryRun(runId: string, action: FactoryRunAction): Promise<FactoryRunActionResult> {
+		return this.requestFactoryRuns({
+			type: "act_on_factory_run",
+			activeSessionId: this.activeSessionId,
+			runId,
+			action,
+		});
+	}
+
+	private async requestFactoryRuns<T>(
+		command: Extract<DaemonCommandBody, { type: "read_factory_runs" | "act_on_factory_run" }>,
+	): Promise<T | { status: "unsupported" }> {
+		const supported =
+			this.client instanceof DaemonRoutedClient
+				? this.client.supportsAttachedSessionCommand(command)
+				: this.client.supportsServerCapability("factory_runs");
+		if (!supported) return { status: "unsupported" };
+		try {
+			// A dropped connection must not replay a stale selection after reattach.
+			return await this.requestData<T>(command, undefined, { recoverable: false });
+		} catch (error) {
+			if (error instanceof DaemonCapabilityUnavailableError && !error.afterReconnect) {
+				return { status: "unsupported" };
+			}
+			throw error;
+		}
 	}
 
 	async mutateQueuedMessage(
@@ -3042,6 +3075,7 @@ function invalidatesCachedSnapshot(commandType: DaemonCommandBody["type"]): bool
 		case "get_commands":
 		case "get_resource_snapshot":
 		case "get_queue":
+		case "read_factory_runs":
 		case "cron_list":
 		case "heartbeats_list":
 		case "get_session_context":

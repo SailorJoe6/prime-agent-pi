@@ -218,6 +218,30 @@ describe("DaemonClient", () => {
 		client.close();
 	});
 
+	it.each([
+		[30, []],
+		[30, ["factory_runs"]],
+		[31, []],
+	] as const)("PAPI-14: sends no factory traffic to schema %i with capabilities %j", async (schema, capabilities) => {
+		const client = new DaemonClient("/tmp/prime-agent.sock");
+		try {
+			const connect = client.connect();
+			const socket = netMock.sockets[0]!;
+			socket.emit("connect");
+			await connect;
+			emitHello(socket, 7, [...capabilities], schema);
+			await expect(client.request({ type: "read_factory_runs", activeSessionId: "own" })).rejects.toThrow(
+				"factory_runs",
+			);
+			await expect(
+				client.request({ type: "act_on_factory_run", activeSessionId: "own", runId: "selected", action: "stop" }),
+			).rejects.toThrow("factory_runs");
+			expect(socket.writes).toEqual([]);
+		} finally {
+			client.close();
+		}
+	});
+
 	it("does not send subagent deletion to an old daemon without the capability", async () => {
 		const client = new DaemonClient("/tmp/prime-agent.sock");
 		const connect = client.connect();

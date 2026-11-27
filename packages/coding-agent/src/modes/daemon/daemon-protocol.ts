@@ -10,6 +10,7 @@ import type {
 	AgentHeartbeatUpdateAction,
 } from "../../core/cron-jobs.js";
 import type { InputSource } from "../../core/extensions/types.js";
+import type { FactoryRunAction } from "../../core/kernel/shared.js";
 import type { AcpMcpServerConfig } from "../../core/mcp/acp-mcp-types.js";
 import type { CustomMessage } from "../../core/messages.js";
 import type { QueuedMessageLane, QueuedMessageMutation } from "../../core/session-action-store.js";
@@ -67,8 +68,9 @@ export const DAEMON_COMMAND_ENVELOPE_MIN_PROTOCOL_VERSION = 7;
 // Revision 28 publishes the last recorded model on saved-session rows.
 // Revision 29 adds the capability-gated abort_and_send_queued command.
 // Revision 30 adds structured update_restarting failure info for opens fenced by an update restart.
-export const DAEMON_SCHEMA_REVISION = 30;
-export const DAEMON_SCHEMA_ID = "protocol-7-schema-30-f908f493c9e1";
+// Revision 31 adds capability-gated, attached-session factory run reads and actions.
+export const DAEMON_SCHEMA_REVISION = 31;
+export const DAEMON_SCHEMA_ID = "protocol-7-schema-31-d3dc76604ade";
 
 export type DaemonProtocolName = typeof DAEMON_PROTOCOL_NAME;
 export type DaemonProtocolVersion = number;
@@ -114,7 +116,8 @@ export type DaemonServerCapability =
 	| "owned_prompt_cancellation"
 	| "acp_mcp_servers"
 	| "direct_peer_transport"
-	| "abort_and_send_queued";
+	| "abort_and_send_queued"
+	| "factory_runs";
 
 export type DaemonReplayStatus = "complete" | "partial" | "unavailable";
 
@@ -160,6 +163,7 @@ export const DAEMON_DEFAULT_SERVER_CAPABILITIES: readonly DaemonServerCapability
 	"session_input_pause",
 	"acp_mcp_servers",
 	"abort_and_send_queued",
+	"factory_runs",
 ];
 
 /** Single-use short-lived credential for one direct TUI connection to one worker process incarnation. */
@@ -520,6 +524,8 @@ export type DaemonCommand =
 	| { id?: string; type: "agent_messages_clear"; activeSessionId: string }
 	| { id?: string; type: "abort"; activeSessionId: string }
 	| { id?: string; type: "abort_and_send_queued"; activeSessionId: string }
+	| { id?: string; type: "read_factory_runs"; activeSessionId: string }
+	| { id?: string; type: "act_on_factory_run"; activeSessionId: string; runId: string; action: FactoryRunAction }
 	| {
 			id?: string;
 			type: "start_side_question";
@@ -767,6 +773,8 @@ export const DAEMON_COMMAND_COMPATIBILITY = {
 	agent_messages_clear: LEGACY_DAEMON_COMMAND,
 	abort: LEGACY_DAEMON_COMMAND,
 	abort_and_send_queued: { minProtocol: 7, minSchemaRevision: 29, capability: "abort_and_send_queued" },
+	read_factory_runs: { minProtocol: 7, minSchemaRevision: 31, capability: "factory_runs" },
+	act_on_factory_run: { minProtocol: 7, minSchemaRevision: 31, capability: "factory_runs" },
 	start_side_question: LEGACY_DAEMON_COMMAND,
 	abort_side_question: LEGACY_DAEMON_COMMAND,
 	execute_bash: LEGACY_DAEMON_COMMAND,
@@ -904,6 +912,8 @@ export const DAEMON_COMMAND_PLANE = {
 	agent_messages_clear: "control",
 	abort: "session",
 	abort_and_send_queued: "session",
+	read_factory_runs: "session",
+	act_on_factory_run: "session",
 	start_side_question: "session",
 	abort_side_question: "session",
 	execute_bash: "session",
@@ -1330,6 +1340,7 @@ const READ_ONLY_DAEMON_COMMANDS: ReadonlySet<DaemonCommand["type"]> = new Set([
 	"get_model_catalog",
 	"get_available_models",
 	"get_queue",
+	"read_factory_runs",
 	"cron_list",
 	"heartbeats_list",
 	"heartbeat_get",

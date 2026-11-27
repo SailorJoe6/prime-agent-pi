@@ -16,6 +16,7 @@ import type { ReplayBuiltInToolName } from "../../core/extensions/index.js";
 import type { InputSource } from "../../core/extensions/types.js";
 import type { GoalState } from "../../core/goals.js";
 import type { KernelSentAgentMessage } from "../../core/kernel/index.js";
+import type { FactoryRunAction, FactoryRunActionResult, FactoryRunsRead } from "../../core/kernel/shared.js";
 import type { AcpMcpServerConfig } from "../../core/mcp/acp-mcp-types.js";
 import type { CustomMessage } from "../../core/messages.js";
 import type { RefinementResult } from "../../core/refinement/index.js";
@@ -698,6 +699,9 @@ export interface AgentConnection {
 		callbacks?: AgentConnectionSessionListCallbacks,
 	): Promise<AgentConnectionSavedSessionInfo[]>;
 	getQueue(): Promise<AgentConnectionQueueState>;
+	/** Inspect factory runs without starting a kernel. */
+	readFactoryRuns?(): Promise<FactoryRunsRead>;
+	actOnFactoryRun?(runId: string, action: FactoryRunAction): Promise<FactoryRunActionResult>;
 	mutateQueuedMessage(
 		lane: AgentConnectionQueuedMessageLane,
 		index: number,

@@ -32,6 +32,8 @@ import {
 	type ExecuteOptions,
 	type ExecuteResult,
 	errorMessage,
+	type FactoryRunAction,
+	type FactoryRunActionResult,
 	type FactoryRunGraph,
 	type FactoryRunsRead,
 	HOST_REQUEST_SHUTDOWN_TIMEOUT_MS,
@@ -69,6 +71,7 @@ const REPL_PROTOCOL_VERSION = 3;
 const READY_TIMEOUT_MS = 30_000;
 const REPAIR_STEP_TIMEOUT_MS = 30_000;
 const FACTORY_READ_TIMEOUT_MS = 2_000;
+const FACTORY_ACTION_TIMEOUT_MS = 5_000;
 // Runtime-minted host-request ids never repeat; the bound only guards a
 // misbehaving runtime from growing the dedup set forever.
 const MAX_HANDLED_HOST_REQUEST_IDS = 1024;
@@ -268,6 +271,8 @@ export class ReplKernelManager {
 	private child?: ChildProcess;
 	private supportsFactoryRuns = false;
 	private readonly pendingFactoryReads = new Map<string, (event?: Record<string, unknown>) => void>();
+	private supportsFactoryAction = false;
+	private readonly pendingFactoryActions = new Map<string, (event?: Record<string, unknown>) => void>();
 	private readyDeferred?: ReturnType<typeof createDeferred<number>>;
 	private kernelStderr = "";
 	/** Serializes execute() calls — the runtime runs one request at a time. */
@@ -933,6 +938,35 @@ export class ReplKernelManager {
 		}
 	}
 
+	/** Send one request to the current child, without entering the execution queue or retrying. */
+	async actOnFactoryRun(runId: string, action: FactoryRunAction): Promise<FactoryRunActionResult> {
+		if (!this.isRunning || this.teardownInFlight || this.protocolRepairPromise) return { status: "unavailable" };
+		if (!this.supportsFactoryAction) return { status: "unsupported" };
+		const id = uuid();
+		const reply = createDeferred<FactoryRunActionResult>();
+		const unavailable = () => reply.resolve({ status: "unavailable" });
+		let error: string | undefined;
+		this.pendingFactoryActions.set(id, (event) => {
+			if (event?.event === "error") {
+				if (typeof event.evalue === "string") error = event.evalue;
+			} else if (event?.status === "ok" && error === undefined) {
+				reply.resolve({ status: "ok" });
+			} else if (event?.status === "error" && error !== undefined) {
+				reply.resolve({ status: "error", error });
+			} else {
+				unavailable();
+			}
+		});
+		const timer = setTimeout(unavailable, FACTORY_ACTION_TIMEOUT_MS);
+		try {
+			void this.writeLine({ type: "factory_action", id, run_id: runId, action }).catch(unavailable);
+			return await reply.promise;
+		} finally {
+			clearTimeout(timer);
+			this.pendingFactoryActions.delete(id);
+		}
+	}
+
 	private handleEvent(event: Record<string, unknown>): void {
 		const type = event.event;
 		if (type === "display" && isRecord(event.data) && BASH_ACTIVITY_DISPLAY_MIME in event.data) {
@@ -968,7 +1002,9 @@ export class ReplKernelManager {
 			return;
 		}
 		if (type === "ready") {
-			this.supportsFactoryRuns = asStringArray(event.capabilities).includes("factory_runs");
+			const capabilities = asStringArray(event.capabilities);
+			this.supportsFactoryRuns = capabilities.includes("factory_runs");
+			this.supportsFactoryAction = capabilities.includes("factory_action");
 			this.readyDeferred?.resolve(typeof event.protocol === "number" ? event.protocol : -1);
 			return;
 		}
@@ -978,6 +1014,13 @@ export class ReplKernelManager {
 		}
 
 		const id = typeof event.id === "string" ? event.id : undefined;
+		if (id && (type === "done" || type === "error")) {
+			const action = this.pendingFactoryActions.get(id);
+			if (action) {
+				action(event);
+				return;
+			}
+		}
 		if (id && type === "done") {
 			const read = this.pendingFactoryReads.get(id);
 			if (read) {
@@ -1485,6 +1528,9 @@ export class ReplKernelManager {
 		this.supportsFactoryRuns = false;
 		for (const read of this.pendingFactoryReads.values()) read();
 		this.pendingFactoryReads.clear();
+		this.supportsFactoryAction = false;
+		for (const action of this.pendingFactoryActions.values()) action();
+		this.pendingFactoryActions.clear();
 		// Teardown kills the handles with the kernel, so owed continuations
 		// waiting on them must hear the settlement once before it is lost. A
 		// host callback failure must not abort the kernel teardown.

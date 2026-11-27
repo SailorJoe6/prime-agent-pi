@@ -247,6 +247,7 @@ import { type FileChangeSummary, formatTotalChangeSummary, mergeTurnFileChanges 
 import { ExtensionEditorComponent } from "./components/extension-editor.js";
 import { ExtensionInputComponent } from "./components/extension-input.js";
 import { ExtensionSelectorComponent } from "./components/extension-selector.js";
+import { FactoryPage } from "./components/factory-page.js";
 import { FooterComponent } from "./components/footer.js";
 import { HeartbeatManagerComponent } from "./components/heartbeat-manager.js";
 import { InjectedPromptMessageComponent, isInjectedPromptMessage } from "./components/injected-prompt-message.js";
@@ -1363,6 +1364,7 @@ export class InteractiveMode {
 	private heartbeatRefreshPromise: Promise<void> | undefined;
 	private heartbeatRefreshRequested = false;
 	private heartbeatManager: HeartbeatManagerComponent | undefined;
+	private factoryPage: { page: FactoryPage; handle: OverlayHandle } | undefined;
 	private heartbeatManagerHandle: OverlayHandle | undefined;
 	private heartbeatManagerRefreshTimer: ReturnType<typeof setTimeout> | undefined;
 	private heartbeatManagerRefreshAt: number | undefined;
@@ -4098,6 +4100,7 @@ export class InteractiveMode {
 		this.closeConfigurationMenu?.();
 		this.closeServiceCatalogPicker?.();
 		this.cancelActiveConnectionExtensionUiRequests();
+		this.closeFactoryPage();
 		this.closeHeartbeatManager();
 		if (this.extensionSelector) {
 			this.hideExtensionSelector();
@@ -5215,6 +5218,16 @@ export class InteractiveMode {
 				if (commandName === "btw") {
 					this.editor.setText("");
 					await this.handleSideQuestion(commandArgs);
+					return;
+				}
+				if (commandName === "factory") {
+					if (commandArgs) {
+						this.editor.setText(text);
+						this.showError("Usage: /factory");
+						return;
+					}
+					this.showFactoryPage();
+					this.editor.setText("");
 					return;
 				}
 				if (commandName === "settings") {
@@ -12085,6 +12098,40 @@ export class InteractiveMode {
 		}
 	}
 
+	private showFactoryPage(): void {
+		if (this.factoryPage) {
+			this.factoryPage.handle.focus();
+			return;
+		}
+		const connection = this.agentConnection;
+		const sessionId = this.connectionState?.sessionId;
+		if (!sessionId) {
+			this.showError("No active session for /factory.");
+			return;
+		}
+		const page = new FactoryPage({
+			read: () => connection.readFactoryRuns?.() ?? Promise.resolve({ status: "unsupported" }),
+			act: (runId, action) =>
+				connection.actOnFactoryRun?.(runId, action) ?? Promise.resolve({ status: "unsupported" }),
+			isCurrentSession: () => this.agentConnection === connection && this.connectionState?.sessionId === sessionId,
+			getRows: () => this.ui.terminal.rows,
+			requestRender: () => this.ui.requestRender(),
+			onClose: () => this.closeFactoryPage(),
+		});
+		const handle = this.showFullPaneOverlay(page, { fullWidth: true, suspendFullscreenMouse: true });
+		this.factoryPage = { page, handle };
+		page.start();
+	}
+
+	private closeFactoryPage(): void {
+		const current = this.factoryPage;
+		if (!current) return;
+		this.factoryPage = undefined;
+		current.page.dispose();
+		current.handle.hide();
+		this.ui.requestRender();
+	}
+
 	private showHeartbeatManager(): void {
 		if (this.heartbeatManagerHandle) {
 			this.heartbeatManagerHandle.focus();
@@ -12593,6 +12640,7 @@ ${interrupt ? `| \`${interrupt}\` | Interrupt current operation |\n` : ""}${shor
 		this.discardRefineLoader();
 		this.stopWorkingPulse();
 		this.stopGoalTrayTimer();
+		this.closeFactoryPage();
 		this.closeHeartbeatManager();
 		this.clearExtensionTerminalInputListeners();
 		this.footer.dispose();

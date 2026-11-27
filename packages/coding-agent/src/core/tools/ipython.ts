@@ -10,6 +10,8 @@ import { withKernelBootPermit } from "../kernel/boot-gate.js";
 import type { KernelBootstrapProgressHandler } from "../kernel/bootstrap.js";
 import {
 	type ExecuteResult,
+	type FactoryRunAction,
+	type FactoryRunActionResult,
 	type FactoryRunsRead,
 	type HostRequestHandlers,
 	type KernelAttachment,
@@ -400,6 +402,16 @@ export class IpythonKernelProvisioner {
 		if (manager.isDefunct) return { status: "unavailable" };
 		if (!manager.readFactoryRuns) return { status: "unsupported" };
 		const result = await manager.readFactoryRuns();
+		return manager === this.startedManager ? result : { status: "unavailable" };
+	}
+
+	/** Act on the existing kernel only; never provision or wait for a new one. */
+	async actOnFactoryRun(runId: string, action: FactoryRunAction): Promise<FactoryRunActionResult> {
+		const manager = this.startedManager;
+		if (!manager) return { status: this.managerPromise ? "unavailable" : "absent" };
+		if (manager.isDefunct) return { status: "unavailable" };
+		if (!manager.actOnFactoryRun) return { status: "unsupported" };
+		const result = await manager.actOnFactoryRun(runId, action);
 		return manager === this.startedManager ? result : { status: "unavailable" };
 	}
 

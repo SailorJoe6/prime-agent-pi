@@ -182,7 +182,13 @@ import {
 	validateGoalObjective,
 } from "./goals.js";
 import { resolveImageModelOverride } from "./image-model-routing.js";
-import type { FactoryRunsRead, HostRequestHandlers, KernelSentAgentMessage } from "./kernel/index.js";
+import type {
+	FactoryRunAction,
+	FactoryRunActionResult,
+	FactoryRunsRead,
+	HostRequestHandlers,
+	KernelSentAgentMessage,
+} from "./kernel/index.js";
 import { type RestoreResult, snapshotPathIn } from "./kernel/state-snapshot.js";
 import type { AcpMcpServerConfig } from "./mcp/acp-mcp-types.js";
 import type { McpManager } from "./mcp/mcp-manager.js";
@@ -2943,6 +2949,12 @@ export class AgentSession {
 	async readFactoryRuns(): Promise<FactoryRunsRead> {
 		if (this._disposed || this._disposing) return { status: "unavailable" };
 		return this._ipythonKernelProvisioner?.readFactoryRuns() ?? { status: "absent" };
+	}
+
+	/** Local host-side action; no kernel provisioning or daemon command. */
+	async actOnFactoryRun(runId: string, action: FactoryRunAction): Promise<FactoryRunActionResult> {
+		if (this._disposed || this._disposing) return { status: "unavailable" };
+		return this._ipythonKernelProvisioner?.actOnFactoryRun(runId, action) ?? { status: "absent" };
 	}
 
 	/** Deliver the owed continuation once descendant work settles. */

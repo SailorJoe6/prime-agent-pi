@@ -495,6 +495,25 @@ class FactoryRuns:
             cancelled = await asyncio.shield(run.worker)
         return {"run_id": run_id, "state": run.state, "cancelled": cancelled}
 
+    async def control(self, run_id: str, action: str) -> None:
+        """Revalidate a terminal action on the loop owning the selected run."""
+        require_factory_enabled()
+        if action not in ("stop", "resume"):
+            raise ValueError(f"unknown factory action {action!r}")
+        if action == "resume":
+            self.resume(run_id)
+            return
+        run = self._require_run(run_id)
+        if not self._is_live(run):
+            raise ValueError(f"factory run {run_id!r} is {run.state!r}, not live")
+        if run.state == "stopping":
+            assert run.worker is not None
+            await asyncio.shield(run.worker)
+        else:
+            await self.stop(run_id)
+        if run.state != "stopped":
+            raise RuntimeError(run.error or f"factory run {run_id!r} did not stop")
+
     async def _retire_children(self, run: _Run) -> list[str]:
         cancelled: list[str] = []
         failures = []

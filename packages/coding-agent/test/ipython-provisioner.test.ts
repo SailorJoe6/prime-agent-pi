@@ -71,11 +71,16 @@ function writeFakeReplRuntime(
 	options: {
 		gatedExecute?: { startedPath: string; gatePath: string };
 		factoryReply?: "legacy" | "failed" | "malformed";
+		factoryAction?: boolean;
 	} = {},
 ): string {
 	const python = join(tempDir, "python-repl");
 	const refuse = `emit({ event: "error", id: request.id, ename: "RuntimeError", evalue: "bootstrap refused", traceback: [] });
 		emit({ event: "done", id: request.id, status: "error" });`;
+	const capabilities = [
+		...(options.factoryReply && options.factoryReply !== "legacy" ? ["factory_runs"] : []),
+		...(options.factoryAction ? ["factory_action"] : []),
+	];
 	const executeBranch = options.gatedExecute
 		? `fs.writeFileSync(${JSON.stringify(options.gatedExecute.startedPath)}, "1");
 		const gate = setInterval(() => {
@@ -83,7 +88,7 @@ function writeFakeReplRuntime(
 			clearInterval(gate);
 			${refuse}
 		}, 10);`
-		: options.factoryReply
+		: options.factoryReply || options.factoryAction
 			? `emit({ event: "done", id: request.id, status: "ok" });`
 			: refuse;
 	writeFileSync(
@@ -92,8 +97,10 @@ function writeFakeReplRuntime(
 const fs = require("node:fs");
 const readline = require("node:readline");
 const emit = (event) => process.stdout.write(JSON.stringify(event) + "\\n");
-emit({ event: "ready", protocol: 3, python: process.version, capabilities: ${JSON.stringify(options.factoryReply && options.factoryReply !== "legacy" ? ["factory_runs"] : [])} });
+emit({ event: "ready", protocol: 3, python: process.version, capabilities: ${JSON.stringify(capabilities)} });
 const input = readline.createInterface({ input: process.stdin });
+let waitingCellId;
+let stopped = false;
 input.on("line", (line) => {
 	const request = JSON.parse(line);
 	if (request.type === "restore") {
@@ -108,7 +115,32 @@ input.on("line", (line) => {
 		return;
 	}
 	if (request.type === "execute") {
+		if (request.code === "wait for test_barrier") {
+			waitingCellId = request.id;
+			emit({ event: "host_request", id: "fixture-barrier", data: { type: "test_barrier" } });
+			return;
+		}
 		${executeBranch}
+		return;
+	}
+	if (request.type === "host_reply" && request.id === "fixture-barrier") {
+		emit({ event: "result", id: waitingCellId, text: "cell result" });
+		emit({ event: "done", id: waitingCellId, status: "ok" });
+		waitingCellId = undefined;
+		return;
+	}
+	if (request.type === "factory_action") {
+		if (!${JSON.stringify(options.factoryAction === true)}) process.exit(43);
+		const valid = request.run_id === "fixture-run" && waitingCellId && request.id !== waitingCellId &&
+			((request.action === "stop" && !stopped) || (request.action === "resume" && stopped));
+		// An unrelated reply must not settle this action.
+		emit({ event: "done", id: "unrelated-action", status: valid ? "error" : "ok" });
+		if (!valid) {
+			emit({ event: "error", id: request.id, ename: "ValueError", evalue: "action refused", traceback: [] });
+		} else {
+			stopped = request.action === "stop";
+		}
+		emit({ event: "done", id: request.id, status: valid ? "ok" : "error" });
 		return;
 	}
 	if (request.type === "factory_runs") {
@@ -208,7 +240,48 @@ await host_request("test_barrier")
 		try {
 			const manager = await provisioner.ensure();
 			await expect(provisioner.readFactoryRuns()).resolves.toEqual({ status });
+			await expect(provisioner.actOnFactoryRun("fixture-run", "stop")).resolves.toEqual({ status: "unsupported" });
 			await expect(manager.execute("1 + 1")).resolves.toMatchObject({ status: "ok" });
+		} finally {
+			await provisioner.dispose({ snapshot: false });
+		}
+	});
+
+	it("PAPI-14 sends both actions to the owning kernel while a cell waits", async () => {
+		const python = writeFakeReplRuntime(join(tempDir, "unused"), { factoryAction: true });
+		const barrier = createDeferred<void>();
+		const release = createDeferred<void>();
+		const provisioner = new IpythonKernelProvisioner(tempDir, {
+			python,
+			hostHandlers: {
+				test_barrier: async () => {
+					barrier.resolve();
+					await release.promise;
+					return {};
+				},
+			},
+		});
+		try {
+			const manager = await provisioner.ensure();
+			await expect(provisioner.readFactoryRuns()).resolves.toEqual({ status: "unsupported" });
+			const cell = manager.execute("wait for test_barrier");
+			try {
+				await Promise.race([
+					barrier.promise,
+					cell.then(() => {
+						throw new Error("Cell finished before barrier");
+					}),
+				]);
+				await expect(provisioner.actOnFactoryRun("fixture-run", "stop")).resolves.toEqual({ status: "ok" });
+				await expect(provisioner.actOnFactoryRun("unknown-run", "resume")).resolves.toEqual({
+					status: "error",
+					error: "action refused",
+				});
+				await expect(provisioner.actOnFactoryRun("fixture-run", "resume")).resolves.toEqual({ status: "ok" });
+			} finally {
+				release.resolve();
+				await expect(cell).resolves.toMatchObject({ status: "ok", result: "cell result" });
+			}
 		} finally {
 			await provisioner.dispose({ snapshot: false });
 		}
@@ -221,8 +294,10 @@ await host_request("test_barrier")
 		let starting: Promise<unknown> | undefined;
 		try {
 			await expect(provisioner.readFactoryRuns()).resolves.toEqual({ status: "absent" });
+			await expect(provisioner.actOnFactoryRun("fixture-run", "stop")).resolves.toEqual({ status: "absent" });
 			starting = provisioner.ensure().catch(() => undefined);
 			await expect(provisioner.readFactoryRuns()).resolves.toEqual({ status: "unavailable" });
+			await expect(provisioner.actOnFactoryRun("fixture-run", "resume")).resolves.toEqual({ status: "unavailable" });
 		} finally {
 			const disposed = provisioner.dispose();
 			gate.resolve();

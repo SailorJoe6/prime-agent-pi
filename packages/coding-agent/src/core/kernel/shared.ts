@@ -296,6 +296,12 @@ export type FactoryRunsRead =
 	| { status: "ok"; runs: FactoryRunGraph[] }
 	| { status: "absent" | "unsupported" | "unavailable" };
 
+export type FactoryRunAction = "stop" | "resume";
+
+export type FactoryRunActionResult =
+	| { status: "ok" | "absent" | "unsupported" | "unavailable" }
+	| { status: "error"; error: string };
+
 export interface KernelClient {
 	readonly ownerSessionId: string | undefined;
 	readonly isRunning: boolean;
@@ -313,6 +319,7 @@ export interface KernelClient {
 	restoreState(): Promise<RestoreResult | null>;
 	listNamespaceNames(signal?: AbortSignal): Promise<string[] | null>;
 	readFactoryRuns?(): Promise<FactoryRunsRead>;
+	actOnFactoryRun?(runId: string, action: FactoryRunAction): Promise<FactoryRunActionResult>;
 }
 
 // One registry serves every client kind; two parallel registries would
