@@ -11239,15 +11239,17 @@ export class AgentSession {
 			// ephemeral sessions fall back to the RLM session dir once it exists.
 			env.RLM_HARNESS_STATE_DIR = this._localHarnessStateDir() ?? getLocalHarnessStateDir(rlmSessionDir)!;
 		}
+		const settingsDir = this.settingsManager.getGlobalSettingsDir();
+		if (settingsDir) {
+			env.PRIME_AGENT_CODING_AGENT_DIR = settingsDir;
+		} else if (this._agentDir) {
+			env.PRIME_AGENT_CODING_AGENT_DIR = this._agentDir;
+		}
 		this._addWebsearchKeyEnv(env);
 		return env;
 	}
 
 	private _addWebsearchKeyEnv(env: Record<string, string>): void {
-		if (this._agentDir) {
-			env.PRIME_AGENT_CODING_AGENT_DIR = this._agentDir;
-		}
-
 		if (process.env[SERPER_ENV_VAR]?.trim()) {
 			return;
 		}

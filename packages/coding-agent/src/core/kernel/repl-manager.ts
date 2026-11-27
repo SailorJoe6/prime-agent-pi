@@ -225,7 +225,8 @@ function isFactoryRunGraph(value: unknown): value is FactoryRunGraph {
 	return (
 		isRecord(value) &&
 		typeof value.run_id === "string" &&
-		typeof value.name === "string" &&
+		typeof value.spec_id === "string" &&
+		(value.name === null || typeof value.name === "string") &&
 		typeof value.state === "string" &&
 		Array.isArray(value.active_nodes) &&
 		value.active_nodes.every((node) => typeof node === "string") &&

@@ -1,10 +1,11 @@
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { join, relative, resolve, sep } from "node:path";
 import { cleanupSessionResources } from "@earendil-works/pi-ai";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ExtensionContext } from "../src/core/extensions/types.js";
 import type { KernelBootstrapProgressHandler } from "../src/core/kernel/bootstrap.js";
+import * as kernelBootstrap from "../src/core/kernel/bootstrap.js";
 import {
 	type ExecuteResult,
 	KernelBusyAfterInterruptError,
@@ -12,8 +13,12 @@ import {
 	ReplKernelManager,
 } from "../src/core/kernel/index.js";
 import { createDeferred } from "../src/core/kernel/shared.js";
+import { createAgentSession } from "../src/core/sdk.js";
+import { SessionManager } from "../src/core/session-manager.js";
 import { SettingsManager } from "../src/core/settings-manager.js";
 import { createIpythonToolDefinition, IpythonKernelProvisioner } from "../src/core/tools/ipython.js";
+
+import { getCodingAgentFixtureModel } from "./fixture-models.js";
 
 let tempDir = "";
 
@@ -235,7 +240,7 @@ async def wait_for_state(run_id, state):
             await rlm.factory.watch(run_id, timeout=10)
 a = (await rlm.factory.run("colors", name="palette"))["run_id"]
 await wait_for_state(a, "paused")
-b = (await rlm.factory.run("colors", name="contrast"))["run_id"]
+b = (await rlm.factory.run("colors"))["run_id"]
 await wait_for_state(b, "paused")
 await host_request("test_barrier")
 `);
@@ -253,7 +258,7 @@ await host_request("test_barrier")
 							state: "paused",
 							machine: { order: ["first", "second"], transitions: [{ to: "second" }] },
 						},
-						{ name: "contrast", state: "paused" },
+						{ name: null, spec_id: "colors", state: "paused" },
 					],
 				});
 				if (pair.status !== "ok" || !pair.runs[0] || !pair.runs[1]) throw new Error("Expected two paused runs");
@@ -291,6 +296,56 @@ await host_request("test_barrier")
 			await expect(manager.execute(checkGate)).resolves.toMatchObject(disabled);
 		} finally {
 			await provisioner.dispose({ snapshot: false });
+		}
+	});
+
+	it("PAPI-14 shares the host-relative factory settings with a kernel in a different cwd", {
+		tags: ["kernel-heavy"],
+	}, async () => {
+		const runtime = resolve(import.meta.dirname, "../../../prime-agent-runtime");
+		const settingsDir = join(tempDir, "agent");
+		const agentDir = relative(process.cwd(), settingsDir);
+		// Do not let excess ".." segments collapse at the root in both processes.
+		const parentSteps = agentDir.split(sep).filter((part) => part === "..").length;
+		const cwd = join(tempDir, ...Array<string>(parentSteps).fill("nested"), "project");
+		mkdirSync(cwd, { recursive: true });
+		mkdirSync(settingsDir);
+		expect(resolve(cwd, agentDir)).not.toBe(settingsDir);
+		const python = process.env.PRIME_AGENT_KERNEL_PYTHON ?? join(runtime, ".venv", "bin", "python");
+		// Select the offline fixture interpreter without installing optional bootstrap packages.
+		const selectPython = vi.spyOn(kernelBootstrap, "ensureKernelPython").mockResolvedValue(python);
+		vi.stubEnv("PYTHONPATH", join(runtime, "src"));
+		try {
+			const { session } = await createAgentSession({
+				cwd,
+				agentDir,
+				model: getCodingAgentFixtureModel("anthropic", "claude-sonnet-4-5")!,
+				sessionManager: SessionManager.inMemory(cwd),
+				tools: ["ipython"],
+			});
+			try {
+				const tool = session.agent.state.tools.find((candidate) => candidate.name === "ipython")!;
+				const execute = async (code: string) => (await tool.execute("factory-settings", { code })).content;
+				await expect(
+					execute(`import os\nfrom rlm import rlm\nprint(os.path.samefile(os.getcwd(), ${JSON.stringify(cwd)}))`),
+				).resolves.toEqual([{ type: "text", text: "True\n" }]);
+				const checkGate = "await rlm.factory.graph()\nprint('factory enabled')";
+				const disabled = [{ type: "text", text: expect.stringContaining("factory is disabled") }];
+				expect(session.settingsManager.getFactoryEnabled()).toBe(false);
+				await expect(execute(checkGate)).resolves.toEqual(disabled);
+				await session.settingsManager.setFactoryEnabled(true);
+				expect(JSON.parse(readFileSync(join(settingsDir, "settings.json"), "utf8"))).toMatchObject({
+					factory: { enabled: true },
+				});
+				await expect(execute(checkGate)).resolves.toEqual([{ type: "text", text: "factory enabled\n" }]);
+				await session.settingsManager.setFactoryEnabled(false);
+				await expect(execute(checkGate)).resolves.toEqual(disabled);
+			} finally {
+				await session.disposeAsync({ kernelSnapshot: false });
+			}
+		} finally {
+			selectPython.mockRestore();
+			vi.unstubAllEnvs();
 		}
 	});
 

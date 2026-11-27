@@ -1,7 +1,7 @@
 import type { ServiceTier, Transport } from "@earendil-works/pi-ai";
 import { existsSync, lstatSync, mkdirSync, readFileSync } from "fs";
 import { homedir } from "os";
-import { dirname, join } from "path";
+import { dirname, join, resolve } from "path";
 import lockfile from "proper-lockfile";
 import { CONFIG_DIR_NAME, getAgentDir } from "../config.js";
 import { writeFileAtomicSync } from "../utils/atomic-file.js";
@@ -341,12 +341,16 @@ export interface SettingsError {
 }
 
 export class FileSettingsStorage implements SettingsStorage {
-	private globalSettingsPath: string;
+	private readonly globalSettingsPath: string;
 	private projectSettingsPath: string;
 
 	constructor(cwd: string, agentDir: string) {
-		this.globalSettingsPath = join(agentDir, "settings.json");
+		this.globalSettingsPath = resolve(agentDir, "settings.json");
 		this.projectSettingsPath = join(cwd, CONFIG_DIR_NAME, "settings.json");
+	}
+
+	getGlobalSettingsDir(): string {
+		return dirname(this.globalSettingsPath);
 	}
 
 	private acquireLockSyncWithRetry(path: string): () => void {
@@ -472,6 +476,11 @@ export class SettingsManager {
 		this.projectSettingsLoadError = projectLoadError;
 		this.errors = [...initialErrors];
 		this.settings = deepMergeSettings(this.globalSettings, this.projectSettings);
+	}
+
+	/** Directory shared with the Python kernel when global settings are file-backed. */
+	getGlobalSettingsDir(): string | undefined {
+		return this.storage instanceof FileSettingsStorage ? this.storage.getGlobalSettingsDir() : undefined;
 	}
 
 	/** Create a SettingsManager that loads from files */

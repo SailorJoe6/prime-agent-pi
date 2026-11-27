@@ -178,7 +178,9 @@ export class FactoryPage implements Component {
 		const hint = `${keyText("tui.select.up")}/${keyText("tui.select.down")} move · ${keyText("tui.select.confirm")} ${this.menu ? "choose" : "actions"} · ${keyText("tui.select.cancel")} ${this.menu ? "back" : "close"}`;
 		if (run) {
 			const index = this.runs.indexOf(run);
-			lines.push(`${index + 1}/${this.runs.length}  ${clean(run.name)} [${clean(run.state)}]`);
+			const name = clean(run.name ?? "");
+			const displayName = name.trim() ? name : clean(run.spec_id);
+			lines.push(`${index + 1}/${this.runs.length}  ${displayName} [${clean(run.state)}]`);
 			const active = new Set(run.active_nodes);
 			const diagram = [
 				"Diagram (* active)",

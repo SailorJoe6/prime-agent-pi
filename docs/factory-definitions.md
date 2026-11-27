@@ -257,10 +257,12 @@ run controls still target exact child IDs.
 The factory is off by default. Enter `/factory on` in terminal chat to enable
 it, and `/factory status` to check. Pi and Python use the same `factory.enabled`
 flag in the agent's `settings.json`. On a supported client and runtime, the
-setting takes effect without a restart.
+setting takes effect without a restart. A relative SDK `agentDir` resolves
+against the host working directory, not the kernel’s session directory.
 
 When enabled, enter `/factory` to open the page. It shows the selected live run,
-its state, and its diagram, with active states marked `*`. The selection follows
+its state, and its diagram, with active states marked `*`. An unnamed run
+uses the factory spec ID as its label. The selection follows
 the run ID as runs update. With the default picker bindings, Up/Down changes the
 selection, Page Up/Page Down scrolls the diagram, Enter opens the run actions
 or confirms one, and Esc backs out of actions or returns to chat. The page

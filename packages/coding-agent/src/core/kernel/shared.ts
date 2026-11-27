@@ -286,7 +286,8 @@ export interface KernelShutdownOptions {
 /** Public surface every kernel client exposes to the provisioner and session layer. */
 export interface FactoryRunGraph {
 	run_id: string;
-	name: string;
+	spec_id: string;
+	name: string | null;
 	state: string;
 	machine: { order: string[]; transitions: { from: string | string[]; to: string }[] };
 	active_nodes: string[];

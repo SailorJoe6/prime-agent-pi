@@ -110,6 +110,7 @@ describe("InteractiveMode factory page", () => {
 	function fixture(state: string, id = "first"): FactoryRunGraph {
 		return {
 			run_id: id,
+			spec_id: `spec-${id}`,
 			name: `Run ${id}`,
 			state,
 			active_nodes: ["prepare"],
@@ -267,6 +268,28 @@ describe("InteractiveMode factory page", () => {
 			expect(context.factoryPage).toBeUndefined();
 			await context.defaultEditor.onSubmit?.("/tree");
 			expect(context.showTreeSelector).toHaveBeenCalledOnce();
+		});
+	});
+
+	it.each([
+		{ variant: "null", name: null, expected: "shared-spec" },
+		{ variant: "blank after stripping ANSI", name: "\x1b[32m \x1b[0m", expected: "shared-spec" },
+		{ variant: "named", name: "\x1b[32mNamed run\x1b[0m", expected: "Named run" },
+	])("PAPI-14 displays the $variant run label without targeting actions by label", async ({ name, expected }) => {
+		await withPage(async (page, setRead, _context, act) => {
+			const selected = { ...fixture("paused"), name, spec_id: "\x1b[36mshared-spec\x1b[0m" };
+			const other = { ...fixture("paused", "second"), name: expected, spec_id: selected.spec_id };
+			setRead({ status: "ok", runs: [selected, other] });
+			await vi.advanceTimersByTimeAsync(1000);
+			const screen = page.render(80).join("\n");
+			expect(screen).toContain(`${expected} [paused]`);
+			expect(screen).not.toContain("\x1b");
+			page.handleInput?.("x");
+			setRead({ status: "ok", runs: [other, selected] });
+			await vi.advanceTimersByTimeAsync(1000);
+			page.handleInput?.("x");
+			await vi.advanceTimersByTimeAsync(0);
+			expect(act.mock.calls).toEqual([["first", "resume"]]);
 		});
 	});
 
