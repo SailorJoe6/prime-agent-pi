@@ -4,7 +4,7 @@ title: Inspect and control named factory runs in the terminal
 status: In Progress
 assignee: []
 created_date: '2026-11-22T22:17:00Z'
-updated_date: '2026-11-27T18:11:00Z'
+updated_date: '2026-11-27T18:18:00Z'
 labels: []
 milestone: m-0
 dependencies:
@@ -26,6 +26,7 @@ modified_files:
   - packages/coding-agent/src/core/agent-session.ts
   - packages/coding-agent/src/core/kernel/repl-manager.ts
   - packages/coding-agent/src/core/kernel/shared.ts
+  - packages/coding-agent/src/core/settings-manager.ts
   - packages/coding-agent/src/core/slash-commands.ts
   - packages/coding-agent/src/core/tools/ipython.ts
   - packages/coding-agent/src/modes/agent-connection/daemon-agent-connection.ts
@@ -44,6 +45,7 @@ modified_files:
   - packages/coding-agent/test/daemon-protocol.test.ts
   - packages/coding-agent/test/interactive-mode-command-usage.test.ts
   - packages/coding-agent/test/ipython-provisioner.test.ts
+  - packages/coding-agent/test/settings-manager.test.ts
   - prime-agent-runtime/src/rlm/factory.py
   - prime-agent-runtime/src/rlm/repl.md
   - prime-agent-runtime/src/rlm/repl.py
@@ -60,8 +62,8 @@ Expose the original v0.10.0 terminal page and selected-run actions, building on 
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 The terminal factory page shows the selected live or paused run, its state and its diagram. A live run prevents disabling the factory.
-- [ ] #2 From the selected run’s available actions, stop acts only on that run and resume acts only on the selected paused run; other runs and ordinary session navigation are unaffected.
+- [x] #1 The terminal factory page shows the selected live or paused run, its state and its diagram. A live run prevents disabling the factory.
+- [x] #2 From the selected run’s available actions, stop acts only on that run and resume acts only on the selected paused run; other runs and ordinary session navigation are unaffected.
 <!-- AC:END -->
 
 ## Implementation Plan
@@ -87,4 +89,16 @@ Host validation: npm run check (including test policy) passed. From packages/cod
 Slice 3 terminal review checkpoint: /factory renders the current session’s selected live/paused run, state, active nodes and transitions. Configurable picker keys control selection, diagram scrolling, action confirmation and dismissal. Refresh and dispatch check the captured run, and the owning Python loop revalidates exact stop/resume eligibility. No inspection provisions Python. The optional daemon transport uses schema 31 and capability negotiation with protocol 7 unchanged; it uses the attached session without worker startup or action replay. Ordinary session navigation is unchanged. /factory on/off/status, settings alignment and live-run disable refusal are explicitly remaining; no acceptance checks changed.
 
 Validation: npm run check (including check:test-policy) and git diff --check passed. From packages/coding-agent, bounded Vitest runs via npx --no-install tsx ../../node_modules/vitest/dist/cli.js --run --no-file-parallelism: interactive-mode-command-usage, slash-commands and ipython-provisioner gave 67 default passes and, separately using --tagsFilter kernel-heavy, 1 real kernel pass. The six focused terminal cases passed shuffle seeds 14 and 310; deliberately sending the wrong run ID failed the exact-action test, and production was restored. Retained package-level uv sync: the isolated kernel CI job installs uv but does not otherwise create the runtime .venv used by the unconditional provisioner case. Daemon-protocol/client/routed-client and AgentConnection passed 186 tests; 8 focused transport cases passed, including older endpoints and attached session controls. The broader daemon-mode test for passive child completion failed with undefined on both candidate and clean host-read HEAD using the same dependencies. Python factory: 27 pass; focused REPL: 2 pass at seeds 14/310/763; full REPL: 117/119, with the two previously documented unchanged-base startup errors. No live model provider used for validation. This is a review checkpoint, not a merge candidate.
+
+Settings slice: compared released v0.10.0 commands and factory lane at 763094e1b6a7c17450ee8399b06cda1853847ca5. Pi uses its existing agent settings.json, read by the owning Python kernel on use. No restart needed on the supported path and no daemon protocol change in this slice. Bare /factory is gated. Off checks the current attached session without starting a kernel; unsupported and unavailable reads cannot prove zero.
+
+Acceptance evidence: interactive-mode-command-usage tests cover selected diagrams, remapped controls, stale actions, exact Stop/Resume, normal /tree navigation, and on/off/status including no write for running, paused, stopping or unreadable state, plus allowance after settlement and definite absence. Real-kernel ipython-provisioner regression uses two benign paused runs, verifies exact selected actions and that the other run remains active, confirms a truly empty read after settlement, and rechecks Python and host action gating without restart. Settings tests cover persistent existing-store behavior and unrelated setting retention.
+
+Validation: from packages/coding-agent, bounded Vitest via npx --no-install tsx ../../node_modules/vitest/dist/cli.js --run --no-file-parallelism passed 137 default tests across interactive-mode-command-usage, slash-commands, ipython-provisioner and settings-manager. Separately, --tagsFilter kernel-heavy passed the real-kernel provisioner regression. Focused terminal, kernel and settings runs passed shuffle seeds 14/310/763. The command tests failed on the previous implementation; isolated negative controls for Python action gating and preservation of nested settings also failed as intended. npm run check (including test policy) and git diff --check passed. No live provider was used. Earlier broader daemon and two REPL failures reproduced on baseline as noted above; those suites were not rerun in the settings slice. Published for independent review, not activated or merged.
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Pi supports the v0.10.0 session-local factory page, exact selected-run Stop and Resume, and /factory on/off/status. The terminal and Python use factory.enabled in existing global settings (off by default). Off does not write while a live run exists or its liveness cannot be confirmed; a settled or definitively absent kernel permits disabling. Later factory navigation and aggregation are outside this candidate.
+<!-- SECTION:FINAL_SUMMARY:END -->
