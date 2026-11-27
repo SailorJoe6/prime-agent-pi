@@ -33,17 +33,24 @@ event.
 | `snapshot` | `{"type":"snapshot","id":str,"path":str,"manifest_path":str,"max_bytes"?:int,"max_variable_bytes"?:int,"prune_oversized"?:bool}` |
 | `restore` | `{"type":"restore","id":str,"path":str}` |
 | `list_names` | `{"type":"list_names","id":str}` |
+| `factory_runs` | `{"type":"factory_runs","id":str}` — when advertised in `ready.capabilities` |
 | `shutdown` | `{"type":"shutdown","id"?:str}` |
 
-Requests other than `interrupt` and `host_reply` run strictly in order, one at
-a time. A malformed line
+Requests other than `interrupt`, `host_reply`, and `factory_runs` run strictly
+in order, one at a time. `factory_runs` reads on the owning event loop without
+waiting for an awaiting cell to finish. It returns a `done` event with a `runs`
+array of compact run graphs: running, paused, stopping, or still holding active
+children. An idle kernel returns an empty array. This read does not execute a
+cell or change factory settings. A host must not send the request to a runtime
+that does not advertise it. A malformed line
 produces `{"event":"error","id":null,"ename":"ProtocolError",...}` and the
 runtime keeps serving. Closing stdin is equivalent to `shutdown`.
 
 ## Events
 
 - `{"event":"ready","protocol":3,"python":"3.13.11"}` — sent once at startup;
-  the handshake. No banner precedes it.
+  the handshake, including optional `capabilities` (an array of supported
+  request names). No banner precedes it.
 - `{"event":"stdout"|"stderr","id":str|null,"text":str}` — captured output.
   `id` is the cell whose Python execution context performed the write; asyncio
   tasks inherit the spawning cell's id (even after that cell finished). `null`

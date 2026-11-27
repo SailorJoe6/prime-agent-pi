@@ -57,6 +57,10 @@ Pi [syncs selected Python skills as editable installs](https://github.com/Sailor
 
 ## Factory workflows, sessions, and terminal controls
 
+**PAPI-14 progress:** The Python kernel has a read-only request for compact live
+run diagrams. It is not wired to the terminal page or `/factory` settings yet;
+this does not close the terminal parity gap.
+
 **First stable release: v0.10.0.** A factory runs a named machine whose states pass outputs to later states. The [machine library release note](https://github.com/PrimeIntellect-ai/prime-agent/blob/763094e1b6a7c17450ee8399b06cda1853847ca5/.changes/feat-machine-library.md) was already in the v0.10.0 tag, even though its bullets later appeared under v0.10.1 in the combined changelog. The same tag contains the executor and terminal page ([workflow #3199](https://github.com/PrimeIntellect-ai/prime-agent/pull/3199), [library #3285](https://github.com/PrimeIntellect-ai/prime-agent/pull/3285), [terminal controls #3290](https://github.com/PrimeIntellect-ai/prime-agent/pull/3290)). Neither the earlier TypeScript design work nor the v0.10.5 skill repair dates their first stable release.
 
 | User action | Upstream v0.10.0 | Original Pi assessment |

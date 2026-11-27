@@ -252,6 +252,13 @@ child label prefix, shortened if needed to fit the host limit. The runner adds
 run and admission suffixes so repeated or overlapping runs have distinct names;
 run controls still target exact child IDs.
 
+### Terminal integration status
+
+The Python kernel can report live run diagrams to its host, including paused
+runs and runs with children still in flight. The terminal page and `/factory`
+controls are not wired to that read path yet. Use the Python commands below to
+inspect or control runs in the meantime.
+
 ### Watch, resume, or stop one run
 
 ```python

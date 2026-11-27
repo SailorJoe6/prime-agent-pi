@@ -27,6 +27,7 @@ import uuid
 from collections.abc import Awaitable, Callable
 from typing import Any
 
+from . import rlm
 from .bash import _kill_live_handles
 
 PROTOCOL_VERSION = 3
@@ -1114,6 +1115,17 @@ async def _handle_list_names(req: dict[str, Any], ns: dict[str, Any]) -> None:
     _send({"event": "done", "id": req["id"], "status": "ok", "names": _list_names(ns)})
 
 
+def _inspect_factory_runs(rid: str) -> None:
+    try:
+        reply = {"event": "done", "id": rid, "status": "ok", "runs": rlm.factory._runs.live_graphs()}
+        _check_payload("factory_runs", reply)
+    except Exception as exc:
+        _send(_error_event(rid, exc))
+        _send({"event": "done", "id": rid, "status": "error"})
+    else:
+        _send(reply)
+
+
 async def _handle_request(
     handler: Callable[[dict[str, Any], dict[str, Any]], Awaitable[None]],
     req: dict[str, Any],
@@ -1170,6 +1182,7 @@ _REQUIRED_FIELDS = {
     "snapshot": ("id", "path", "manifest_path"),
     "restore": ("id", "path"),
     "list_names": ("id",),
+    "factory_runs": ("id",),
     "shutdown": (),
 }
 
@@ -1206,6 +1219,10 @@ def _handle_request_line(raw: bytes, queue: asyncio.Queue[dict[str, Any]]) -> No
     missing = [f for f in _REQUIRED_FIELDS[rtype] if not isinstance(req.get(f), str)]
     if missing:
         _protocol_error(f"{rtype} request needs string fields: {', '.join(missing)}")
+        return
+    if rtype == "factory_runs":
+        # Inspect on the owning loop, without waiting behind a cell watching a run.
+        _loop.call_soon_threadsafe(_inspect_factory_runs, req["id"])
         return
     if rtype in ("execute", "snapshot", "restore"):
         with _interrupt_lock:
@@ -1350,7 +1367,8 @@ def main() -> None:
     user_module.__dict__["__builtins__"] = __builtins__
     sys.modules["__main__"] = user_module
 
-    _send({"event": "ready", "protocol": PROTOCOL_VERSION, "python": platform.python_version()})
+    _send({"event": "ready", "protocol": PROTOCOL_VERSION, "python": platform.python_version(),
+           "capabilities": ["factory_runs"]})
 
     # The event-loop stack (asyncio plus its ssl, concurrent.futures, and
     # logging imports) is the heaviest part of this module's boot chain; load

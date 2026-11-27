@@ -426,15 +426,21 @@ class FactoryRuns:
                 "state": run.state, "children": dict(run.children), "error": run.error,
                 "pause_reason": run.pause_reason}
 
+    @staticmethod
+    def _is_live(run: _Run) -> bool:
+        return run.state in ("running", "paused", "stopping") or bool(run.active)
+
+    def live_graphs(self) -> list[dict[str, Any]]:
+        return [self.graph(run.run_id, compact=True) for run in self._runs.values() if self._is_live(run)]
+
     def graphs(self) -> dict[str, Any]:
-        live_states = ("running", "paused", "stopping")
         terminal = deque(maxlen=GRAPH_RUNS_WINDOW)
         for run in self._runs.values():
-            if run.state not in live_states and not run.active:
+            if not self._is_live(run):
                 terminal.append(run.run_id)
         recent = set(terminal)
         return {"runs": [self.graph(run.run_id) for run in self._runs.values()
-                         if run.state in live_states or run.active or run.run_id in recent]}
+                         if self._is_live(run) or run.run_id in recent]}
 
     def graph(self, run_id: str, *, compact: bool = False) -> dict[str, Any]:
         run = self._require_run(run_id)

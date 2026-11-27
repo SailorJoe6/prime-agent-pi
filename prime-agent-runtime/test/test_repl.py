@@ -1322,6 +1322,45 @@ class ReplTest(unittest.TestCase):
         self.assertEqual(one(events, "result")["text"], repr(envelope))
         self.assertEqual(one(events, "done")["status"], "ok")
 
+    def test_papi_14_inspects_live_factory_graph_while_cell_waits(self):
+        with tempfile.TemporaryDirectory() as directory:
+            with open(os.path.join(directory, "settings.json"), "w", encoding="utf-8") as settings:
+                settings.write('{"factory":{"enabled":true}}')
+            repl = ReplProcess({
+                "PRIME_AGENT_CODING_AGENT_DIR": directory,
+                "RLM_HARNESS_STATE_DIR": os.path.join(directory, "harness"),
+            })
+            try:
+                ready, _ = repl.ready()
+                self.assertIn("factory_runs", ready["capabilities"])
+                query = {"type": "factory_runs", "id": "idle"}
+                repl.send(query)
+                self.assertEqual(repl.until_done("idle")[-1]["runs"], [])
+                repl.send({"type": "execute", "id": "run", "code": """
+from rlm import rlm
+from rlm.repl import host_request
+rlm.harness.save_factory("colors", {"nodes": [
+    {"id": "first", "subagent": {"prompt": "Name a color."}},
+    {"id": "second", "depends_on": ["first"], "subagent": {"prompt": "Name another color."}},
+]})
+started = await rlm.factory.run("colors", name="palette")
+await host_request({"type": "test_barrier", "run_id": started["run_id"]})
+"""})
+                barrier = repl.read_event()
+                self.assertEqual(barrier["data"]["type"], "test_barrier")
+                repl.send({"type": "factory_runs", "id": "live"})
+                reply = repl.until_done("live")[-1]
+                self.assertEqual(reply["status"], "ok")
+                run, = reply["runs"]
+                self.assertEqual(run["run_id"], barrier["data"]["run_id"])
+                self.assertEqual((run["name"], run["state"]), ("palette", "running"))
+                self.assertEqual(run["machine"]["order"], ["first", "second"])
+                self.assertEqual(run["machine"]["transitions"][0]["to"], "second")
+                reply_ok(repl, barrier)
+                self.assertEqual(repl.until_done("run")[-1]["status"], "ok")
+            finally:
+                repl.close()
+
     def test_typed_host_request_unwraps_exact_handler_result(self):
         code = "\n".join(
             [
