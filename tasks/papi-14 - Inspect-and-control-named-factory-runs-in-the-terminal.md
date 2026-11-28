@@ -1,10 +1,10 @@
 ---
 id: PAPI-14
 title: Inspect and control named factory runs in the terminal
-status: Ready for Merge
+status: In Progress
 assignee: []
 created_date: '2026-11-22T22:17:00Z'
-updated_date: '2026-11-27T18:38:00Z'
+updated_date: '2026-11-28T17:51:00Z'
 labels: []
 milestone: m-0
 dependencies:
@@ -105,6 +105,8 @@ Validation: 140 targeted default Vitest tests passed across ipython-provisioner,
 Split-root SDK compatibility: a relative agentDir A is resolved on the host and remains the Python resource root. An injected file-backed SettingsManager at B passes the effective absolute settings file only to the Python factory gate; without a backing file that reader still uses the Python agent directory settings.json. No machine library, daemon, or run routing change.
 
 Offline SDK regression: normal createAgentSession provisions a real kernel in a distinct cwd (only interpreter selection is stubbed); it observes factory off/on/off from B without restart and selects a benign personal definition found only under A/machines. On f72c1c2a8 the split fixture failed with MachineResolutionError (shared layout passed); both passed after the fix. From packages/coding-agent, bounded Vitest via npx --no-install tsx ../../node_modules/vitest/dist/cli.js --run --no-file-parallelism passed 140 default tests across ipython-provisioner, interactive-mode-command-usage, slash-commands and settings-manager. Separately, --tagsFilter kernel-heavy test/ipython-provisioner.test.ts passed all 3 offline kernel cases normally and with --sequence.shuffle --sequence.seed=14, 310, and 763 (one run per seed). All 27 Python factory tests, npm run check, and git diff --check passed. Known broad baseline failures were not rerun. Published for targeted follow-up, not merged or activated.
+
+Owner-requested evidence revision after merge approval was withheld for 08cdc96b766299c50526da7457341261ed9f9f13. AC2 is supported. For AC1, use existing focused offline terminal tests to show (1) switching between two runs with distinct diagrams changes the displayed diagram and (2) a finished run with a still-running resident child remains visible and stoppable in the terminal and prevents /factory off. These are evidence gaps, not observed product failures. No broader review, feature work or merge authorization.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
