@@ -184,6 +184,7 @@ describe("InteractiveMode factory page", () => {
 			setRead: (read: FactoryRunsRead) => void,
 			context: SubmitContext,
 			act: ReturnType<typeof vi.fn>,
+			setFactoryEnabled: ReturnType<typeof vi.fn>,
 		) => Promise<void>,
 	) {
 		vi.useFakeTimers();
@@ -195,13 +196,17 @@ describe("InteractiveMode factory page", () => {
 		Object.setPrototypeOf(context, InteractiveMode.prototype);
 		let page: Component | undefined;
 		let snapshot: FactoryRunsRead = { status: "ok", runs: [fixture("paused"), fixture("running", "second")] };
+		let enabled = true;
+		const setFactoryEnabled = vi.fn(async (value: boolean) => {
+			enabled = value;
+		});
 		const act = vi.fn(async (_id: string, _action: FactoryRunAction) => ({ status: "ok" }));
 		const read = vi.fn(async () => snapshot);
 		const hide = vi.fn(() => {
 			page = undefined;
 		});
 		Object.assign(context, {
-			uiServices: { settingsManager: { getFactoryEnabled: () => true } },
+			uiServices: { settingsManager: { getFactoryEnabled: () => enabled, setFactoryEnabled } },
 			ui: {
 				requestRender: vi.fn(),
 				terminal: { rows: 24 },
@@ -224,6 +229,7 @@ describe("InteractiveMode factory page", () => {
 				},
 				context,
 				act,
+				setFactoryEnabled,
 			);
 			expect((context.agentConnection as { prompt: ReturnType<typeof vi.fn> }).prompt).not.toHaveBeenCalled();
 		} finally {
@@ -237,24 +243,36 @@ describe("InteractiveMode factory page", () => {
 
 	it("PAPI-14 renders a live graph, sends exact actions with remapped keys, and restores navigation", async () => {
 		await withPage(async (page, setRead, context, act) => {
+			const first = fixture("paused");
+			const second: FactoryRunGraph = {
+				...fixture("running", "second"),
+				active_nodes: ["scan"],
+				machine: { order: ["scan", "report"], transitions: [{ from: "scan", to: "report" }] },
+			};
+			setRead({ status: "ok", runs: [first, second] });
+			await vi.advanceTimersByTimeAsync(1000);
 			const screen = () => page.render(80).join("\n");
 			expect(screen()).toContain("X actions");
 			expect(screen()).toContain("Z close");
 			expect(screen()).toContain("Run first [paused]");
 			expect(screen()).toContain("* prepare");
 			expect(screen()).toContain("prepare → finish");
+			expect(screen()).not.toContain("scan → report");
 			page.handleInput?.("\r");
 			expect(screen()).not.toContain("> Resume");
 			page.handleInput?.("x");
 			expect(screen()).toContain("> Resume");
 			// A refresh can reorder the list without changing the selected run.
-			setRead({ status: "ok", runs: [fixture("running", "second"), fixture("paused")] });
+			setRead({ status: "ok", runs: [second, first] });
 			await vi.advanceTimersByTimeAsync(1000);
 			page.handleInput?.("x");
 			await vi.advanceTimersByTimeAsync(0);
 			expect(act.mock.calls).toEqual([["first", "resume"]]);
 			page.handleInput?.("j");
 			expect(screen()).toContain("Run second [running]");
+			expect(screen()).toContain("* scan");
+			expect(screen()).toContain("scan → report");
+			expect(screen()).not.toContain("prepare → finish");
 			page.handleInput?.("x");
 			expect(screen()).toContain("> Stop");
 			expect(screen()).not.toContain("Resume");
@@ -268,6 +286,35 @@ describe("InteractiveMode factory page", () => {
 			expect(context.factoryPage).toBeUndefined();
 			await context.defaultEditor.onSubmit?.("/tree");
 			expect(context.showTreeSelector).toHaveBeenCalledOnce();
+		});
+	});
+
+	it("PAPI-14 keeps a done run with a live resident visible and stoppable and refuses off", async () => {
+		await withPage(async (page, setRead, context, act, setFactoryEnabled) => {
+			// The runtime keeps a done graph in the live snapshot while its resident watch node is active.
+			const run: FactoryRunGraph = {
+				...fixture("done", "manuscript"),
+				active_nodes: ["watch"],
+				machine: { order: ["scan", "watch"], transitions: [{ from: "scan", to: "watch" }] },
+			};
+			setRead({ status: "ok", runs: [run] });
+			await vi.advanceTimersByTimeAsync(1000);
+			const screen = () => page.render(80).join("\n");
+			expect(screen()).toContain("Run manuscript [done]");
+			expect(screen()).toContain("* watch");
+
+			await context.defaultEditor.onSubmit?.("/factory off");
+			expect(context.showError).toHaveBeenCalledWith(expect.stringMatching(/cannot disable.*runs are live/i));
+			expect(setFactoryEnabled).not.toHaveBeenCalled();
+			await context.defaultEditor.onSubmit?.("/factory status");
+			expect(context.showStatus).toHaveBeenLastCalledWith(expect.stringMatching(/enabled/i));
+
+			page.handleInput?.("x");
+			expect(screen()).toContain("> Stop");
+			expect(screen()).not.toContain("Resume");
+			page.handleInput?.("x");
+			await vi.advanceTimersByTimeAsync(0);
+			expect(act.mock.calls).toEqual([["manuscript", "stop"]]);
 		});
 	});
 
