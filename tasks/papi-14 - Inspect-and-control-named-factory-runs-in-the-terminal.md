@@ -4,7 +4,7 @@ title: Inspect and control named factory runs in the terminal
 status: In Progress
 assignee: []
 created_date: '2026-11-22T22:17:00Z'
-updated_date: '2026-11-28T17:51:00Z'
+updated_date: '2026-11-28T17:56:00Z'
 labels: []
 milestone: m-0
 dependencies:
@@ -107,6 +107,10 @@ Split-root SDK compatibility: a relative agentDir A is resolved on the host and 
 Offline SDK regression: normal createAgentSession provisions a real kernel in a distinct cwd (only interpreter selection is stubbed); it observes factory off/on/off from B without restart and selects a benign personal definition found only under A/machines. On f72c1c2a8 the split fixture failed with MachineResolutionError (shared layout passed); both passed after the fix. From packages/coding-agent, bounded Vitest via npx --no-install tsx ../../node_modules/vitest/dist/cli.js --run --no-file-parallelism passed 140 default tests across ipython-provisioner, interactive-mode-command-usage, slash-commands and settings-manager. Separately, --tagsFilter kernel-heavy test/ipython-provisioner.test.ts passed all 3 offline kernel cases normally and with --sequence.shuffle --sequence.seed=14, 310, and 763 (one run per seed). All 27 Python factory tests, npm run check, and git diff --check passed. Known broad baseline failures were not rerun. Published for targeted follow-up, not merged or activated.
 
 Owner-requested evidence revision after merge approval was withheld for 08cdc96b766299c50526da7457341261ed9f9f13. AC2 is supported. For AC1, use existing focused offline terminal tests to show (1) switching between two runs with distinct diagrams changes the displayed diagram and (2) a finished run with a still-running resident child remains visible and stoppable in the terminal and prevents /factory off. These are evidence gaps, not observed product failures. No broader review, feature work or merge authorization.
+
+Focused terminal evidence revision (tests only; no product behavior changes): two runs have distinct transitions and active nodes. Moving selection after a reordered snapshot replaces the visible diagram and preserves exact Resume/Stop routing. The done-with-live-resident fixture uses Python graph state done with active_nodes [watch], based on test_papi_13_residents_survive_graph_completion_and_stop_by_run and test_papi_13_graph_lists_live_residents_beyond_terminal_window. The terminal renders that run and active node, dispatches only Stop to its exact run ID, and refuses /factory off without invoking the settings writer; status remains enabled. Both focused Python factory tests and both real REPL subprocess tests for live snapshots and exact actions passed.
+
+From packages/coding-agent, gtimeout -k 5s 75s npx --no-install tsx ../../node_modules/vitest/dist/cli.js --run --no-file-parallelism test/interactive-mode-command-usage.test.ts passed 22 tests normally and with --sequence.shuffle --sequence.seed=14, 310, and 763 (separate runs). The initial chained shuffle command passed seed 14, then a repeated relative cd failed before starting seed 310; corrected commands passed 310 and 763. Temporary negative controls failed at the new checks: rendering the paused diagram after switching showed prepare instead of scan; rejecting Stop for done prevented the expected dispatch; ignoring done runs on /factory off bypassed the refusal. Restored all temporary mutations. npm run check (includes check:test-policy) and git diff --check passed. No full-suite result claimed. In Progress for review; no merge or activation.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
