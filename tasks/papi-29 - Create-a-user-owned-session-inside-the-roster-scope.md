@@ -1,10 +1,10 @@
 ---
 id: PAPI-29
 title: Create a user-owned session inside the roster scope
-status: In Progress
+status: Blocked
 assignee: []
 created_date: '2026-11-22T22:18:00Z'
-updated_date: '2026-11-28T19:34:00Z'
+updated_date: '2026-11-28T19:39:00Z'
 labels: []
 milestone: m-0
 dependencies: []
@@ -41,3 +41,15 @@ v0.10.0 scoped new session. Agents view + daemon create. No worker spawn, child 
 3. Reuse the roster’s open/back and selection state so returning from the new chat retains A’s scope and selects the exact created row. Keep existing navigation for other rows and root New.
 4. Prove through the roster action and daemon create/readback with offline fixtures: distinct launch and A directories, a fresh user-owned row directly under A (not a spawned child), Back restoring A and the exact created selection, and unscoped New still creating a root. Use existing agents-view and daemon suites, with a failing regression control; run changed tests directly and the required project/test-policy checks. Add a coding-agent changelog fragment and update the scoped New entry in the parity inventory without claiming adjacent features.
 <!-- SECTION:PLAN:END -->
+
+## Comments
+
+<!-- COMMENTS:BEGIN -->
+created: 2026-11-28T19:39:00Z
+
+---
+
+Episode creation blocked: the allocated Orca worktree was prepared and its launch run dispatched, but Prime Agent startup stopped at a daemon-version mismatch prompt warning that takeover would terminate one busy session. Binding timed out; no Episode session or execute admission was verified. The same operation and resources are preserved, with no replay. Unblock by resolving the daemon-version mismatch without interrupting active work, then reconcile the existing launch and initial-assignment evidence before any supported same-operation recovery.
+
+---
+<!-- COMMENTS:END -->
